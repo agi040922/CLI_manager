@@ -1,0 +1,45 @@
+# Node modules
+node_modules/
+
+# Build outputs
+out/
+dist/
+*.js
+*.js.map
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Electron
+*.exe
+*.dmg
+*.app
+
+# Test coverage
+coverage/
+
+# Temp files
+*.tmp
+.cache/
