@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { TerminalView } from './components/TerminalView'
+import { StatusBar } from './components/StatusBar'
 import { Workspace, TerminalSession } from '../../shared/types'
 
-function App(): JSX.Element {
+function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
     const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null)
     const [activeSession, setActiveSession] = useState<TerminalSession | null>(null)
@@ -67,9 +68,7 @@ function App(): JSX.Element {
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
                 <div className="h-10 border-b border-white/10 flex items-center px-4 draggable">
                     <span className="text-sm text-gray-400">
-                        {activeWorkspace && activeSession
-                            ? `${activeWorkspace.name} / ${activeSession.name}`
-                            : 'Select a terminal to get started'}
+                        {activeWorkspace ? activeWorkspace.name : 'Select a workspace to get started'}
                     </span>
                 </div>
                 <div className="flex-1 p-4 relative">
@@ -99,6 +98,7 @@ function App(): JSX.Element {
                         </div>
                     )}
                 </div>
+                <StatusBar />
             </div>
         </div>
     )

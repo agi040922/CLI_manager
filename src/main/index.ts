@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join } from 'path'
+import path, { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import Store from 'electron-store'
@@ -9,15 +9,17 @@ import simpleGit from 'simple-git'
 import { existsSync, mkdirSync } from 'fs'
 
 import { TerminalManager } from './TerminalManager'
+import { PortManager } from './PortManager'
 
 const store = new Store<AppConfig>({
     defaults: {
         workspaces: [],
         playgroundPath: app.getPath('downloads')
     }
-})
+}) as any
 
 const terminalManager = new TerminalManager()
+const portManager = new PortManager()
 
 function createWindow(): void {
     // Create the browser window.
@@ -110,79 +112,63 @@ app.whenReady().then(() => {
 
     ipcMain.handle('add-session', async (_, workspaceId: string, type: 'regular' | 'worktree', branchName?: string) => {
         const workspaces = store.get('workspaces')
-        const workspace = workspaces.find(w => w.id === workspaceId)
+        const workspace = workspaces.find((w: any) => w.id === workspaceId)
 
         if (!workspace) return null
 
-        let sessionCwd = workspace.path
-        let sessionName = `Terminal ${workspace.sessions.length + 1}`
+        let newSession: TerminalSession = {
+            id: uuidv4(),
+            name: 'Main',
+            cwd: workspace.path,
+            type
+        }
 
+        // Worktree logic
         if (type === 'worktree' && branchName) {
+            const git = simpleGit(workspace.path) as any
+            const worktreePath = path.join(path.dirname(workspace.path), `${workspace.name}-worktrees`, branchName)
+
+            // Create worktree directory if it doesn't exist
+            if (!existsSync(path.dirname(worktreePath))) {
+                mkdirSync(path.dirname(worktreePath), { recursive: true })
+            }
+
             try {
-                const git = simpleGit(workspace.path)
-                const isRepo = await git.checkIsRepo()
-
-                if (!isRepo) {
-                    throw new Error('Not a git repository')
-                }
-
-                // Create a sibling directory for worktrees to keep things clean
-                // e.g. ~/Projects/MyApp -> ~/Projects/MyApp-worktrees/feature-branch
-                const parentDir = join(workspace.path, '..')
-                const worktreesDir = join(parentDir, `${workspace.name}-worktrees`)
-                const worktreePath = join(worktreesDir, branchName)
-
-                // Ensure worktrees directory exists
-                if (!existsSync(worktreesDir)) {
-                    mkdirSync(worktreesDir)
-                }
-
-                // Create worktree
-                // git worktree add -b <branch> <path> <start-point>
-                // We'll just use the current HEAD as start point for now
+                await git.checkIsRepo()
                 await git.worktree(['add', '-b', branchName, worktreePath])
 
-                sessionCwd = worktreePath
-                sessionName = `🌿 ${branchName}`
-            } catch (error) {
-                console.error('Failed to create worktree:', error)
-                // Fallback to regular session or return error?
-                // For now, let's return null to indicate failure
+                newSession.cwd = worktreePath
+                newSession.name = `🌿 ${branchName}`
+            } catch (e) {
+                console.error('Failed to create worktree:', e)
                 return null
             }
         }
 
-        const newSession: TerminalSession = {
-            id: uuidv4(),
-            name: sessionName,
-            cwd: sessionCwd,
-            type
-        }
-
         workspace.sessions.push(newSession)
+
+        // Update workspace in store
         store.set('workspaces', workspaces)
+
         return newSession
     })
 
     ipcMain.handle('remove-workspace', (_, id: string) => {
-        const workspaces = store.get('workspaces')
-        store.set('workspaces', workspaces.filter(w => w.id !== id))
+        const workspaces = store.get('workspaces') as Workspace[]
+        store.set('workspaces', workspaces.filter((w: Workspace) => w.id !== id))
         return true
     })
 
     ipcMain.handle('create-playground', async () => {
-        const downloadsPath = app.getPath('downloads')
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-        const playgroundName = `playground-${timestamp}`
-        const playgroundPath = join(downloadsPath, playgroundName)
+        const playgroundPath = path.join(app.getPath('downloads'), `playground-${new Date().toISOString().replace(/[:.]/g, '-')}`)
 
         if (!existsSync(playgroundPath)) {
-            mkdirSync(playgroundPath)
+            mkdirSync(playgroundPath, { recursive: true })
         }
 
         const newWorkspace: Workspace = {
             id: uuidv4(),
-            name: playgroundName,
+            name: 'Playground',
             path: playgroundPath,
             sessions: [
                 {
@@ -192,11 +178,13 @@ app.whenReady().then(() => {
                     type: 'regular'
                 }
             ],
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            isPlayground: true
         }
 
-        const workspaces = store.get('workspaces')
+        const workspaces = store.get('workspaces') as Workspace[]
         store.set('workspaces', [...workspaces, newWorkspace])
+
         return newWorkspace
     })
 

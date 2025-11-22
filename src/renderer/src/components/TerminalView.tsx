@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -9,7 +9,7 @@ interface TerminalViewProps {
     visible: boolean
 }
 
-export function TerminalView({ id, cwd, visible }: TerminalViewProps): JSX.Element {
+export function TerminalView({ id, cwd, visible }: TerminalViewProps) {
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
@@ -60,7 +60,20 @@ export function TerminalView({ id, cwd, visible }: TerminalViewProps): JSX.Eleme
         fitAddonRef.current = fitAddon
 
         // Initialize backend terminal
-        window.api.createTerminal(id, cwd).then(() => {
+        let initialCols = 80
+        let initialRows = 30
+
+        if (visible) {
+            try {
+                fitAddon.fit()
+                initialCols = term.cols
+                initialRows = term.rows
+            } catch (e) {
+                console.error('Failed to fit terminal initially:', e)
+            }
+        }
+
+        window.api.createTerminal(id, cwd, initialCols, initialRows).then(() => {
             // Handle input
             term.onData((data) => {
                 window.api.writeTerminal(id, data)
@@ -71,8 +84,8 @@ export function TerminalView({ id, cwd, visible }: TerminalViewProps): JSX.Eleme
                 term.write(data)
             })
 
-            // Initial resize
-            window.api.resizeTerminal(id, term.cols, term.rows)
+            // Initial resize is NO LONGER needed here because we passed dimensions to createTerminal
+            // window.api.resizeTerminal(id, term.cols, term.rows)
 
             return () => {
                 cleanup()

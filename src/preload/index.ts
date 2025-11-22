@@ -11,14 +11,21 @@ const api = {
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
 
     // Terminal
-    createTerminal: (id: string, cwd: string): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd),
+    createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),
     resizeTerminal: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('terminal-resize', id, cols, rows),
     writeTerminal: (id: string, data: string): void => ipcRenderer.send('terminal-input', id, data),
     onTerminalData: (id: string, callback: (data: string) => void): () => void => {
         const channel = `terminal-output-${id}`
-        const listener = (_, data) => callback(data)
+        const listener = (_: any, data: string) => callback(data)
         ipcRenderer.on(channel, listener)
         return () => ipcRenderer.removeListener(channel, listener)
+    },
+
+    // Ports
+    onPortUpdate: (callback: (ports: any[]) => void): () => void => {
+        const listener = (_: any, ports: any[]) => callback(ports)
+        ipcRenderer.on('port-update', listener)
+        return () => ipcRenderer.removeListener('port-update', listener)
     }
 }
 

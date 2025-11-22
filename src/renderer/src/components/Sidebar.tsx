@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Workspace, TerminalSession } from '../../shared/types'
+import React, { useState, useRef, useEffect } from 'react'
+import { Workspace, TerminalSession } from '../../../shared/types'
 import { Folder, Plus, Terminal, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -21,135 +21,192 @@ export function Sidebar({
     onAddSession,
     onCreatePlayground,
     activeSessionId
-}: SidebarProps): JSX.Element {
+}: SidebarProps) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    const [menuOpen, setMenuOpen] = useState<{ x: number, y: number, workspaceId: string } | null>(null)
+    const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
+    const [branchName, setBranchName] = useState('')
 
+    // Initialize expanded state with all workspace IDs when workspaces change
     useEffect(() => {
-        // Auto expand new workspaces
         if (workspaces.length > 0) {
             setExpanded(prev => {
-                const next = new Set(prev)
-                workspaces.forEach(w => next.add(w.id))
-                return next
+                const newExpanded = new Set(prev)
+                workspaces.forEach(w => newExpanded.add(w.id))
+                return newExpanded
             })
         }
-    }, [workspaces.length])
+    }, [workspaces.length]) // Only run when workspace count changes
 
     const toggleExpand = (id: string) => {
-        const newExpanded = new Set(expanded)
-        if (newExpanded.has(id)) {
-            newExpanded.delete(id)
-        } else {
-            newExpanded.add(id)
-        }
-        setExpanded(newExpanded)
+        setExpanded(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            return next
+        })
     }
 
-    const [menuOpen, setMenuOpen] = useState<{ id: string, x: number, y: number } | null>(null)
+    const handleContextMenu = (e: React.MouseEvent, workspaceId: string) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setMenuOpen({ x: e.clientX, y: e.clientY, workspaceId })
+    }
 
+    const handleAddSessionClick = (type: 'regular' | 'worktree') => {
+        if (menuOpen) {
+            if (type === 'worktree') {
+                setShowPrompt({ workspaceId: menuOpen.workspaceId })
+            } else {
+                onAddSession(menuOpen.workspaceId, 'regular')
+            }
+            setMenuOpen(null)
+        }
+    }
+
+    const handlePromptSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (showPrompt && branchName) {
+            onAddSession(showPrompt.workspaceId, 'worktree', branchName)
+            setShowPrompt(null)
+            setBranchName('')
+        }
+    }
+
+    // Close menu on click outside
     useEffect(() => {
-        const handleClickOutside = () => setMenuOpen(null)
-        window.addEventListener('click', handleClickOutside)
-        return () => window.removeEventListener('click', handleClickOutside)
+        const handleClick = () => setMenuOpen(null)
+        window.addEventListener('click', handleClick)
+        return () => window.removeEventListener('click', handleClick)
     }, [])
 
-    const handleAddClick = (e: React.MouseEvent, workspaceId: string) => {
-        e.stopPropagation()
-        const rect = (e.target as HTMLElement).getBoundingClientRect()
-        setMenuOpen({ id: workspaceId, x: rect.right + 10, y: rect.top })
-    }
-
-    const handleAddRegular = (workspaceId: string) => {
-        onAddSession(workspaceId, 'regular')
-        setMenuOpen(null)
-    }
-
-    const handleAddWorktree = (workspaceId: string) => {
-        const branchName = prompt('Enter new branch name for worktree:')
-        if (branchName) {
-            onAddSession(workspaceId, 'worktree', branchName)
-        }
-        setMenuOpen(null)
-    }
-
     return (
-        <div className="glass-sidebar h-full w-[250px] flex flex-col text-gray-300 relative">
+        <div className="w-64 glass-panel m-2 rounded-lg flex flex-col overflow-hidden">
             {/* Context Menu */}
             {menuOpen && (
                 <div
-                    className="fixed z-50 bg-[#1e1e20] border border-white/10 rounded shadow-xl py-1 w-40 backdrop-blur-md"
+                    className="fixed z-[100] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-1 w-40 backdrop-blur-md"
                     style={{ top: menuOpen.y, left: menuOpen.x }}
                     onClick={e => e.stopPropagation()}
                 >
                     <button
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-500/20 hover:text-blue-400 transition-colors"
-                        onClick={() => handleAddRegular(menuOpen.id)}
+                        className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                        onClick={() => handleAddSessionClick('regular')}
                     >
                         New Terminal
                     </button>
                     <button
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-green-500/20 hover:text-green-400 transition-colors"
-                        onClick={() => handleAddWorktree(menuOpen.id)}
+                        className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                        onClick={() => handleAddSessionClick('worktree')}
                     >
                         New Worktree
                     </button>
                 </div>
             )}
 
-            <div className="p-4 border-b border-white/10 flex justify-between items-center draggable">
-                <span className="font-semibold text-sm tracking-wide">PROJECTS</span>
+            {/* Prompt Modal */}
+            {showPrompt && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-[#1e1e20] border border-white/10 rounded-lg p-4 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-sm font-medium text-white mb-3">Enter Branch Name</h3>
+                        <form onSubmit={handlePromptSubmit}>
+                            <input
+                                type="text"
+                                autoFocus
+                                value={branchName}
+                                onChange={e => setBranchName(e.target.value)}
+                                placeholder="feature/my-branch"
+                                className="w-full bg-black/30 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 mb-3"
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPrompt(null)}
+                                    className="px-3 py-1 text-xs text-gray-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500"
+                                >
+                                    Create
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            <div className="p-3 border-b border-white/10 flex items-center justify-between draggable">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Workspaces</span>
                 <button
                     onClick={onAddWorkspace}
                     className="p-1 hover:bg-white/10 rounded transition-colors no-drag"
                 >
-                    <Plus size={16} />
+                    <Plus size={14} className="text-gray-400" />
                 </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {workspaces.map(workspace => (
-                    <div key={workspace.id} className="mb-2">
+                    <div key={workspace.id} className="space-y-0.5">
                         <div
                             onClick={() => toggleExpand(workspace.id)}
+                            onContextMenu={(e) => handleContextMenu(e, workspace.id)}
                             className="group flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
                         >
                             <div className="flex items-center gap-2 overflow-hidden">
-                                {expanded.has(workspace.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                <Folder size={16} className="text-blue-400 shrink-0" />
-                                <span className="font-medium text-sm truncate">{workspace.name}</span>
+                                {expanded.has(workspace.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                                {workspace.isPlayground ? (
+                                    <Folder size={16} className="text-yellow-400 shrink-0" />
+                                ) : (
+                                    <Folder size={16} className="text-blue-400 shrink-0" />
+                                )}
+                                <span className={clsx(
+                                    "font-medium text-sm truncate",
+                                    workspace.isPlayground ? "text-yellow-100" : ""
+                                )}>{workspace.name}</span>
                             </div>
                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
-                                    onClick={(e) => handleAddClick(e, workspace.id)}
-                                    className="p-1 hover:text-green-400"
-                                    title="Add Terminal"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleContextMenu(e, workspace.id)
+                                    }}
+                                    className="p-1 hover:bg-white/10 rounded mr-1"
                                 >
-                                    <Plus size={14} />
+                                    <Plus size={12} className="text-gray-400" />
                                 </button>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation()
                                         onRemoveWorkspace(workspace.id)
                                     }}
-                                    className="p-1 hover:text-red-400"
+                                    className="p-1 hover:bg-red-500/20 rounded"
                                 >
-                                    <Trash2 size={14} />
+                                    <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
                                 </button>
                             </div>
                         </div>
 
                         {expanded.has(workspace.id) && (
-                            <div className="ml-6 space-y-1 mt-1 border-l border-white/10 pl-2">
-                                {workspace.sessions?.map(session => (
+                            <div className="ml-4 pl-2 border-l border-white/5 space-y-0.5">
+                                {workspace.sessions?.map((session: TerminalSession) => (
                                     <div
                                         key={session.id}
                                         onClick={() => onSelect(workspace, session)}
                                         className={clsx(
-                                            "flex items-center gap-2 p-2 rounded cursor-pointer text-sm transition-colors",
-                                            activeSessionId === session.id ? "bg-white/10 text-white" : "hover:bg-white/5 text-gray-400"
+                                            "flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm",
+                                            activeSessionId === session.id
+                                                ? "bg-blue-500/20 text-blue-200"
+                                                : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
                                         )}
                                     >
-                                        <Terminal size={14} className={session.type === 'worktree' ? 'text-green-400' : ''} />
+                                        <Terminal size={14} />
                                         <span className="truncate">{session.name}</span>
                                     </div>
                                 ))}

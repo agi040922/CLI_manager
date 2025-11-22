@@ -11,6 +11,7 @@ export interface Workspace {
     path: string
     sessions: TerminalSession[]
     createdAt: number
+    isPlayground?: boolean
 }
 
 export interface AppConfig {
