@@ -17,4 +17,17 @@ export interface Workspace {
 export interface AppConfig {
     workspaces: Workspace[]
     playgroundPath: string
+    settings?: UserSettings
+}
+
+export interface UserSettings {
+    theme: 'dark' | 'light'
+    fontSize: number
+    fontFamily: string
+    defaultShell: string
+    github?: {
+        username: string
+        email: string
+        isAuthenticated: boolean
+    }
 }

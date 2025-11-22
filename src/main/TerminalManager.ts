@@ -46,8 +46,17 @@ export class TerminalManager {
             cols,
             rows,
             cwd,
-            env: process.env as any
+            env: {
+                ...process.env,
+                // Prevent double prompt by clearing on start
+                TERM_PROGRAM: 'CLImanger'
+            } as any
         })
+
+        // Clear the initial prompt to prevent double %
+        setTimeout(() => {
+            ptyProcess.write('\x0c') // Form feed - clears screen
+        }, 100)
 
         ptyProcess.onData((data: string) => {
             // Send data to renderer

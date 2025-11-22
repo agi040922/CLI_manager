@@ -2,12 +2,16 @@ import React, { useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
+import { Settings } from './components/Settings'
+import { GitPanel } from './components/GitPanel'
 import { Workspace, TerminalSession } from '../../shared/types'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
     const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null)
     const [activeSession, setActiveSession] = useState<TerminalSession | null>(null)
+    const [settingsOpen, setSettingsOpen] = useState(false)
+    const [gitPanelOpen, setGitPanelOpen] = useState(false)
 
     // Load workspaces on mount
     useState(() => {
@@ -66,10 +70,34 @@ function App() {
                 activeSessionId={activeSession?.id}
             />
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
-                <div className="h-10 border-b border-white/10 flex items-center px-4 draggable">
+                <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between">
                     <span className="text-sm text-gray-400">
                         {activeWorkspace ? activeWorkspace.name : 'Select a workspace to get started'}
                     </span>
+                    <div className="flex items-center gap-2 no-drag">
+                        <button
+                            onClick={() => setGitPanelOpen(true)}
+                            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+                            title="Source Control"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                                <line x1="6" y1="3" x2="6" y2="15"></line>
+                                <circle cx="18" cy="6" r="3"></circle>
+                                <circle cx="6" cy="18" r="3"></circle>
+                                <path d="M18 9a9 9 0 0 1-9 9"></path>
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => setSettingsOpen(true)}
+                            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+                            title="Settings"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M12 1v6m0 6v6m-9-9h6m6 0h6m-3.5-8.5 4.5 4.5m-9 9 4.5 4.5m-.5-18.5-4.5 4.5m9 9-4.5 4.5"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div className="flex-1 p-4 relative">
                     {/* Render ALL sessions but hide inactive ones to keep them alive */}
@@ -100,6 +128,16 @@ function App() {
                 </div>
                 <StatusBar />
             </div>
+
+            {/* Settings Modal */}
+            <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+            {/* Git Panel */}
+            <GitPanel
+                workspacePath={activeWorkspace?.path}
+                isOpen={gitPanelOpen}
+                onClose={() => setGitPanelOpen(false)}
+            />
         </div>
     )
 }

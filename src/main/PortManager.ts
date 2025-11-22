@@ -47,36 +47,37 @@ export class PortManager {
     }
 
     private parseLsof(output: string): PortInfo[] {
-        const lines = output.trim().split('\n')
-        // Skip header
-        if (lines.length > 0 && lines[0].startsWith('COMMAND')) {
-            lines.shift()
-        }
-
+        const lines = output.split('\n')
         const ports: PortInfo[] = []
         const seen = new Set<string>()
 
-        lines.forEach(line => {
-            // COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
-            // node    123 user 20u IPv6 0t0      TCP  *:3000 (LISTEN)
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim()
+            if (!line) continue
+
             const parts = line.split(/\s+/)
-            if (parts.length >= 9) {
-                const command = parts[0]
-                const pid = parseInt(parts[1], 10)
-                const address = parts[8] // *:3000 or 127.0.0.1:3000
+            if (parts.length < 9) continue
 
-                const portMatch = address.match(/:(\d+)$/)
-                if (portMatch) {
-                    const port = parseInt(portMatch[1], 10)
-                    const key = `${port}-${pid}`
+            const command = parts[0]
+            const pid = parseInt(parts[1])
+            const address = parts[8] // e.g., "localhost:3000" or "*:8080" or "127.0.0.1:3000"
 
-                    if (!seen.has(key)) {
-                        ports.push({ port, pid, command })
-                        seen.add(key)
-                    }
+            // Only show localhost ports (127.0.0.1 or localhost)
+            if (!address.includes('localhost') && !address.includes('127.0.0.1')) {
+                continue
+            }
+
+            const portMatch = address.match(/:(\d+)/)
+            if (portMatch) {
+                const port = parseInt(portMatch[1])
+                const key = `${port}-${pid}`
+
+                if (!seen.has(key)) {
+                    ports.push({ port, pid, command })
+                    seen.add(key)
                 }
             }
-        })
+        }
 
         return ports.sort((a, b) => a.port - b.port)
     }

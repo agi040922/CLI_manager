@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession } from '../shared/types'
+import { Workspace, TerminalSession, UserSettings } from '../shared/types'
 
 // Custom APIs for renderer
 const api = {
@@ -9,6 +9,21 @@ const api = {
     addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string): Promise<TerminalSession | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName),
     removeWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
+
+    // Settings
+    getSettings: (): Promise<UserSettings> => ipcRenderer.invoke('get-settings'),
+    saveSettings: (settings: UserSettings): Promise<boolean> => ipcRenderer.invoke('save-settings', settings),
+    checkGitConfig: (): Promise<{ username: string; email: string } | null> => ipcRenderer.invoke('check-git-config'),
+
+    // Git
+    getGitStatus: (workspacePath: string): Promise<any> => ipcRenderer.invoke('get-git-status', workspacePath),
+    gitStage: (workspacePath: string, file: string): Promise<boolean> => ipcRenderer.invoke('git-stage', workspacePath, file),
+    gitUnstage: (workspacePath: string, file: string): Promise<boolean> => ipcRenderer.invoke('git-unstage', workspacePath, file),
+    gitCommit: (workspacePath: string, message: string): Promise<boolean> => ipcRenderer.invoke('git-commit', workspacePath, message),
+    gitPush: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-push', workspacePath),
+    gitPull: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-pull', workspacePath),
+    gitLog: (workspacePath: string, limit?: number): Promise<any[]> => ipcRenderer.invoke('git-log', workspacePath, limit),
+    gitReset: (workspacePath: string, commitHash: string, hard?: boolean): Promise<boolean> => ipcRenderer.invoke('git-reset', workspacePath, commitHash, hard),
 
     // Terminal
     createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),

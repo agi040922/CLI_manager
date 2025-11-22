@@ -3,18 +3,28 @@ import path, { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import Store from 'electron-store'
-import { AppConfig, Workspace, TerminalSession } from '../shared/types'
+import { AppConfig, Workspace, TerminalSession, UserSettings } from '../shared/types'
 import { v4 as uuidv4 } from 'uuid'
 import simpleGit from 'simple-git'
 import { existsSync, mkdirSync } from 'fs'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
 
+const execAsync = promisify(exec)
+
 const store = new Store<AppConfig>({
     defaults: {
         workspaces: [],
-        playgroundPath: app.getPath('downloads')
+        playgroundPath: app.getPath('downloads'),
+        settings: {
+            theme: 'dark',
+            fontSize: 14,
+            fontFamily: 'Monaco, Courier New, monospace',
+            defaultShell: 'zsh'
+        }
     }
 }) as any
 
@@ -125,17 +135,26 @@ app.whenReady().then(() => {
 
         // Worktree logic
         if (type === 'worktree' && branchName) {
-            const git = simpleGit(workspace.path) as any
+            const git = simpleGit(workspace.path)
             const worktreePath = path.join(path.dirname(workspace.path), `${workspace.name}-worktrees`, branchName)
 
-            // Create worktree directory if it doesn't exist
-            if (!existsSync(path.dirname(worktreePath))) {
-                mkdirSync(path.dirname(worktreePath), { recursive: true })
+            // Create worktree directory parent if it doesn't exist
+            const worktreesDir = path.dirname(worktreePath)
+            if (!existsSync(worktreesDir)) {
+                mkdirSync(worktreesDir, { recursive: true })
             }
 
             try {
-                await git.checkIsRepo()
-                await git.worktree(['add', '-b', branchName, worktreePath])
+                // Check if it's a git repository
+                const isRepo = await git.checkIsRepo()
+                if (!isRepo) {
+                    console.error('Not a git repository')
+                    return null
+                }
+
+                // Use raw() method for worktree command
+                // git worktree add -b <branch> <path>
+                await git.raw(['worktree', 'add', '-b', branchName, worktreePath])
 
                 newSession.cwd = worktreePath
                 newSession.name = `🌿 ${branchName}`
@@ -160,7 +179,11 @@ app.whenReady().then(() => {
     })
 
     ipcMain.handle('create-playground', async () => {
-        const playgroundPath = path.join(app.getPath('downloads'), `playground-${new Date().toISOString().replace(/[:.]/g, '-')}`)
+        // Create a readable timestamp for the playground name
+        const now = new Date()
+        const timestamp = `${now.getMonth() + 1}-${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+        const playgroundName = `Playground ${timestamp}`
+        const playgroundPath = path.join(app.getPath('downloads'), `playground-${now.getTime()}`)
 
         if (!existsSync(playgroundPath)) {
             mkdirSync(playgroundPath, { recursive: true })
@@ -168,7 +191,7 @@ app.whenReady().then(() => {
 
         const newWorkspace: Workspace = {
             id: uuidv4(),
-            name: 'Playground',
+            name: playgroundName,
             path: playgroundPath,
             sessions: [
                 {
@@ -186,6 +209,137 @@ app.whenReady().then(() => {
         store.set('workspaces', [...workspaces, newWorkspace])
 
         return newWorkspace
+    })
+
+    // Settings handlers
+    ipcMain.handle('get-settings', () => {
+        return store.get('settings')
+    })
+
+    ipcMain.handle('save-settings', (_, settings: UserSettings) => {
+        store.set('settings', settings)
+        return true
+    })
+
+    ipcMain.handle('check-git-config', async () => {
+        try {
+            const { stdout: username } = await execAsync('git config --global user.name')
+            const { stdout: email } = await execAsync('git config --global user.email')
+            return {
+                username: username.trim(),
+                email: email.trim()
+            }
+        } catch (e) {
+            return null
+        }
+    })
+
+    // Git handlers
+    ipcMain.handle('get-git-status', async (_, workspacePath: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            const isRepo = await git.checkIsRepo()
+            if (!isRepo) return null
+
+            const status = await git.status()
+            return {
+                branch: status.current || 'unknown',
+                modified: status.modified,
+                staged: status.staged,
+                untracked: status.not_added,
+                ahead: status.ahead,
+                behind: status.behind
+            }
+        } catch (e) {
+            console.error('Git status error:', e)
+            return null
+        }
+    })
+
+    ipcMain.handle('git-stage', async (_, workspacePath: string, file: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.add(file)
+            return true
+        } catch (e) {
+            console.error('Git stage error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-unstage', async (_, workspacePath: string, file: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.reset(['HEAD', file])
+            return true
+        } catch (e) {
+            console.error('Git unstage error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-commit', async (_, workspacePath: string, message: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.commit(message)
+            return true
+        } catch (e) {
+            console.error('Git commit error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-push', async (_, workspacePath: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.push()
+            return true
+        } catch (e) {
+            console.error('Git push error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-pull', async (_, workspacePath: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.pull()
+            return true
+        } catch (e) {
+            console.error('Git pull error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-log', async (_, workspacePath: string, limit: number = 20) => {
+        try {
+            const git = simpleGit(workspacePath)
+            const log = await git.log({ maxCount: limit })
+            return log.all.map(commit => ({
+                hash: commit.hash,
+                message: commit.message,
+                author: commit.author_name,
+                date: commit.date
+            }))
+        } catch (e) {
+            console.error('Git log error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-reset', async (_, workspacePath: string, commitHash: string, hard: boolean = false) => {
+        try {
+            const git = simpleGit(workspacePath)
+            if (hard) {
+                await git.reset(['--hard', commitHash])
+            } else {
+                await git.reset(['--soft', commitHash])
+            }
+            return true
+        } catch (e) {
+            console.error('Git reset error:', e)
+            throw e
+        }
     })
 
     createWindow()
