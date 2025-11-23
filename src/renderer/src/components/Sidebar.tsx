@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Workspace, TerminalSession } from '../../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus } from '../../../shared/types'
 import { Folder, Plus, Terminal, Trash2, ChevronRight, ChevronDown, Settings as SettingsIcon, GitBranch } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -12,6 +12,7 @@ interface SidebarProps {
     onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string) => void
     onCreatePlayground: () => void
     activeSessionId?: string
+    sessionNotifications?: Map<string, NotificationStatus>
 }
 
 export function Sidebar({
@@ -21,8 +22,24 @@ export function Sidebar({
     onRemoveWorkspace,
     onAddSession,
     onCreatePlayground,
-    activeSessionId
+    activeSessionId,
+    sessionNotifications
 }: SidebarProps) {
+    // 알림 배지 색상 결정
+    const getNotificationBadge = (sessionId: string) => {
+        const status = sessionNotifications?.get(sessionId)
+        if (!status || status === 'none') return null
+
+        const colors = {
+            info: 'bg-amber-500',      // 🔔 노란색: 사용자 입력 필요
+            error: 'bg-red-500',        // ❌ 빨간색: 에러
+            success: 'bg-green-500'     // ✅ 초록색: 완료
+        }
+
+        return (
+            <div className={`w-2 h-2 rounded-full ${colors[status]} animate-pulse shrink-0`} />
+        )
+    }
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     const [menuOpen, setMenuOpen] = useState<{ x: number, y: number, workspaceId: string } | null>(null)
     const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
@@ -212,7 +229,8 @@ export function Sidebar({
                                         )}
                                     >
                                         <Terminal size={14} />
-                                        <span className="truncate">{session.name}</span>
+                                        <span className="truncate flex-1">{session.name}</span>
+                                        {getNotificationBadge(session.id)}
                                     </div>
                                 ))}
                             </div>
@@ -275,7 +293,8 @@ export function Sidebar({
                                                 )}
                                             >
                                                 <Terminal size={14} />
-                                                <span className="truncate">{session.name}</span>
+                                                <span className="truncate flex-1">{session.name}</span>
+                                                {getNotificationBadge(session.id)}
                                             </div>
                                         ))}
                                     </div>

@@ -342,6 +342,61 @@ app.whenReady().then(() => {
         }
     })
 
+    // GitHub CLI handlers
+    ipcMain.handle('gh-check-auth', async () => {
+        try {
+            // gh auth status 명령어로 인증 상태 확인
+            const { stdout } = await execAsync('gh auth status')
+            return { authenticated: true, message: stdout }
+        } catch (e: any) {
+            // 인증되지 않은 경우
+            return { authenticated: false, message: e.message }
+        }
+    })
+
+    ipcMain.handle('gh-auth-login', async () => {
+        try {
+            // gh auth login --web 으로 브라우저 인증
+            const { stdout, stderr } = await execAsync('gh auth login --web')
+            return { success: true, message: stdout || stderr }
+        } catch (e: any) {
+            return { success: false, message: e.message }
+        }
+    })
+
+    ipcMain.handle('gh-create-pr', async (_, workspacePath: string, title: string, body: string) => {
+        try {
+            const cmd = `cd "${workspacePath}" && gh pr create --title "${title}" --body "${body}"`
+            const { stdout } = await execAsync(cmd)
+            return { success: true, url: stdout.trim() }
+        } catch (e: any) {
+            console.error('GitHub PR creation error:', e)
+            throw new Error(e.message)
+        }
+    })
+
+    ipcMain.handle('gh-list-prs', async (_, workspacePath: string) => {
+        try {
+            const cmd = `cd "${workspacePath}" && gh pr list --json number,title,state,author,url`
+            const { stdout } = await execAsync(cmd)
+            return JSON.parse(stdout)
+        } catch (e: any) {
+            console.error('GitHub PR list error:', e)
+            throw new Error(e.message)
+        }
+    })
+
+    ipcMain.handle('gh-repo-view', async (_, workspacePath: string) => {
+        try {
+            const cmd = `cd "${workspacePath}" && gh repo view --json name,owner,url,description,defaultBranch`
+            const { stdout } = await execAsync(cmd)
+            return JSON.parse(stdout)
+        } catch (e: any) {
+            console.error('GitHub repo view error:', e)
+            return null
+        }
+    })
+
     createWindow()
 
     app.on('activate', function () {

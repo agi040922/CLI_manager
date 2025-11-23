@@ -4,7 +4,7 @@ import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
-import { Workspace, TerminalSession } from '../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus } from '../../shared/types'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -12,6 +12,7 @@ function App() {
     const [activeSession, setActiveSession] = useState<TerminalSession | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [gitPanelOpen, setGitPanelOpen] = useState(false)
+    const [sessionNotifications, setSessionNotifications] = useState<Map<string, NotificationStatus>>(new Map())
 
     // Load workspaces on mount
     useState(() => {
@@ -21,6 +22,23 @@ function App() {
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
         setActiveWorkspace(workspace)
         setActiveSession(session)
+        // 세션 선택 시 알림 초기화
+        setSessionNotifications(prev => {
+            const next = new Map(prev)
+            next.set(session.id, 'none')
+            return next
+        })
+    }
+
+    const handleNotification = (sessionId: string, type: 'info' | 'error' | 'success') => {
+        // 현재 활성 세션이 아닐 때만 알림 표시
+        if (activeSession?.id !== sessionId) {
+            setSessionNotifications(prev => {
+                const next = new Map(prev)
+                next.set(sessionId, type)
+                return next
+            })
+        }
     }
 
     const handleAddWorkspace = async () => {
@@ -68,6 +86,7 @@ function App() {
                 onAddSession={handleAddSession}
                 onCreatePlayground={handleCreatePlayground}
                 activeSessionId={activeSession?.id}
+                sessionNotifications={sessionNotifications}
             />
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
                 <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between">
@@ -115,6 +134,7 @@ function App() {
                                     id={session.id}
                                     cwd={session.cwd}
                                     visible={activeSession?.id === session.id}
+                                    onNotification={(type) => handleNotification(session.id, type)}
                                 />
                             </div>
                         ))

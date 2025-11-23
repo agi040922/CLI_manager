@@ -1,8 +1,11 @@
+export type NotificationStatus = 'none' | 'info' | 'error' | 'success'
+
 export interface TerminalSession {
     id: string
     name: string
     cwd: string
     type: 'regular' | 'worktree'
+    notificationStatus?: NotificationStatus
 }
 
 export interface Workspace {

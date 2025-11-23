@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText } from 'lucide-react'
+import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink } from 'lucide-react'
 
 interface GitStatus {
     branch: string
@@ -31,6 +31,14 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
     const [error, setError] = useState<string | null>(null)
     const [commits, setCommits] = useState<GitCommit[]>([])
     const [showHistory, setShowHistory] = useState(false)
+
+    // GitHub 관련 state
+    const [ghAuth, setGhAuth] = useState<boolean>(false)
+    const [ghRepo, setGhRepo] = useState<any>(null)
+    const [ghPRs, setGhPRs] = useState<any[]>([])
+    const [showGitHub, setShowGitHub] = useState(false)
+    const [prTitle, setPrTitle] = useState('')
+    const [prBody, setPrBody] = useState('')
 
     const loadStatus = async () => {
         if (!workspacePath) return
@@ -81,10 +89,63 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
         }
     }
 
+    // GitHub 인증 확인
+    const checkGitHubAuth = async () => {
+        try {
+            const authStatus = await window.api.ghCheckAuth()
+            setGhAuth(authStatus.authenticated)
+            if (authStatus.authenticated && workspacePath) {
+                const repo = await window.api.ghRepoView(workspacePath)
+                setGhRepo(repo)
+                const prs = await window.api.ghListPRs(workspacePath)
+                setGhPRs(prs)
+            }
+        } catch (err) {
+            console.error('GitHub auth check failed:', err)
+        }
+    }
+
+    // GitHub 로그인
+    const handleGitHubLogin = async () => {
+        setLoading(true)
+        try {
+            const result = await window.api.ghAuthLogin()
+            if (result.success) {
+                await checkGitHubAuth()
+            } else {
+                setError('GitHub 로그인 실패')
+            }
+        } catch (err: any) {
+            setError(err.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // PR 생성
+    const handleCreatePR = async () => {
+        if (!workspacePath || !prTitle.trim()) return
+
+        setLoading(true)
+        try {
+            const result = await window.api.ghCreatePR(workspacePath, prTitle, prBody)
+            if (result.success) {
+                setPrTitle('')
+                setPrBody('')
+                await checkGitHubAuth() // PR 목록 새로고침
+            }
+        } catch (err: any) {
+            setError(err.message || 'PR 생성 실패')
+        } finally {
+            setLoading(false)
+        }
+    }
+
     useEffect(() => {
         if (isOpen && workspacePath) {
             loadStatus()
             loadHistory()
+            checkGitHubAuth()
         }
     }, [isOpen, workspacePath])
 
@@ -165,6 +226,13 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                 </div>
                 <div className="flex items-center gap-2">
                     <button
+                        onClick={() => setShowGitHub(!showGitHub)}
+                        className={`p-1.5 rounded transition-colors ${showGitHub ? 'bg-white/20' : 'hover:bg-white/10'}`}
+                        title="GitHub"
+                    >
+                        <Github size={16} className="text-gray-400" />
+                    </button>
+                    <button
                         onClick={loadStatus}
                         disabled={loading}
                         className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
@@ -179,6 +247,102 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                     </button>
                 </div>
             </div>
+
+            {/* GitHub Section */}
+            {showGitHub && (
+                <div className="p-4 border-b border-white/10 bg-black/20">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <Github size={16} className="text-purple-400" />
+                            <h3 className="text-sm font-semibold text-white">GitHub</h3>
+                        </div>
+                        {ghAuth && ghRepo && (
+                            <a
+                                href={ghRepo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                            >
+                                {ghRepo.owner.login}/{ghRepo.name}
+                                <ExternalLink size={12} />
+                            </a>
+                        )}
+                    </div>
+
+                    {!ghAuth ? (
+                        <div className="space-y-2">
+                            <p className="text-xs text-gray-400">GitHub CLI 인증이 필요합니다</p>
+                            <button
+                                onClick={handleGitHubLogin}
+                                disabled={loading}
+                                className="w-full px-3 py-2 text-sm bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors disabled:opacity-50"
+                            >
+                                GitHub 로그인
+                            </button>
+                            <p className="text-xs text-gray-500">브라우저에서 인증 후 돌아오세요</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {/* PR 생성 */}
+                            <div>
+                                <label className="text-xs text-gray-400 block mb-1">Pull Request 생성</label>
+                                <input
+                                    type="text"
+                                    value={prTitle}
+                                    onChange={e => setPrTitle(e.target.value)}
+                                    placeholder="PR 제목"
+                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500 mb-2"
+                                />
+                                <textarea
+                                    value={prBody}
+                                    onChange={e => setPrBody(e.target.value)}
+                                    placeholder="PR 설명 (선택)"
+                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500 resize-none"
+                                    rows={2}
+                                />
+                                <button
+                                    onClick={handleCreatePR}
+                                    disabled={loading || !prTitle.trim()}
+                                    className="mt-2 w-full px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors disabled:opacity-50"
+                                >
+                                    <GitPullRequest size={14} className="inline mr-1" />
+                                    PR 생성
+                                </button>
+                            </div>
+
+                            {/* PR 목록 */}
+                            {ghPRs.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-gray-400 mb-2">최근 Pull Requests</h4>
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {ghPRs.slice(0, 5).map(pr => (
+                                            <a
+                                                key={pr.number}
+                                                href={pr.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block p-2 bg-black/30 hover:bg-white/5 rounded text-xs transition-colors"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-white font-medium truncate">#{pr.number} {pr.title}</span>
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                                        pr.state === 'OPEN' ? 'bg-green-500/20 text-green-300' :
+                                                        pr.state === 'MERGED' ? 'bg-purple-500/20 text-purple-300' :
+                                                        'bg-red-500/20 text-red-300'
+                                                    }`}>
+                                                        {pr.state}
+                                                    </span>
+                                                </div>
+                                                <div className="text-gray-500 mt-1">by {pr.author.login}</div>
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {error && (
                 <div className="mx-4 mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded">

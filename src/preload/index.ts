@@ -25,6 +25,13 @@ const api = {
     gitLog: (workspacePath: string, limit?: number): Promise<any[]> => ipcRenderer.invoke('git-log', workspacePath, limit),
     gitReset: (workspacePath: string, commitHash: string, hard?: boolean): Promise<boolean> => ipcRenderer.invoke('git-reset', workspacePath, commitHash, hard),
 
+    // GitHub CLI
+    ghCheckAuth: (): Promise<{ authenticated: boolean; message: string }> => ipcRenderer.invoke('gh-check-auth'),
+    ghAuthLogin: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke('gh-auth-login'),
+    ghCreatePR: (workspacePath: string, title: string, body: string): Promise<{ success: boolean; url: string }> => ipcRenderer.invoke('gh-create-pr', workspacePath, title, body),
+    ghListPRs: (workspacePath: string): Promise<any[]> => ipcRenderer.invoke('gh-list-prs', workspacePath),
+    ghRepoView: (workspacePath: string): Promise<any> => ipcRenderer.invoke('gh-repo-view', workspacePath),
+
     // Terminal
     createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),
     resizeTerminal: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('terminal-resize', id, cols, rows),
