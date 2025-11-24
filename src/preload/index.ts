@@ -6,7 +6,7 @@ import { Workspace, TerminalSession, UserSettings } from '../shared/types'
 const api = {
     getWorkspaces: (): Promise<Workspace[]> => ipcRenderer.invoke('get-workspaces'),
     addWorkspace: (): Promise<Workspace | null> => ipcRenderer.invoke('add-workspace'),
-    addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string): Promise<TerminalSession | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName),
+    addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<TerminalSession | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand),
     removeWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
 
@@ -14,6 +14,10 @@ const api = {
     getSettings: (): Promise<UserSettings> => ipcRenderer.invoke('get-settings'),
     saveSettings: (settings: UserSettings): Promise<boolean> => ipcRenderer.invoke('save-settings', settings),
     checkGitConfig: (): Promise<{ username: string; email: string } | null> => ipcRenderer.invoke('check-git-config'),
+
+    // Templates
+    getTemplates: (): Promise<any[]> => ipcRenderer.invoke('get-templates'),
+    saveTemplates: (templates: any[]): Promise<boolean> => ipcRenderer.invoke('save-templates', templates),
 
     // Git
     getGitStatus: (workspacePath: string): Promise<any> => ipcRenderer.invoke('get-git-status', workspacePath),

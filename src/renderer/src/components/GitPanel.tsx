@@ -32,7 +32,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
     const [commits, setCommits] = useState<GitCommit[]>([])
     const [showHistory, setShowHistory] = useState(false)
 
-    // GitHub 관련 state
+    // GitHub state
     const [ghAuth, setGhAuth] = useState<boolean>(false)
     const [ghRepo, setGhRepo] = useState<any>(null)
     const [ghPRs, setGhPRs] = useState<any[]>([])
@@ -74,8 +74,8 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
         if (!workspacePath) return
 
         const confirmMessage = hard
-            ? '이 커밋으로 되돌립니다. 변경사항이 모두 삭제됩니다. 계속하시겠습니까?'
-            : '이 커밋으로 되돌립니다 (변경사항은 유지). 계속하시겠습니까?'
+            ? 'Reset to this commit. All changes will be deleted. Continue?'
+            : 'Reset to this commit (keep changes). Continue?'
 
         if (!confirm(confirmMessage)) return
 
@@ -91,7 +91,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
         }
     }
 
-    // GitHub 인증 확인
+    // Check GitHub authentication
     const checkGitHubAuth = async () => {
         if (!workspacePath) return
 
@@ -115,7 +115,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
         }
     }
 
-    // Workflow 상태 새로고침
+    // Refresh workflow status
     const refreshWorkflows = async () => {
         if (!workspacePath || !ghAuth) return
         setLoading(true)
@@ -129,7 +129,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
         }
     }
 
-    // GitHub 로그인
+    // GitHub login
     const handleGitHubLogin = async () => {
         setLoading(true)
         try {
@@ -137,7 +137,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
             if (result.success) {
                 await checkGitHubAuth()
             } else {
-                setError('GitHub 로그인 실패')
+                setError('GitHub login failed')
             }
         } catch (err: any) {
             setError(err.message)
@@ -146,7 +146,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
         }
     }
 
-    // PR 생성
+    // Create PR
     const handleCreatePR = async () => {
         if (!workspacePath || !prTitle.trim()) return
 
@@ -156,10 +156,10 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
             if (result.success) {
                 setPrTitle('')
                 setPrBody('')
-                await checkGitHubAuth() // PR 목록 새로고침
+                await checkGitHubAuth() // Refresh PR list
             }
         } catch (err: any) {
-            setError(err.message || 'PR 생성 실패')
+            setError(err.message || 'Failed to create PR')
         } finally {
             setLoading(false)
         }
@@ -171,7 +171,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
             loadHistory()
             checkGitHubAuth()
         }
-        // Cleanup: 패널이 닫힐 때 로딩 상태 리셋
+        // Cleanup: Reset loading state when panel closes
         return () => {
             if (!isOpen) {
                 setLoading(false)
@@ -269,25 +269,24 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                     <button
                         onClick={() => setShowGitHub(!showGitHub)}
                         title="GitHub"
-                        className="git-panel-button"
+                        className={`p-1.5 hover:bg-white/10 rounded transition-colors ${showGitHub ? 'bg-purple-500/20 text-purple-400' : 'text-gray-400'}`}
                     >
-                        <Github size={16} style={{ color: '#9ca3af' }} />
+                        <Github size={16} />
                     </button>
                     <button
                         onClick={() => loadStatus()}
                         disabled={loading}
                         title="Refresh"
-                        className="git-panel-button"
-                        style={{ opacity: loading ? 0.5 : 1 }}
+                        className="p-1.5 hover:bg-white/10 rounded transition-colors text-gray-400 disabled:opacity-50"
                     >
-                        <RefreshCw size={16} style={{ color: '#9ca3af' }} />
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     </button>
                     <button
                         onClick={onClose}
                         title="Close"
-                        className="git-panel-button"
+                        className="p-1.5 hover:bg-white/10 rounded transition-colors text-gray-400 hover:text-white"
                     >
-                        <X size={16} style={{ color: '#9ca3af' }} />
+                        <X size={16} />
                     </button>
                 </div>
             </div>
@@ -315,32 +314,32 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
 
                     {!ghAuth ? (
                         <div className="space-y-2">
-                            <p className="text-xs text-gray-400">GitHub CLI 인증이 필요합니다</p>
+                            <p className="text-xs text-gray-400">GitHub CLI authentication required</p>
                             <button
                                 onClick={handleGitHubLogin}
                                 disabled={loading}
                                 className="w-full px-3 py-2 text-sm bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors disabled:opacity-50"
                             >
-                                GitHub 로그인
+                                GitHub Login
                             </button>
-                            <p className="text-xs text-gray-500">브라우저에서 인증 후 돌아오세요</p>
+                            <p className="text-xs text-gray-500">Authenticate in browser and return</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {/* PR 생성 */}
+                            {/* Create PR */}
                             <div>
-                                <label className="text-xs text-gray-400 block mb-1">Pull Request 생성</label>
+                                <label className="text-xs text-gray-400 block mb-1">Create Pull Request</label>
                                 <input
                                     type="text"
                                     value={prTitle}
                                     onChange={e => setPrTitle(e.target.value)}
-                                    placeholder="PR 제목"
+                                    placeholder="PR title"
                                     className="w-full bg-black/30 border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500 mb-2"
                                 />
                                 <textarea
                                     value={prBody}
                                     onChange={e => setPrBody(e.target.value)}
-                                    placeholder="PR 설명 (선택)"
+                                    placeholder="PR description (optional)"
                                     className="w-full bg-black/30 border border-white/10 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500 resize-none"
                                     rows={2}
                                 />
@@ -350,14 +349,14 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                     className="mt-2 w-full px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 text-white rounded transition-colors disabled:opacity-50"
                                 >
                                     <GitPullRequest size={14} className="inline mr-1" />
-                                    PR 생성
+                                    Create PR
                                 </button>
                             </div>
 
-                            {/* PR 목록 */}
+                            {/* PR List */}
                             {ghPRs.length > 0 && (
                                 <div>
-                                    <h4 className="text-xs font-semibold text-gray-400 mb-2">최근 Pull Requests</h4>
+                                    <h4 className="text-xs font-semibold text-gray-400 mb-2">Recent Pull Requests</h4>
                                     <div className="space-y-1 max-h-40 overflow-y-auto">
                                         {ghPRs.slice(0, 5).map(pr => (
                                             <a
@@ -397,7 +396,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                                 onClick={refreshWorkflows}
                                                 disabled={loading}
                                                 className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
-                                                title="새로고침"
+                                                title="Refresh"
                                             >
                                                 <RefreshCw size={12} className="text-gray-400" />
                                             </button>
@@ -660,16 +659,16 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                                             <button
                                                                 onClick={() => handleReset(commit.hash, false)}
                                                                 className="px-2 py-1 text-xs bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors"
-                                                                title="Soft reset (변경사항 유지)"
+                                                                title="Soft reset (keep changes)"
                                                             >
-                                                                복원
+                                                                Restore
                                                             </button>
                                                             <button
                                                                 onClick={() => handleReset(commit.hash, true)}
                                                                 className="px-2 py-1 text-xs bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded transition-colors"
-                                                                title="Hard reset (변경사항 삭제)"
+                                                                title="Hard reset (delete changes)"
                                                             >
-                                                                되돌리기
+                                                                Reset
                                                             </button>
                                                         </div>
                                                     )}

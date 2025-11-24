@@ -11,6 +11,7 @@ interface TerminalViewProps {
     onNotification?: (type: 'info' | 'error' | 'success') => void
     fontSize?: number
     fontFamily?: string
+    initialCommand?: string
 }
 
 interface Notification {
@@ -25,7 +26,8 @@ export function TerminalView({
     visible,
     onNotification,
     fontSize = 13,
-    fontFamily = 'Menlo, Monaco, "Courier New", monospace'
+    fontFamily = 'Menlo, Monaco, "Courier New", monospace',
+    initialCommand
 }: TerminalViewProps) {
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
@@ -33,30 +35,30 @@ export function TerminalView({
     const [notifications, setNotifications] = useState<Notification[]>([])
     const outputBufferRef = useRef<string>('')
     const lastNotificationRef = useRef<{ type: string; message: string; time: number } | null>(null)
-    const claudeResponseStartRef = useRef<boolean>(false)  // Claude 응답 시작 추적
+    const claudeResponseStartRef = useRef<boolean>(false)  // Track Claude response start
 
     // Detection patterns
     const detectOutput = (text: string) => {
         // Strip ANSI codes for pattern matching
         const cleanText = text.replace(/\x1b\[[0-9;]*m/g, '')
 
-        // Claude Code 응답 시작 감지 (⏺ 기호)
+        // Detect Claude Code response start (⏺ symbol)
         if (/⏺/.test(cleanText)) {
             claudeResponseStartRef.current = true
-            return  // 시작만 감지하고 알림은 안 보냄
+            return  // Just detect start, don't show notification
         }
 
-        // Claude Code 사용자 개입 필요 패턴 (높은 우선순위)
+        // Claude Code user interaction patterns (high priority)
         const interactionPatterns = [
-            /\?$/m,  // 질문 끝에 ? 있는 경우
-            /\[Y\/n\]/i,  // Yes/No 선택
+            /\?$/m,  // Question ends with ?
+            /\[Y\/n\]/i,  // Yes/No selection
             /\[y\/N\]/i,
-            /approve|permission|allow|grant/i,  // 허가 요청
-            /waiting for|awaiting|pending/i,  // 대기 중
-            /continue\?|proceed\?/i,  // 계속 진행 확인
-            /press any key|press enter/i,  // 키 입력 대기
-            /Enter to select/i,  // 선택 대기
-            /Tab\/Arrow keys to navigate/i  // 탐색 대기
+            /approve|permission|allow|grant/i,  // Permission request
+            /waiting for|awaiting|pending/i,  // Waiting
+            /continue\?|proceed\?/i,  // Proceed confirmation
+            /press any key|press enter/i,  // Key input wait
+            /Enter to select/i,  // Selection wait
+            /Tab\/Arrow keys to navigate/i  // Navigation wait
         ]
 
         // Error patterns
@@ -73,34 +75,34 @@ export function TerminalView({
             /access denied/i
         ]
 
-        // Success patterns (작업 완료 감지)
+        // Success patterns (task completion detection)
         const successPatterns = [
-            // 일반 빌드/테스트 완료
+            // General build/test completion
             /compiled successfully/i,
             /build successful/i,
             /done in/i,
             /✓|✔/,
             /successfully installed/i,
             /webpack compiled/i,
-            /✨|🎉/,  // 이모지로도 성공 표시
-            /completed|finished|done/i,  // 작업 완료
+            /✨|🎉/,  // Emoji success indicators
+            /completed|finished|done/i,  // Task completion
             /all tests passed/i,
             /deployment successful/i,
             /success!/i,
             /ready in/i
         ]
 
-        // Claude Code 완료 감지 (⏺ 응답 후 > 프롬프트 나타남)
+        // Detect Claude Code completion (> prompt after ⏺ response)
         if (claudeResponseStartRef.current && /^>\s*$/m.test(cleanText)) {
-            claudeResponseStartRef.current = false  // 리셋
-            addNotification('success', 'Claude Code 작업 완료')
+            claudeResponseStartRef.current = false  // Reset
+            addNotification('success', 'Claude Code task completed')
             return
         }
 
         let detectedType: 'error' | 'success' | 'info' | null = null
         let detectedMessage = ''
 
-        // 우선순위: 상호작용 > 에러 > 성공
+        // Priority: interaction > error > success
         for (const pattern of interactionPatterns) {
             if (pattern.test(cleanText)) {
                 detectedType = 'info'
@@ -141,14 +143,14 @@ export function TerminalView({
     }
 
     const addNotification = (type: 'error' | 'success' | 'info', message: string) => {
-        // 중복 방지: 같은 타입과 메시지가 3초 이내에 온 경우 무시
+        // Prevent duplicates: ignore if same type and message within 3 seconds
         const now = Date.now()
         const last = lastNotificationRef.current
         if (last && last.type === type && last.message === message && now - last.time < 3000) {
             return
         }
 
-        // 마지막 알림 기록
+        // Record last notification
         lastNotificationRef.current = { type, message, time: now }
 
         const newNotif: Notification = {
@@ -159,10 +161,10 @@ export function TerminalView({
 
         setNotifications(prev => [...prev, newNotif])
 
-        // 부모 컴포넌트에 알림
+        // Notify parent component
         onNotification?.(type)
 
-        // info 타입(사용자 개입 필요)은 10초, 나머지는 5초 후 자동 사라짐
+        // info type (user intervention needed): 10s, others: 5s auto dismiss
         const dismissTime = type === 'info' ? 10000 : 5000
         setTimeout(() => {
             setNotifications(prev => prev.filter(n => n.id !== newNotif.id))
@@ -250,6 +252,14 @@ export function TerminalView({
                     }
                 }
             })
+
+            // Execute initial command if provided
+            if (initialCommand) {
+                // Wait a bit for the terminal to be ready
+                setTimeout(() => {
+                    window.api.writeTerminal(id, initialCommand + '\n')
+                }, 500)
+            }
 
             // Initial resize is NO LONGER needed here because we passed dimensions to createTerminal
             // window.api.resizeTerminal(id, term.cols, term.rows)

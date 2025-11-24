@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { UserSettings, EditorType } from '../../../shared/types'
-import { X, Check, AlertCircle } from 'lucide-react'
+import { UserSettings, EditorType, TerminalTemplate } from '../../../shared/types'
+import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon } from 'lucide-react'
+import { v4 as uuidv4 } from 'uuid'
 
 interface SettingsProps {
     isOpen: boolean
@@ -15,9 +16,16 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
         fontFamily: 'Monaco, Courier New, monospace',
         defaultShell: 'zsh',
         defaultEditor: 'vscode',
+        portFilter: {
+            enabled: true,
+            minPort: 3000,
+            maxPort: 9000
+        },
         github: undefined
     })
     const [githubCheckStatus, setGithubCheckStatus] = useState<'checking' | 'success' | 'error' | null>(null)
+    const [templates, setTemplates] = useState<TerminalTemplate[]>([])
+    const [editingTemplate, setEditingTemplate] = useState<TerminalTemplate | null>(null)
 
     useEffect(() => {
         if (isOpen) {
@@ -29,13 +37,59 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
             }).catch(() => {
                 // If getSettings is not available, use defaults
             })
+
+            // Load templates
+            window.api.getTemplates().then(setTemplates).catch(() => {
+                // If getTemplates is not available, use empty array
+            })
+
+            // Automatically check git config when settings open
+            checkGitConfig()
         }
     }, [isOpen])
 
     const handleSave = async () => {
         await window.api.saveSettings(settings)
+        await window.api.saveTemplates(templates)
         onSave?.(settings)
         onClose()
+    }
+
+    const handleAddTemplate = () => {
+        const newTemplate: TerminalTemplate = {
+            id: uuidv4(),
+            name: 'New Template',
+            icon: 'terminal',
+            description: '',
+            command: ''
+        }
+        setEditingTemplate(newTemplate)
+    }
+
+    const handleSaveTemplate = () => {
+        if (editingTemplate) {
+            const existingIndex = templates.findIndex(t => t.id === editingTemplate.id)
+            if (existingIndex >= 0) {
+                setTemplates(prev => prev.map((t, i) => i === existingIndex ? editingTemplate : t))
+            } else {
+                setTemplates(prev => [...prev, editingTemplate])
+            }
+            setEditingTemplate(null)
+        }
+    }
+
+    const handleDeleteTemplate = (id: string) => {
+        setTemplates(prev => prev.filter(t => t.id !== id))
+    }
+
+    const getTemplateIcon = (iconName: string) => {
+        switch (iconName) {
+            case 'code': return <Code2 size={16} />
+            case 'play': return <Play size={16} />
+            case 'package': return <Package size={16} />
+            case 'git': return <GitBranch size={16} />
+            default: return <Terminal size={16} />
+        }
     }
 
     const checkGitConfig = async () => {
@@ -63,6 +117,7 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     if (!isOpen) return null
 
     return (
+        <>
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-[#1e1e20] border border-white/10 rounded-lg w-[600px] max-h-[80vh] overflow-hidden shadow-2xl">
                 {/* Header */}
@@ -117,8 +172,16 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                                     <div className="flex-1">
                                         <p className="text-sm text-red-300 font-medium">Git not configured</p>
                                         <p className="text-xs text-gray-400 mt-1">
-                                            Please configure Git with: <code className="text-white bg-black/30 px-1 rounded">git config --global user.name</code> and <code className="text-white bg-black/30 px-1 rounded">git config --global user.email</code>
+                                            Git is not installed or configured. Set it up with these commands:
                                         </p>
+                                        <div className="mt-2 space-y-1">
+                                            <code className="block text-xs text-white bg-black/30 px-2 py-1 rounded">
+                                                git config --global user.name "Your Name"
+                                            </code>
+                                            <code className="block text-xs text-white bg-black/30 px-2 py-1 rounded">
+                                                git config --global user.email "your@email.com"
+                                            </code>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -187,6 +250,143 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                         </div>
                     </div>
 
+                    {/* Port Filter Settings */}
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-white">Port Monitoring</h3>
+                        <p className="text-xs text-gray-400">
+                            Enable filter to show only development server ports
+                        </p>
+
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="checkbox"
+                                checked={settings.portFilter?.enabled ?? true}
+                                onChange={e => setSettings(prev => ({
+                                    ...prev,
+                                    portFilter: {
+                                        enabled: e.target.checked,
+                                        minPort: prev.portFilter?.minPort ?? 3000,
+                                        maxPort: prev.portFilter?.maxPort ?? 9000
+                                    }
+                                }))}
+                                className="w-4 h-4 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
+                            />
+                            <label className="text-sm text-gray-300">Enable port filter</label>
+                        </div>
+
+                        {settings.portFilter?.enabled && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Min Port</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={65535}
+                                        value={settings.portFilter?.minPort ?? 3000}
+                                        onChange={e => setSettings(prev => ({
+                                            ...prev,
+                                            portFilter: {
+                                                enabled: prev.portFilter?.enabled ?? true,
+                                                minPort: parseInt(e.target.value) || 3000,
+                                                maxPort: prev.portFilter?.maxPort ?? 9000
+                                            }
+                                        }))}
+                                        className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Max Port</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={65535}
+                                        value={settings.portFilter?.maxPort ?? 9000}
+                                        onChange={e => setSettings(prev => ({
+                                            ...prev,
+                                            portFilter: {
+                                                enabled: prev.portFilter?.enabled ?? true,
+                                                minPort: prev.portFilter?.minPort ?? 3000,
+                                                maxPort: parseInt(e.target.value) || 9000
+                                            }
+                                        }))}
+                                        className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <p className="text-xs text-gray-500">
+                            Common dev ports: 3000 (React), 5173 (Vite), 8080 (Server)
+                        </p>
+                    </div>
+
+                    {/* Terminal Templates */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-white">Terminal Templates</h3>
+                            <button
+                                onClick={handleAddTemplate}
+                                className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex items-center gap-1"
+                            >
+                                <Plus size={12} />
+                                Add Template
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                            Create custom terminal templates with preset commands
+                        </p>
+
+                        <div className="space-y-2">
+                            {templates.map(template => (
+                                <div
+                                    key={template.id}
+                                    className="p-3 bg-black/20 border border-white/10 rounded hover:border-white/20 transition-colors"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-start gap-2 flex-1">
+                                            <div className="text-gray-400 mt-0.5">
+                                                {getTemplateIcon(template.icon)}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium text-white">{template.name}</div>
+                                                {template.description && (
+                                                    <div className="text-xs text-gray-500 mt-0.5">{template.description}</div>
+                                                )}
+                                                {template.command && (
+                                                    <code className="block text-xs text-blue-300 mt-1 bg-black/30 px-2 py-1 rounded">
+                                                        {template.command}
+                                                    </code>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setEditingTemplate(template)}
+                                                className="p-1 hover:bg-white/10 rounded transition-colors"
+                                                title="Edit"
+                                            >
+                                                <SettingsIcon size={12} className="text-gray-400" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteTemplate(template.id)}
+                                                className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {templates.length === 0 && (
+                                <div className="text-center py-8 text-gray-500 text-sm">
+                                    No templates yet. Click "Add Template" to create one.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                 </div>
 
                 {/* Footer */}
@@ -206,5 +406,101 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                 </div>
             </div>
         </div>
+
+        {/* Template Edit Modal */}
+        {editingTemplate && (
+            <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="bg-[#1e1e20] border border-white/10 rounded-lg w-[500px] shadow-2xl" onClick={e => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-white/10">
+                        <h3 className="text-lg font-semibold text-white">
+                            {templates.find(t => t.id === editingTemplate.id) ? 'Edit Template' : 'New Template'}
+                        </h3>
+                        <button
+                            onClick={() => setEditingTemplate(null)}
+                            className="p-1 hover:bg-white/10 rounded transition-colors"
+                        >
+                            <X size={18} className="text-gray-400" />
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4 space-y-4">
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Template Name</label>
+                            <input
+                                type="text"
+                                value={editingTemplate.name}
+                                onChange={e => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                                placeholder="e.g., Claude Code, npm dev"
+                                className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Description (optional)</label>
+                            <input
+                                type="text"
+                                value={editingTemplate.description}
+                                onChange={e => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
+                                placeholder="Brief description"
+                                className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Command</label>
+                            <input
+                                type="text"
+                                value={editingTemplate.command}
+                                onChange={e => setEditingTemplate({ ...editingTemplate, command: e.target.value })}
+                                placeholder="e.g., cld, npm run dev, pnpm dev"
+                                className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Command will be executed when terminal is created
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Icon</label>
+                            <div className="grid grid-cols-5 gap-2">
+                                {['terminal', 'code', 'play', 'package', 'git'].map(iconName => (
+                                    <button
+                                        key={iconName}
+                                        onClick={() => setEditingTemplate({ ...editingTemplate, icon: iconName })}
+                                        className={`p-3 rounded border transition-colors flex items-center justify-center ${
+                                            editingTemplate.icon === iconName
+                                                ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                                                : 'border-white/10 bg-black/30 text-gray-400 hover:border-white/20'
+                                        }`}
+                                    >
+                                        {getTemplateIcon(iconName)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-end gap-2 p-4 border-t border-white/10">
+                        <button
+                            onClick={() => setEditingTemplate(null)}
+                            className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSaveTemplate}
+                            disabled={!editingTemplate.name.trim()}
+                            className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Save Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     )
 }

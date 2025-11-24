@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Workspace, TerminalSession, NotificationStatus } from '../../../shared/types'
-import { Folder, FolderOpen, Plus, Terminal, Trash2, ChevronRight, ChevronDown, Settings as SettingsIcon, GitBranch } from 'lucide-react'
+import { Workspace, TerminalSession, NotificationStatus, TerminalTemplate } from '../../../shared/types'
+import { Folder, FolderOpen, Plus, Terminal, Trash2, ChevronRight, ChevronDown, Settings as SettingsIcon, GitBranch, Code2, Play, Package, Database } from 'lucide-react'
 import clsx from 'clsx'
 
 interface SidebarProps {
@@ -9,11 +9,13 @@ interface SidebarProps {
     onSelect: (workspace: Workspace, session: TerminalSession) => void
     onAddWorkspace: () => void
     onRemoveWorkspace: (id: string) => void
-    onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string) => void
+    onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => void
     onCreatePlayground: () => void
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
     onOpenInEditor: (workspacePath: string) => void
+    onOpenSettings: () => void
+    settingsOpen?: boolean
 }
 
 export function Sidebar({
@@ -25,17 +27,36 @@ export function Sidebar({
     onCreatePlayground,
     activeSessionId,
     sessionNotifications,
-    onOpenInEditor
+    onOpenInEditor,
+    onOpenSettings,
+    settingsOpen
 }: SidebarProps) {
-    // 알림 배지 색상 결정
+    const [customTemplates, setCustomTemplates] = useState<TerminalTemplate[]>([])
+
+    // Load custom templates
+    useEffect(() => {
+        window.api.getTemplates().then(setCustomTemplates).catch(err => {
+            console.error('Failed to load templates:', err)
+        })
+    }, [])
+
+    // Reload templates when settings close
+    useEffect(() => {
+        if (settingsOpen === false) {
+            window.api.getTemplates().then(setCustomTemplates).catch(err => {
+                console.error('Failed to reload templates:', err)
+            })
+        }
+    }, [settingsOpen])
+    // Notification badge color
     const getNotificationBadge = (sessionId: string) => {
         const status = sessionNotifications?.get(sessionId)
         if (!status || status === 'none') return null
 
         const colors = {
-            info: 'bg-amber-500',      // 🔔 노란색: 사용자 입력 필요
-            error: 'bg-red-500',        // ❌ 빨간색: 에러
-            success: 'bg-green-500'     // ✅ 초록색: 완료
+            info: 'bg-amber-500',      // 🔔 Yellow: User input needed
+            error: 'bg-red-500',        // ❌ Red: Error
+            success: 'bg-green-500'     // ✅ Green: Success
         }
 
         return (
@@ -76,14 +97,24 @@ export function Sidebar({
         setMenuOpen({ x: e.clientX, y: e.clientY, workspaceId })
     }
 
-    const handleAddSessionClick = (type: 'regular' | 'worktree') => {
+    const handleAddSessionClick = (type: 'regular' | 'worktree', template?: TerminalTemplate) => {
         if (menuOpen) {
             if (type === 'worktree') {
                 setShowPrompt({ workspaceId: menuOpen.workspaceId })
             } else {
-                onAddSession(menuOpen.workspaceId, 'regular')
+                onAddSession(menuOpen.workspaceId, 'regular', undefined, template?.command)
             }
             setMenuOpen(null)
+        }
+    }
+
+    const getTemplateIcon = (iconName: string) => {
+        switch (iconName) {
+            case 'code': return <Code2 size={12} />
+            case 'play': return <Play size={12} />
+            case 'package': return <Package size={12} />
+            case 'git': return <GitBranch size={12} />
+            default: return <Terminal size={12} />
         }
     }
 
@@ -108,21 +139,63 @@ export function Sidebar({
             {/* Context Menu - Portal to body */}
             {menuOpen && createPortal(
                 <div
-                    className="fixed z-[9999] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-1 w-40 backdrop-blur-md"
+                    className="fixed z-[9999] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-44 backdrop-blur-md"
                     style={{ top: menuOpen.y, left: menuOpen.x }}
                     onClick={e => e.stopPropagation()}
                 >
-                    <button
-                        className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-                        onClick={() => handleAddSessionClick('regular')}
-                    >
+                    <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
                         New Terminal
-                    </button>
+                    </div>
+
+                    {/* Plain Terminal */}
                     <button
-                        className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-                        onClick={() => handleAddSessionClick('worktree')}
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                        onClick={() => handleAddSessionClick('regular', { id: 'plain', name: 'Plain Terminal', icon: 'terminal', description: 'Basic terminal', command: '' })}
+                        title="Basic terminal"
                     >
-                        New Worktree
+                        <Terminal size={12} className="text-gray-400 shrink-0" />
+                        <span className="truncate">Plain Terminal</span>
+                    </button>
+
+                    {/* Custom Templates */}
+                    {customTemplates.map(template => (
+                        <button
+                            key={template.id}
+                            className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                            onClick={() => handleAddSessionClick('regular', template)}
+                            title={template.description || template.command}
+                        >
+                            <span className="text-gray-400 shrink-0">
+                                {getTemplateIcon(template.icon)}
+                            </span>
+                            <span className="truncate">{template.name}</span>
+                        </button>
+                    ))}
+
+                    <div className="border-t border-white/10 my-0.5"></div>
+
+                    {/* Worktree */}
+                    <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                        onClick={() => handleAddSessionClick('worktree')}
+                        title="Create git worktree"
+                    >
+                        <GitBranch size={12} className="text-gray-400 shrink-0" />
+                        <span className="truncate">New Worktree</span>
+                    </button>
+
+                    <div className="border-t border-white/10 my-0.5"></div>
+
+                    {/* Manage Templates */}
+                    <button
+                        className="w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1.5"
+                        onClick={() => {
+                            setMenuOpen(null)
+                            onOpenSettings()
+                        }}
+                    >
+                        <SettingsIcon size={10} />
+                        <span>Manage Templates...</span>
                     </button>
                 </div>,
                 document.body
@@ -255,7 +328,7 @@ export function Sidebar({
                 <div className="p-4">
                     <div className="text-xs font-semibold text-gray-500 mb-2">PLAYGROUND</div>
 
-                    {/* Playground 목록 */}
+                    {/* Playground list */}
                     <div className="space-y-0.5 mb-3">
                         {workspaces.filter(w => w.isPlayground).map(workspace => (
                             <div key={workspace.id} className="space-y-0.5">

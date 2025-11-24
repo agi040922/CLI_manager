@@ -8,6 +8,15 @@ export interface TerminalSession {
     cwd: string
     type: 'regular' | 'worktree'
     notificationStatus?: NotificationStatus
+    initialCommand?: string
+}
+
+export interface TerminalTemplate {
+    id: string
+    name: string
+    icon: string
+    description: string
+    command: string
 }
 
 export interface Workspace {
@@ -23,6 +32,7 @@ export interface AppConfig {
     workspaces: Workspace[]
     playgroundPath: string
     settings?: UserSettings
+    customTemplates?: TerminalTemplate[]
 }
 
 export interface UserSettings {
@@ -31,6 +41,11 @@ export interface UserSettings {
     fontFamily: string
     defaultShell: string
     defaultEditor: EditorType
+    portFilter?: {
+        enabled: boolean
+        minPort: number
+        maxPort: number
+    }
     github?: {
         username: string
         email: string

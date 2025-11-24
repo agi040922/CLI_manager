@@ -18,7 +18,12 @@ function App() {
         fontSize: 14,
         fontFamily: 'Monaco, Courier New, monospace',
         defaultShell: 'zsh',
-        defaultEditor: 'vscode'
+        defaultEditor: 'vscode',
+        portFilter: {
+            enabled: true,
+            minPort: 3000,
+            maxPort: 9000
+        }
     })
 
     // Load workspaces and settings on mount
@@ -71,8 +76,8 @@ function App() {
         }
     }
 
-    const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string) => {
-        const newSession = await window.api.addSession(workspaceId, type, branchName)
+    const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string, initialCommand?: string) => {
+        const newSession = await window.api.addSession(workspaceId, type, branchName, initialCommand)
         if (newSession) {
             setWorkspaces(prev => prev.map(w => {
                 if (w.id === workspaceId) {
@@ -113,6 +118,8 @@ function App() {
                 activeSessionId={activeSession?.id}
                 sessionNotifications={sessionNotifications}
                 onOpenInEditor={handleOpenInEditor}
+                onOpenSettings={() => setSettingsOpen(true)}
+                settingsOpen={settingsOpen}
             />
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
                 <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between">
@@ -163,6 +170,7 @@ function App() {
                                     onNotification={(type) => handleNotification(session.id, type)}
                                     fontSize={settings.fontSize}
                                     fontFamily={settings.fontFamily}
+                                    initialCommand={session.initialCommand}
                                 />
                             </div>
                         ))
@@ -174,7 +182,7 @@ function App() {
                         </div>
                     )}
                 </div>
-                <StatusBar />
+                <StatusBar portFilter={settings.portFilter} />
             </div>
 
             {/* Settings Modal */}

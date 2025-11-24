@@ -19,12 +19,18 @@ const store = new Store<AppConfig>({
     defaults: {
         workspaces: [],
         playgroundPath: app.getPath('downloads'),
+        customTemplates: [],
         settings: {
             theme: 'dark',
             fontSize: 14,
             fontFamily: 'Monaco, Courier New, monospace',
             defaultShell: 'zsh',
-            defaultEditor: 'vscode'
+            defaultEditor: 'vscode',
+            portFilter: {
+                enabled: true,
+                minPort: 3000,
+                maxPort: 9000
+            }
         }
     }
 }) as any
@@ -121,7 +127,7 @@ app.whenReady().then(() => {
         return newWorkspace
     })
 
-    ipcMain.handle('add-session', async (_, workspaceId: string, type: 'regular' | 'worktree', branchName?: string) => {
+    ipcMain.handle('add-session', async (_, workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => {
         const workspaces = store.get('workspaces')
         const workspace = workspaces.find((w: any) => w.id === workspaceId)
 
@@ -131,7 +137,8 @@ app.whenReady().then(() => {
             id: uuidv4(),
             name: 'Main',
             cwd: workspace.path,
-            type
+            type,
+            initialCommand
         }
 
         // Worktree logic
@@ -222,8 +229,26 @@ app.whenReady().then(() => {
         return true
     })
 
+    // Template handlers
+    ipcMain.handle('get-templates', () => {
+        return store.get('customTemplates') || []
+    })
+
+    ipcMain.handle('save-templates', (_, templates: any[]) => {
+        store.set('customTemplates', templates)
+        return true
+    })
+
     ipcMain.handle('check-git-config', async () => {
         try {
+            // First, check if git is installed
+            try {
+                await execAsync('git --version')
+            } catch (e) {
+                console.error('Git is not installed:', e)
+                return null
+            }
+
             let username = ''
             let email = ''
 
@@ -232,7 +257,7 @@ app.whenReady().then(() => {
                 const result = await execAsync('git config --global user.name')
                 username = result.stdout.trim()
             } catch (e) {
-                // Username not set
+                // Username not set - this is okay, we'll return empty string
             }
 
             // Check email
@@ -240,10 +265,10 @@ app.whenReady().then(() => {
                 const result = await execAsync('git config --global user.email')
                 email = result.stdout.trim()
             } catch (e) {
-                // Email not set
+                // Email not set - this is okay, we'll return empty string
             }
 
-            // Return null if both are empty
+            // Return null if both are empty (git is installed but not configured)
             if (!username && !email) {
                 return null
             }
