@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
-import { Workspace, TerminalSession, NotificationStatus } from '../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, UserSettings } from '../../shared/types'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -13,11 +13,25 @@ function App() {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [gitPanelOpen, setGitPanelOpen] = useState(false)
     const [sessionNotifications, setSessionNotifications] = useState<Map<string, NotificationStatus>>(new Map())
-
-    // Load workspaces on mount
-    useState(() => {
-        window.api.getWorkspaces().then(setWorkspaces)
+    const [settings, setSettings] = useState<UserSettings>({
+        theme: 'dark',
+        fontSize: 14,
+        fontFamily: 'Monaco, Courier New, monospace',
+        defaultShell: 'zsh',
+        defaultEditor: 'vscode'
     })
+
+    // Load workspaces and settings on mount
+    useEffect(() => {
+        window.api.getWorkspaces().then(setWorkspaces)
+        window.api.getSettings().then(loadedSettings => {
+            if (loadedSettings) {
+                setSettings(loadedSettings)
+            }
+        }).catch(err => {
+            console.error('Failed to load settings:', err)
+        })
+    }, [])
 
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
         setActiveWorkspace(workspace)
@@ -76,6 +90,17 @@ function App() {
         }
     }
 
+    const handleOpenInEditor = async (workspacePath: string) => {
+        try {
+            const result = await window.api.openInEditor(workspacePath)
+            if (!result.success) {
+                console.error('Failed to open in editor:', result.error)
+            }
+        } catch (error) {
+            console.error('Failed to open in editor:', error)
+        }
+    }
+
     return (
         <div className="flex h-screen w-screen bg-transparent">
             <Sidebar
@@ -87,6 +112,7 @@ function App() {
                 onCreatePlayground={handleCreatePlayground}
                 activeSessionId={activeSession?.id}
                 sessionNotifications={sessionNotifications}
+                onOpenInEditor={handleOpenInEditor}
             />
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
                 <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between">
@@ -112,8 +138,8 @@ function App() {
                             title="Settings"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M12 1v6m0 6v6m-9-9h6m6 0h6m-3.5-8.5 4.5 4.5m-9 9 4.5 4.5m-.5-18.5-4.5 4.5m9 9-4.5 4.5"></path>
                             </svg>
                         </button>
                     </div>
@@ -135,6 +161,8 @@ function App() {
                                     cwd={session.cwd}
                                     visible={activeSession?.id === session.id}
                                     onNotification={(type) => handleNotification(session.id, type)}
+                                    fontSize={settings.fontSize}
+                                    fontFamily={settings.fontFamily}
                                 />
                             </div>
                         ))
@@ -150,7 +178,11 @@ function App() {
             </div>
 
             {/* Settings Modal */}
-            <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+            <Settings
+                isOpen={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+                onSave={(newSettings) => setSettings(newSettings)}
+            />
 
             {/* Git Panel */}
             <GitPanel

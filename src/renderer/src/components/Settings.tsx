@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react'
-import { UserSettings } from '../../../shared/types'
+import { UserSettings, EditorType } from '../../../shared/types'
 import { X, Check, AlertCircle } from 'lucide-react'
 
 interface SettingsProps {
     isOpen: boolean
     onClose: () => void
+    onSave?: (settings: UserSettings) => void
 }
 
-export function Settings({ isOpen, onClose }: SettingsProps) {
+export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
         theme: 'dark',
         fontSize: 14,
         fontFamily: 'Monaco, Courier New, monospace',
         defaultShell: 'zsh',
+        defaultEditor: 'vscode',
         github: undefined
     })
     const [githubCheckStatus, setGithubCheckStatus] = useState<'checking' | 'success' | 'error' | null>(null)
@@ -32,6 +34,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
     const handleSave = async () => {
         await window.api.saveSettings(settings)
+        onSave?.(settings)
         onClose()
     }
 
@@ -122,6 +125,27 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                         )}
                     </div>
 
+                    {/* Editor Settings */}
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-white">Editor</h3>
+                        <p className="text-xs text-gray-400">
+                            Choose which editor to open workspace folders with
+                        </p>
+
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1">Default Editor</label>
+                            <select
+                                value={settings.defaultEditor}
+                                onChange={e => setSettings(prev => ({ ...prev, defaultEditor: e.target.value as EditorType }))}
+                                className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="vscode">VS Code</option>
+                                <option value="cursor">Cursor</option>
+                                <option value="antigravity">Antigravity</option>
+                            </select>
+                        </div>
+                    </div>
+
                     {/* Terminal Settings */}
                     <div className="space-y-3">
                         <h3 className="text-sm font-semibold text-white">Terminal</h3>
@@ -163,36 +187,6 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                         </div>
                     </div>
 
-                    {/* Appearance */}
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-white">Appearance</h3>
-
-                        <div>
-                            <label className="block text-xs text-gray-400 mb-1">Theme</label>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setSettings(prev => ({ ...prev, theme: 'dark' }))}
-                                    className={`flex-1 px-4 py-2 text-sm rounded transition-colors ${
-                                        settings.theme === 'dark'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-black/30 text-gray-400 hover:bg-white/5'
-                                    }`}
-                                >
-                                    Dark
-                                </button>
-                                <button
-                                    onClick={() => setSettings(prev => ({ ...prev, theme: 'light' }))}
-                                    className={`flex-1 px-4 py-2 text-sm rounded transition-colors ${
-                                        settings.theme === 'light'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-black/30 text-gray-400 hover:bg-white/5'
-                                    }`}
-                                >
-                                    Light
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Footer */}

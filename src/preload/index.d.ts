@@ -23,6 +23,19 @@ declare global {
             gitCommit: (workspacePath: string, message: string) => Promise<boolean>
             gitPush: (workspacePath: string) => Promise<boolean>
             gitPull: (workspacePath: string) => Promise<boolean>
+            gitLog: (workspacePath: string, limit?: number) => Promise<any[]>
+            gitReset: (workspacePath: string, commitHash: string, hard?: boolean) => Promise<boolean>
+
+            // GitHub CLI
+            ghCheckAuth: () => Promise<{ authenticated: boolean; message: string }>
+            ghAuthLogin: () => Promise<{ success: boolean; message: string }>
+            ghCreatePR: (workspacePath: string, title: string, body: string) => Promise<{ success: boolean; url: string }>
+            ghListPRs: (workspacePath: string) => Promise<any[]>
+            ghRepoView: (workspacePath: string) => Promise<any>
+            ghWorkflowStatus: (workspacePath: string) => Promise<any[]>
+
+            // Editor
+            openInEditor: (workspacePath: string, editorType?: string) => Promise<{ success: boolean; editor?: string; error?: string }>
 
             // Terminal
             createTerminal: (id: string, cwd: string, cols: number, rows: number) => Promise<boolean>

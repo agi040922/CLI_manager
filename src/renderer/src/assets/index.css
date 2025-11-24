@@ -3,33 +3,86 @@
 @tailwind utilities;
 
 :root {
-  --background-color: #0f0f12;
   --sidebar-width: 250px;
   --header-height: 40px;
+}
+
+/* Dark Mode (Default) */
+:root,
+:root.dark {
+  --background-color: #0f0f12;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --text-tertiary: #666666;
+  --text-white: #ffffff;
+  --text-muted: #4a4a4a;
+
+  --glass-bg: rgba(20, 20, 25, 0.7);
+  --glass-sidebar-bg: rgba(15, 15, 20, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-panel-bg: rgba(30, 30, 32, 1);
+
+  --button-hover-bg: rgba(255, 255, 255, 0.1);
+  --button-active-bg: rgba(255, 255, 255, 0.2);
+  --border-color: rgba(255, 255, 255, 0.1);
+
+  --blue-400: #60a5fa;
+  --blue-500: #3b82f6;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+}
+
+/* Light Mode */
+:root.light {
+  --background-color: #f5f5f5;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a4a4a;
+  --text-tertiary: #8a8a8a;
+  --text-white: #000000;
+  --text-muted: #b0b0b0;
+
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-sidebar-bg: rgba(245, 245, 250, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-panel-bg: rgba(255, 255, 255, 1);
+
+  --button-hover-bg: rgba(0, 0, 0, 0.05);
+  --button-active-bg: rgba(0, 0, 0, 0.1);
+  --border-color: rgba(0, 0, 0, 0.1);
+
+  --blue-400: #3b82f6;
+  --blue-500: #2563eb;
+  --gray-300: #4a4a4a;
+  --gray-400: #6b7280;
+  --gray-500: #9ca3af;
 }
 
 body {
   margin: 0;
   padding: 0;
   background-color: var(--background-color);
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   overflow: hidden; /* Prevent body scroll */
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Glassmorphism Utilities */
 .glass-panel {
-  background: rgba(20, 20, 25, 0.7);
+  background: var(--glass-bg);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .glass-sidebar {
-  background: rgba(15, 15, 20, 0.85);
+  background: var(--glass-sidebar-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid var(--glass-border);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 /* Scrollbar */
@@ -43,12 +96,22 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(128, 128, 128, 0.3);
   border-radius: 4px;
+  transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(128, 128, 128, 0.5);
+}
+
+/* Light mode scrollbar */
+:root.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+:root.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* Draggable Window Region */
@@ -60,4 +123,97 @@ body {
 .no-drag {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* Light Mode Text Colors */
+.light .text-white {
+  color: #1a1a1a !important;
+}
+
+.light .text-gray-300 {
+  color: #4a4a4a !important;
+}
+
+.light .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+.light .text-gray-500 {
+  color: #8a8a8a !important;
+}
+
+.light .text-gray-600 {
+  color: #666666 !important;
+}
+
+/* Light Mode Background Colors */
+.light .bg-\\[\\#1e1e20\\] {
+  background-color: #ffffff !important;
+}
+
+.light .bg-black\\/20,
+.light .bg-black\\/30 {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Light Mode Borders */
+.light .border-white\\/10,
+.light .border-white\\/5 {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Light Mode Hover Effects */
+.light .hover\\:bg-white\\/10:hover,
+.light .hover\\:bg-white\\/5:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Light Mode Icons - make them darker */
+.light svg {
+  filter: brightness(0.4);
+}
+
+.light .text-blue-400,
+.light .text-blue-300,
+.light .text-green-400,
+.light .text-green-300,
+.light .text-red-400,
+.light .text-red-300,
+.light .text-yellow-400,
+.light .text-purple-400 {
+  filter: brightness(0.8) saturate(1.2);
+}
+
+/* Git Panel Button */
+.git-panel-button {
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.git-panel-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.git-panel-button:disabled {
+  cursor: not-allowed;
+}
+
+.git-panel-button:disabled:hover {
+  background-color: transparent;
+}
+
+/* 중요: 버튼 내부의 모든 요소가 클릭 이벤트를 방해하지 않도록 함 */
+.git-panel-button * {
+  pointer-events: none !important;
 }

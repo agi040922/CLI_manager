@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink } from 'lucide-react'
+import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink, Play, CheckCircle2, XCircle, Clock } from 'lucide-react'
 
 interface GitStatus {
     branch: string
@@ -36,7 +36,9 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
     const [ghAuth, setGhAuth] = useState<boolean>(false)
     const [ghRepo, setGhRepo] = useState<any>(null)
     const [ghPRs, setGhPRs] = useState<any[]>([])
+    const [ghWorkflows, setGhWorkflows] = useState<any[]>([])
     const [showGitHub, setShowGitHub] = useState(false)
+    const [showWorkflows, setShowWorkflows] = useState(false)
     const [prTitle, setPrTitle] = useState('')
     const [prBody, setPrBody] = useState('')
 
@@ -91,17 +93,39 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
 
     // GitHub 인증 확인
     const checkGitHubAuth = async () => {
+        if (!workspacePath) return
+
         try {
             const authStatus = await window.api.ghCheckAuth()
             setGhAuth(authStatus.authenticated)
-            if (authStatus.authenticated && workspacePath) {
+            if (authStatus.authenticated) {
                 const repo = await window.api.ghRepoView(workspacePath)
                 setGhRepo(repo)
                 const prs = await window.api.ghListPRs(workspacePath)
                 setGhPRs(prs)
+                const workflows = await window.api.ghWorkflowStatus(workspacePath)
+                setGhWorkflows(workflows)
             }
         } catch (err) {
             console.error('GitHub auth check failed:', err)
+            setGhAuth(false)
+            setGhRepo(null)
+            setGhPRs([])
+            setGhWorkflows([])
+        }
+    }
+
+    // Workflow 상태 새로고침
+    const refreshWorkflows = async () => {
+        if (!workspacePath || !ghAuth) return
+        setLoading(true)
+        try {
+            const workflows = await window.api.ghWorkflowStatus(workspacePath)
+            setGhWorkflows(workflows)
+        } catch (err: any) {
+            setError(err.message || 'Failed to load workflows')
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -147,27 +171,39 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
             loadHistory()
             checkGitHubAuth()
         }
+        // Cleanup: 패널이 닫힐 때 로딩 상태 리셋
+        return () => {
+            if (!isOpen) {
+                setLoading(false)
+            }
+        }
     }, [isOpen, workspacePath])
 
     const handleStage = async (file: string) => {
         if (!workspacePath) return
 
+        setLoading(true)
         try {
             await window.api.gitStage(workspacePath, file)
             await loadStatus()
         } catch (err: any) {
             setError(err.message || 'Failed to stage file')
+        } finally {
+            setLoading(false)
         }
     }
 
     const handleUnstage = async (file: string) => {
         if (!workspacePath) return
 
+        setLoading(true)
         try {
             await window.api.gitUnstage(workspacePath, file)
             await loadStatus()
         } catch (err: any) {
             setError(err.message || 'Failed to unstage file')
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -217,33 +253,41 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
     if (!isOpen) return null
 
     return (
-        <div className="fixed right-0 top-0 bottom-0 w-96 bg-[#1e1e20] border-l border-white/10 shadow-2xl z-[200] flex flex-col">
+        <div className="fixed inset-0 z-[500] bg-black/20" onClick={onClose}>
+            {/* Panel */}
+            <div
+                className="absolute right-0 top-0 bottom-0 w-96 bg-[#1e1e20] border-l border-white/10 shadow-2xl flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 min-h-[56px]">
                 <div className="flex items-center gap-2">
-                    <GitBranch size={18} className="text-blue-400" />
+                    <GitBranch size={16} className="text-blue-400" />
                     <h2 className="text-sm font-semibold text-white">Source Control</h2>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                     <button
                         onClick={() => setShowGitHub(!showGitHub)}
-                        className={`p-1.5 rounded transition-colors ${showGitHub ? 'bg-white/20' : 'hover:bg-white/10'}`}
                         title="GitHub"
+                        className="git-panel-button"
                     >
-                        <Github size={16} className="text-gray-400" />
+                        <Github size={16} style={{ color: '#9ca3af' }} />
                     </button>
                     <button
-                        onClick={loadStatus}
+                        onClick={() => loadStatus()}
                         disabled={loading}
-                        className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                        title="Refresh"
+                        className="git-panel-button"
+                        style={{ opacity: loading ? 0.5 : 1 }}
                     >
-                        <RefreshCw size={16} className="text-gray-400" />
+                        <RefreshCw size={16} style={{ color: '#9ca3af' }} />
                     </button>
                     <button
                         onClick={onClose}
-                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                        title="Close"
+                        className="git-panel-button"
                     >
-                        <X size={16} className="text-gray-400" />
+                        <X size={16} style={{ color: '#9ca3af' }} />
                     </button>
                 </div>
             </div>
@@ -337,6 +381,86 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                             </a>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {/* GitHub Actions */}
+                            {ghWorkflows.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-white/10">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-xs font-semibold text-gray-400 flex items-center gap-1">
+                                            <Play size={12} />
+                                            Actions ({ghWorkflows.length})
+                                        </h4>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={refreshWorkflows}
+                                                disabled={loading}
+                                                className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                                                title="새로고침"
+                                            >
+                                                <RefreshCw size={12} className="text-gray-400" />
+                                            </button>
+                                            <button
+                                                onClick={() => setShowWorkflows(!showWorkflows)}
+                                                className="text-xs text-blue-400 hover:text-blue-300"
+                                            >
+                                                {showWorkflows ? 'Hide' : 'Show'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {showWorkflows && (
+                                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                                            {ghWorkflows.map((workflow, index) => {
+                                                const isRunning = workflow.status === 'in_progress' || workflow.status === 'queued'
+                                                const isSuccess = workflow.conclusion === 'success'
+                                                const isFailure = workflow.conclusion === 'failure'
+
+                                                return (
+                                                    <a
+                                                        key={index}
+                                                        href={workflow.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="block p-2 bg-black/30 hover:bg-white/5 rounded text-xs transition-colors"
+                                                    >
+                                                        <div className="flex items-start gap-2">
+                                                            {/* 상태 아이콘 */}
+                                                            {isRunning && (
+                                                                <Clock size={14} className="text-yellow-400 shrink-0 mt-0.5 animate-pulse" />
+                                                            )}
+                                                            {isSuccess && (
+                                                                <CheckCircle2 size={14} className="text-green-400 shrink-0 mt-0.5" />
+                                                            )}
+                                                            {isFailure && (
+                                                                <XCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
+                                                            )}
+                                                            {!isRunning && !isSuccess && !isFailure && (
+                                                                <div className="w-3.5 h-3.5 rounded-full bg-gray-500 shrink-0 mt-0.5" />
+                                                            )}
+
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-white font-medium truncate">{workflow.name}</div>
+                                                                <div className="text-gray-500 mt-1 flex items-center gap-2">
+                                                                    <span>{workflow.headBranch}</span>
+                                                                    <span>•</span>
+                                                                    <span className={`${
+                                                                        isRunning ? 'text-yellow-400' :
+                                                                        isSuccess ? 'text-green-400' :
+                                                                        isFailure ? 'text-red-400' :
+                                                                        'text-gray-400'
+                                                                    }`}>
+                                                                        {isRunning ? 'Running...' : workflow.conclusion || workflow.status}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </a>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -579,6 +703,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                     </div>
                 )}
             </div>
+        </div>
         </div>
     )
 }

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Workspace, TerminalSession, NotificationStatus } from '../../../shared/types'
-import { Folder, Plus, Terminal, Trash2, ChevronRight, ChevronDown, Settings as SettingsIcon, GitBranch } from 'lucide-react'
+import { Folder, FolderOpen, Plus, Terminal, Trash2, ChevronRight, ChevronDown, Settings as SettingsIcon, GitBranch } from 'lucide-react'
 import clsx from 'clsx'
 
 interface SidebarProps {
@@ -13,6 +13,7 @@ interface SidebarProps {
     onCreatePlayground: () => void
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
+    onOpenInEditor: (workspacePath: string) => void
 }
 
 export function Sidebar({
@@ -23,7 +24,8 @@ export function Sidebar({
     onAddSession,
     onCreatePlayground,
     activeSessionId,
-    sessionNotifications
+    sessionNotifications,
+    onOpenInEditor
 }: SidebarProps) {
     // 알림 배지 색상 결정
     const getNotificationBadge = (sessionId: string) => {
@@ -197,6 +199,16 @@ export function Sidebar({
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation()
+                                        onOpenInEditor(workspace.path)
+                                    }}
+                                    className="p-1 hover:bg-blue-500/20 rounded mr-1"
+                                    title="Open in editor"
+                                >
+                                    <FolderOpen size={12} className="text-gray-400 hover:text-blue-400" />
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation()
                                         handleContextMenu(e, workspace.id)
                                     }}
                                     className="p-1 hover:bg-white/10 rounded mr-1"
@@ -258,6 +270,16 @@ export function Sidebar({
                                         <span className="font-medium text-sm text-yellow-100 truncate">{workspace.name}</span>
                                     </div>
                                     <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                onOpenInEditor(workspace.path)
+                                            }}
+                                            className="p-1 hover:bg-blue-500/20 rounded mr-1"
+                                            title="Open in editor"
+                                        >
+                                            <FolderOpen size={12} className="text-gray-400 hover:text-blue-400" />
+                                        </button>
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation()

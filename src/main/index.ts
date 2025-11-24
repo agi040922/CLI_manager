@@ -23,7 +23,8 @@ const store = new Store<AppConfig>({
             theme: 'dark',
             fontSize: 14,
             fontFamily: 'Monaco, Courier New, monospace',
-            defaultShell: 'zsh'
+            defaultShell: 'zsh',
+            defaultEditor: 'vscode'
         }
     }
 }) as any
@@ -223,13 +224,36 @@ app.whenReady().then(() => {
 
     ipcMain.handle('check-git-config', async () => {
         try {
-            const { stdout: username } = await execAsync('git config --global user.name')
-            const { stdout: email } = await execAsync('git config --global user.email')
+            let username = ''
+            let email = ''
+
+            // Check username
+            try {
+                const result = await execAsync('git config --global user.name')
+                username = result.stdout.trim()
+            } catch (e) {
+                // Username not set
+            }
+
+            // Check email
+            try {
+                const result = await execAsync('git config --global user.email')
+                email = result.stdout.trim()
+            } catch (e) {
+                // Email not set
+            }
+
+            // Return null if both are empty
+            if (!username && !email) {
+                return null
+            }
+
             return {
-                username: username.trim(),
-                email: email.trim()
+                username,
+                email
             }
         } catch (e) {
+            console.error('Git config check error:', e)
             return null
         }
     })
@@ -388,12 +412,52 @@ app.whenReady().then(() => {
 
     ipcMain.handle('gh-repo-view', async (_, workspacePath: string) => {
         try {
-            const cmd = `cd "${workspacePath}" && gh repo view --json name,owner,url,description,defaultBranch`
+            const cmd = `cd "${workspacePath}" && gh repo view --json name,owner,url,description,defaultBranchRef`
             const { stdout } = await execAsync(cmd)
             return JSON.parse(stdout)
         } catch (e: any) {
             console.error('GitHub repo view error:', e)
             return null
+        }
+    })
+
+    ipcMain.handle('gh-workflow-status', async (_, workspacePath: string) => {
+        try {
+            const cmd = `cd "${workspacePath}" && gh run list --json status,conclusion,name,headBranch,createdAt,url --limit 10`
+            const { stdout } = await execAsync(cmd)
+            return JSON.parse(stdout)
+        } catch (e: any) {
+            console.error('GitHub workflow status error:', e)
+            throw new Error(e.message)
+        }
+    })
+
+    // Editor open handler
+    ipcMain.handle('open-in-editor', async (_, workspacePath: string, editorType?: string) => {
+        try {
+            // Get default editor from settings if not specified
+            const editor = editorType || (store.get('settings') as UserSettings)?.defaultEditor || 'vscode'
+
+            // Map editor type to command
+            const editorCommands: Record<string, string> = {
+                'vscode': 'code',
+                'cursor': 'cursor',
+                'antigravity': 'antigravity'
+            }
+
+            const command = editorCommands[editor]
+            if (!command) {
+                throw new Error(`Unknown editor type: ${editor}`)
+            }
+
+            // Execute editor command in the workspace directory
+            const cmd = `cd "${workspacePath}" && ${command} .`
+            await execAsync(cmd)
+
+            return { success: true, editor }
+        } catch (e: any) {
+            console.error('Open in editor error:', e)
+            return { success: false, error: e.message }
         }
     })
 

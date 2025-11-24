@@ -9,6 +9,8 @@ interface TerminalViewProps {
     cwd: string
     visible: boolean
     onNotification?: (type: 'info' | 'error' | 'success') => void
+    fontSize?: number
+    fontFamily?: string
 }
 
 interface Notification {
@@ -17,7 +19,14 @@ interface Notification {
     message: string
 }
 
-export function TerminalView({ id, cwd, visible, onNotification }: TerminalViewProps) {
+export function TerminalView({
+    id,
+    cwd,
+    visible,
+    onNotification,
+    fontSize = 13,
+    fontFamily = 'Menlo, Monaco, "Courier New", monospace'
+}: TerminalViewProps) {
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
@@ -186,8 +195,8 @@ export function TerminalView({ id, cwd, visible, onNotification }: TerminalViewP
                 cursor: '#ffffff',
                 selectionBackground: 'rgba(255, 255, 255, 0.3)'
             },
-            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-            fontSize: 13,
+            fontFamily,
+            fontSize,
             allowProposedApi: true,
             cursorBlink: true
         })
@@ -284,7 +293,7 @@ export function TerminalView({ id, cwd, visible, onNotification }: TerminalViewP
             resizeObserver.disconnect()
             term.dispose()
         }
-    }, [id, cwd])
+    }, [id, cwd, fontSize, fontFamily])
 
     return (
         <div className="w-full h-full relative">

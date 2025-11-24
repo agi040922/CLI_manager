@@ -1,5 +1,7 @@
 export type NotificationStatus = 'none' | 'info' | 'error' | 'success'
 
+export type EditorType = 'vscode' | 'cursor' | 'antigravity'
+
 export interface TerminalSession {
     id: string
     name: string
@@ -28,6 +30,7 @@ export interface UserSettings {
     fontSize: number
     fontFamily: string
     defaultShell: string
+    defaultEditor: EditorType
     github?: {
         username: string
         email: string
