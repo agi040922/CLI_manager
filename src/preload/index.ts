@@ -8,6 +8,7 @@ const api = {
     addWorkspace: (): Promise<Workspace | null> => ipcRenderer.invoke('add-workspace'),
     addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<TerminalSession | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand),
     removeWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id),
+    removeSession: (workspaceId: string, sessionId: string): Promise<boolean> => ipcRenderer.invoke('remove-session', workspaceId, sessionId),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
 
     // Settings
@@ -28,6 +29,8 @@ const api = {
     gitPull: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-pull', workspacePath),
     gitLog: (workspacePath: string, limit?: number): Promise<any[]> => ipcRenderer.invoke('git-log', workspacePath, limit),
     gitReset: (workspacePath: string, commitHash: string, hard?: boolean): Promise<boolean> => ipcRenderer.invoke('git-reset', workspacePath, commitHash, hard),
+    gitListBranches: (workspacePath: string): Promise<{ current: string; all: string[]; branches: any } | null> => ipcRenderer.invoke('git-list-branches', workspacePath),
+    gitCheckout: (workspacePath: string, branchName: string): Promise<boolean> => ipcRenderer.invoke('git-checkout', workspacePath, branchName),
 
     // GitHub CLI
     ghCheckAuth: (): Promise<{ authenticated: boolean; message: string }> => ipcRenderer.invoke('gh-check-auth'),
@@ -43,6 +46,7 @@ const api = {
     // Terminal
     createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),
     resizeTerminal: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('terminal-resize', id, cols, rows),
+    killTerminal: (id: string): Promise<void> => ipcRenderer.invoke('terminal-kill', id),
     writeTerminal: (id: string, data: string): void => ipcRenderer.send('terminal-input', id, data),
     onTerminalData: (id: string, callback: (data: string) => void): () => void => {
         const channel = `terminal-output-${id}`

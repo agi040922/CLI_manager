@@ -10,6 +10,7 @@ interface SidebarProps {
     onAddWorkspace: () => void
     onRemoveWorkspace: (id: string) => void
     onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => void
+    onRemoveSession: (workspaceId: string, sessionId: string) => void
     onCreatePlayground: () => void
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
@@ -24,6 +25,7 @@ export function Sidebar({
     onAddWorkspace,
     onRemoveWorkspace,
     onAddSession,
+    onRemoveSession,
     onCreatePlayground,
     activeSessionId,
     sessionNotifications,
@@ -32,6 +34,8 @@ export function Sidebar({
     settingsOpen
 }: SidebarProps) {
     const [customTemplates, setCustomTemplates] = useState<TerminalTemplate[]>([])
+    const [workspaceBranches, setWorkspaceBranches] = useState<Map<string, { current: string; all: string[] }>>(new Map())
+    const [branchMenuOpen, setBranchMenuOpen] = useState<{ x: number; y: number; workspaceId: string; workspacePath: string } | null>(null)
 
     // Load custom templates
     useEffect(() => {
@@ -39,6 +43,32 @@ export function Sidebar({
             console.error('Failed to load templates:', err)
         })
     }, [])
+
+    // Load branch info for all workspaces
+    useEffect(() => {
+        const loadBranches = async () => {
+            const branchMap = new Map<string, { current: string; all: string[] }>()
+
+            for (const workspace of workspaces) {
+                try {
+                    const branches = await window.api.gitListBranches(workspace.path)
+                    if (branches) {
+                        branchMap.set(workspace.id, {
+                            current: branches.current,
+                            all: branches.all.filter(b => !b.startsWith('remotes/'))
+                        })
+                    }
+                } catch (err) {
+                    // Workspace is not a git repo or error occurred
+                    console.debug(`Could not load branches for ${workspace.name}`)
+                }
+            }
+
+            setWorkspaceBranches(branchMap)
+        }
+
+        loadBranches()
+    }, [workspaces])
 
     // Reload templates when settings close
     useEffect(() => {
@@ -127,15 +157,96 @@ export function Sidebar({
         }
     }
 
+    // Handle branch click
+    const handleBranchClick = (e: React.MouseEvent, workspace: Workspace) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        const branches = workspaceBranches.get(workspace.id)
+        if (!branches) return
+
+        setBranchMenuOpen({
+            x: e.clientX,
+            y: e.clientY,
+            workspaceId: workspace.id,
+            workspacePath: workspace.path
+        })
+    }
+
+    // Handle branch checkout
+    const handleBranchCheckout = async (branchName: string) => {
+        if (!branchMenuOpen) return
+
+        try {
+            await window.api.gitCheckout(branchMenuOpen.workspacePath, branchName)
+
+            // Reload branch info
+            const branches = await window.api.gitListBranches(branchMenuOpen.workspacePath)
+            if (branches) {
+                setWorkspaceBranches(prev => {
+                    const next = new Map(prev)
+                    next.set(branchMenuOpen.workspaceId, {
+                        current: branches.current,
+                        all: branches.all.filter(b => !b.startsWith('remotes/'))
+                    })
+                    return next
+                })
+            }
+        } catch (err) {
+            console.error('Failed to checkout branch:', err)
+            alert('Failed to checkout branch. Make sure you have no uncommitted changes.')
+        } finally {
+            setBranchMenuOpen(null)
+        }
+    }
+
     // Close menu on click outside
     useEffect(() => {
-        const handleClick = () => setMenuOpen(null)
+        const handleClick = () => {
+            setMenuOpen(null)
+            setBranchMenuOpen(null)
+        }
         window.addEventListener('click', handleClick)
         return () => window.removeEventListener('click', handleClick)
     }, [])
 
     return (
         <>
+            {/* Branch Menu - Portal to body */}
+            {branchMenuOpen && createPortal(
+                <div
+                    className="fixed z-[9999] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-52 backdrop-blur-md max-h-64 overflow-y-auto"
+                    style={{ top: branchMenuOpen.y, left: branchMenuOpen.x }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Switch Branch
+                    </div>
+
+                    {workspaceBranches.get(branchMenuOpen.workspaceId)?.all.map(branch => {
+                        const isCurrentBranch = branch === workspaceBranches.get(branchMenuOpen.workspaceId)?.current
+                        return (
+                            <button
+                                key={branch}
+                                className={clsx(
+                                    "w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center gap-2",
+                                    isCurrentBranch
+                                        ? "bg-blue-500/20 text-blue-300 font-medium"
+                                        : "text-gray-300 hover:bg-white/10 hover:text-white"
+                                )}
+                                onClick={() => handleBranchCheckout(branch)}
+                                disabled={isCurrentBranch}
+                            >
+                                <GitBranch size={12} className={isCurrentBranch ? "text-blue-400" : "text-gray-400"} />
+                                <span className="truncate">{branch}</span>
+                                {isCurrentBranch && <span className="ml-auto text-[9px] text-blue-400">✓</span>}
+                            </button>
+                        )
+                    })}
+                </div>,
+                document.body
+            )}
+
             {/* Context Menu - Portal to body */}
             {menuOpen && createPortal(
                 <div
@@ -256,17 +367,28 @@ export function Sidebar({
                             onContextMenu={(e) => handleContextMenu(e, workspace.id)}
                             className="group flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
                         >
-                            <div className="flex items-center gap-2 overflow-hidden">
-                                {expanded.has(workspace.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                                {workspace.isPlayground ? (
-                                    <Folder size={16} className="text-yellow-400 shrink-0" />
-                                ) : (
-                                    <Folder size={16} className="text-blue-400 shrink-0" />
+                            <div className="flex flex-col gap-0.5 overflow-hidden flex-1 min-w-0">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                    {expanded.has(workspace.id) ? <ChevronDown size={14} className="text-gray-400 shrink-0" /> : <ChevronRight size={14} className="text-gray-400 shrink-0" />}
+                                    {workspace.isPlayground ? (
+                                        <Folder size={16} className="text-yellow-400 shrink-0" />
+                                    ) : (
+                                        <Folder size={16} className="text-blue-400 shrink-0" />
+                                    )}
+                                    <span className={clsx(
+                                        "font-medium text-sm truncate",
+                                        workspace.isPlayground ? "text-yellow-100" : ""
+                                    )}>{workspace.name}</span>
+                                </div>
+                                {workspaceBranches.get(workspace.id) && (
+                                    <div
+                                        className="ml-7 flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors cursor-pointer"
+                                        onClick={(e) => handleBranchClick(e, workspace)}
+                                    >
+                                        <GitBranch size={10} />
+                                        <span className="truncate">{workspaceBranches.get(workspace.id)?.current}</span>
+                                    </div>
                                 )}
-                                <span className={clsx(
-                                    "font-medium text-sm truncate",
-                                    workspace.isPlayground ? "text-yellow-100" : ""
-                                )}>{workspace.name}</span>
                             </div>
                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
@@ -305,17 +427,31 @@ export function Sidebar({
                                 {workspace.sessions?.map((session: TerminalSession) => (
                                     <div
                                         key={session.id}
-                                        onClick={() => onSelect(workspace, session)}
                                         className={clsx(
-                                            "flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm",
+                                            "flex items-center gap-2 p-2 rounded transition-colors text-sm group",
                                             activeSessionId === session.id
                                                 ? "bg-blue-500/20 text-blue-200"
                                                 : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
                                         )}
                                     >
-                                        <Terminal size={14} />
-                                        <span className="truncate flex-1">{session.name}</span>
-                                        {getNotificationBadge(session.id)}
+                                        <div
+                                            onClick={() => onSelect(workspace, session)}
+                                            className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+                                        >
+                                            <Terminal size={14} className="shrink-0" />
+                                            <span className="truncate flex-1">{session.name}</span>
+                                            {getNotificationBadge(session.id)}
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                onRemoveSession(workspace.id, session.id)
+                                            }}
+                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all shrink-0"
+                                            title="Delete session"
+                                        >
+                                            <Trash2 size={12} className="text-gray-500 hover:text-red-400" />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -337,10 +473,21 @@ export function Sidebar({
                                     onContextMenu={(e) => handleContextMenu(e, workspace.id)}
                                     className="group flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
                                 >
-                                    <div className="flex items-center gap-2 overflow-hidden">
-                                        {expanded.has(workspace.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                                        <Folder size={16} className="text-yellow-400 shrink-0" />
-                                        <span className="font-medium text-sm text-yellow-100 truncate">{workspace.name}</span>
+                                    <div className="flex flex-col gap-0.5 overflow-hidden flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            {expanded.has(workspace.id) ? <ChevronDown size={14} className="text-gray-400 shrink-0" /> : <ChevronRight size={14} className="text-gray-400 shrink-0" />}
+                                            <Folder size={16} className="text-yellow-400 shrink-0" />
+                                            <span className="font-medium text-sm text-yellow-100 truncate">{workspace.name}</span>
+                                        </div>
+                                        {workspaceBranches.get(workspace.id) && (
+                                            <div
+                                                className="ml-7 flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors cursor-pointer"
+                                                onClick={(e) => handleBranchClick(e, workspace)}
+                                            >
+                                                <GitBranch size={10} />
+                                                <span className="truncate">{workspaceBranches.get(workspace.id)?.current}</span>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                                         <button
@@ -379,17 +526,31 @@ export function Sidebar({
                                         {workspace.sessions?.map((session: TerminalSession) => (
                                             <div
                                                 key={session.id}
-                                                onClick={() => onSelect(workspace, session)}
                                                 className={clsx(
-                                                    "flex items-center gap-2 p-2 rounded cursor-pointer transition-colors text-sm",
+                                                    "flex items-center gap-2 p-2 rounded transition-colors text-sm group",
                                                     activeSessionId === session.id
                                                         ? "bg-blue-500/20 text-blue-200"
                                                         : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
                                                 )}
                                             >
-                                                <Terminal size={14} />
-                                                <span className="truncate flex-1">{session.name}</span>
-                                                {getNotificationBadge(session.id)}
+                                                <div
+                                                    onClick={() => onSelect(workspace, session)}
+                                                    className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+                                                >
+                                                    <Terminal size={14} className="shrink-0" />
+                                                    <span className="truncate flex-1">{session.name}</span>
+                                                    {getNotificationBadge(session.id)}
+                                                </div>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        onRemoveSession(workspace.id, session.id)
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all shrink-0"
+                                                    title="Delete session"
+                                                >
+                                                    <Trash2 size={12} className="text-gray-500 hover:text-red-400" />
+                                                </button>
                                             </div>
                                         ))}
                                     </div>

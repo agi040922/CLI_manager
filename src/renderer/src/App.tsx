@@ -88,6 +88,27 @@ function App() {
         }
     }
 
+    const handleRemoveSession = async (workspaceId: string, sessionId: string) => {
+        // Kill the terminal process
+        await window.api.killTerminal(sessionId)
+
+        // Remove from store
+        await window.api.removeSession(workspaceId, sessionId)
+
+        // Update UI
+        setWorkspaces(prev => prev.map(w => {
+            if (w.id === workspaceId) {
+                return { ...w, sessions: w.sessions.filter(s => s.id !== sessionId) }
+            }
+            return w
+        }))
+
+        // Clear active session if it's the one being removed
+        if (activeSession?.id === sessionId) {
+            setActiveSession(null)
+        }
+    }
+
     const handleCreatePlayground = async () => {
         const newWorkspace = await window.api.createPlayground()
         if (newWorkspace) {
@@ -114,6 +135,7 @@ function App() {
                 onAddWorkspace={handleAddWorkspace}
                 onRemoveWorkspace={handleRemoveWorkspace}
                 onAddSession={handleAddSession}
+                onRemoveSession={handleRemoveSession}
                 onCreatePlayground={handleCreatePlayground}
                 activeSessionId={activeSession?.id}
                 sessionNotifications={sessionNotifications}

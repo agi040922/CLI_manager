@@ -186,6 +186,23 @@ app.whenReady().then(() => {
         return true
     })
 
+    ipcMain.handle('remove-session', (_, workspaceId: string, sessionId: string) => {
+        const workspaces = store.get('workspaces') as Workspace[]
+        const workspace = workspaces.find((w: Workspace) => w.id === workspaceId)
+
+        if (!workspace) return false
+
+        // Remove session from workspace
+        workspace.sessions = workspace.sessions.filter(s => s.id !== sessionId)
+
+        // Update store
+        store.set('workspaces', workspaces.map(w =>
+            w.id === workspaceId ? workspace : w
+        ))
+
+        return true
+    })
+
     ipcMain.handle('create-playground', async () => {
         // Create a readable timestamp for the playground name
         const now = new Date()
@@ -387,6 +404,35 @@ app.whenReady().then(() => {
             return true
         } catch (e) {
             console.error('Git reset error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-list-branches', async (_, workspacePath: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            const isRepo = await git.checkIsRepo()
+            if (!isRepo) return null
+
+            const branchSummary = await git.branch()
+            return {
+                current: branchSummary.current,
+                all: branchSummary.all,
+                branches: branchSummary.branches
+            }
+        } catch (e) {
+            console.error('Git list branches error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-checkout', async (_, workspacePath: string, branchName: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.checkout(branchName)
+            return true
+        } catch (e) {
+            console.error('Git checkout error:', e)
             throw e
         }
     })
