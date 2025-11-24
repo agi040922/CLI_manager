@@ -1,0 +1,267 @@
+import React from 'react'
+import { createPortal } from 'react-dom'
+import { Terminal, GitBranch, Settings as SettingsIcon } from 'lucide-react'
+import { Workspace, TerminalTemplate } from '../../../../shared/types'
+import { getTemplateIcon } from '../../constants/icons'
+import { MENU_Z_INDEX } from '../../constants/styles'
+
+interface WorkspaceContextMenuProps {
+    x: number
+    y: number
+    templates: TerminalTemplate[]
+    onAddSession: (type: 'regular' | 'worktree', template?: TerminalTemplate) => void
+    onOpenSettings: () => void
+    onClose: () => void
+}
+
+/**
+ * 워크스페이스 우클릭 컨텍스트 메뉴
+ * 일반 터미널, 커스텀 템플릿, Worktree 생성 옵션 제공
+ */
+export function WorkspaceContextMenu({
+    x,
+    y,
+    templates,
+    onAddSession,
+    onOpenSettings,
+    onClose
+}: WorkspaceContextMenuProps) {
+    return createPortal(
+        <div
+            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-44 backdrop-blur-md`}
+            style={{ top: y, left: x }}
+            onClick={e => e.stopPropagation()}
+        >
+            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                New Terminal
+            </div>
+
+            {/* Plain Terminal */}
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onAddSession('regular', {
+                        id: 'plain',
+                        name: 'Plain Terminal',
+                        icon: 'terminal',
+                        description: 'Basic terminal',
+                        command: ''
+                    })
+                    onClose()
+                }}
+                title="Basic terminal"
+            >
+                <Terminal size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Plain Terminal</span>
+            </button>
+
+            {/* Custom Templates */}
+            {templates.map(template => (
+                <button
+                    key={template.id}
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                    onClick={() => {
+                        onAddSession('regular', template)
+                        onClose()
+                    }}
+                    title={template.description || template.command}
+                >
+                    <span className="text-gray-400 shrink-0">
+                        {getTemplateIcon(template.icon)}
+                    </span>
+                    <span className="truncate">{template.name}</span>
+                </button>
+            ))}
+
+            <div className="border-t border-white/10 my-0.5"></div>
+
+            {/* Worktree */}
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onAddSession('worktree')
+                    onClose()
+                }}
+                title="Create git worktree"
+            >
+                <GitBranch size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">New Worktree</span>
+            </button>
+
+            <div className="border-t border-white/10 my-0.5"></div>
+
+            {/* Manage Templates */}
+            <button
+                className="w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1.5"
+                onClick={() => {
+                    onClose()
+                    onOpenSettings()
+                }}
+            >
+                <SettingsIcon size={10} />
+                <span>Manage Templates...</span>
+            </button>
+        </div>,
+        document.body
+    )
+}
+
+interface WorktreeContextMenuProps {
+    x: number
+    y: number
+    workspace: Workspace
+    templates: TerminalTemplate[]
+    onPushToGitHub: () => void
+    onCreatePR: () => void
+    onAddSession: (workspaceId: string, template?: TerminalTemplate) => void
+    onClose: () => void
+}
+
+/**
+ * Worktree 우클릭 컨텍스트 메뉴
+ * GitHub push, PR 생성, 커스텀 터미널 추가 기능 제공
+ */
+export function WorktreeContextMenu({
+    x,
+    y,
+    workspace,
+    templates,
+    onPushToGitHub,
+    onCreatePR,
+    onAddSession,
+    onClose
+}: WorktreeContextMenuProps) {
+    return createPortal(
+        <div
+            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-52 backdrop-blur-md max-h-96 overflow-y-auto`}
+            style={{ top: y, left: x }}
+            onClick={e => e.stopPropagation()}
+        >
+            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                Worktree Actions
+            </div>
+
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onPushToGitHub()
+                    onClose()
+                }}
+                title="Push branch to GitHub"
+            >
+                <GitBranch size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Push to GitHub</span>
+            </button>
+
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onCreatePR()
+                    onClose()
+                }}
+                title="Create pull request"
+            >
+                <GitBranch size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Create PR</span>
+            </button>
+
+            <div className="border-t border-white/10 my-0.5"></div>
+
+            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                New Terminal
+            </div>
+
+            {/* Plain Terminal */}
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onAddSession(workspace.id)
+                    onClose()
+                }}
+                title="Basic terminal"
+            >
+                <Terminal size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Plain Terminal</span>
+            </button>
+
+            {/* Custom Templates */}
+            {templates.map(template => (
+                <button
+                    key={template.id}
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                    onClick={() => {
+                        onAddSession(workspace.id, template)
+                        onClose()
+                    }}
+                    title={template.description || template.command}
+                >
+                    <span className="text-gray-400 shrink-0">
+                        {getTemplateIcon(template.icon)}
+                    </span>
+                    <span className="truncate">{template.name}</span>
+                </button>
+            ))}
+        </div>,
+        document.body
+    )
+}
+
+interface BranchMenuProps {
+    x: number
+    y: number
+    branches: string[]
+    currentBranch: string
+    onCheckout: (branchName: string) => void
+    onClose: () => void
+}
+
+/**
+ * 브랜치 선택 메뉴
+ * Git 브랜치 전환 기능 제공
+ */
+export function BranchMenu({
+    x,
+    y,
+    branches,
+    currentBranch,
+    onCheckout,
+    onClose
+}: BranchMenuProps) {
+    return createPortal(
+        <div
+            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-52 backdrop-blur-md max-h-64 overflow-y-auto`}
+            style={{ top: y, left: x }}
+            onClick={e => e.stopPropagation()}
+        >
+            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                Switch Branch
+            </div>
+
+            {branches.map(branch => {
+                const isCurrentBranch = branch === currentBranch
+                return (
+                    <button
+                        key={branch}
+                        className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center gap-2 ${
+                            isCurrentBranch
+                                ? "bg-blue-500/20 text-blue-300 font-medium"
+                                : "text-gray-300 hover:bg-white/10 hover:text-white"
+                        }`}
+                        onClick={() => {
+                            if (!isCurrentBranch) {
+                                onCheckout(branch)
+                            }
+                            onClose()
+                        }}
+                        disabled={isCurrentBranch}
+                    >
+                        <GitBranch size={12} className={isCurrentBranch ? "text-blue-400" : "text-gray-400"} />
+                        <span className="truncate">{branch}</span>
+                        {isCurrentBranch && <span className="ml-auto text-[9px] text-blue-400">✓</span>}
+                    </button>
+                )
+            })}
+        </div>,
+        document.body
+    )
+}

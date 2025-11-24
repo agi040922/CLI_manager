@@ -7,6 +7,7 @@ const api = {
     getWorkspaces: (): Promise<Workspace[]> => ipcRenderer.invoke('get-workspaces'),
     addWorkspace: (): Promise<Workspace | null> => ipcRenderer.invoke('add-workspace'),
     addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<TerminalSession | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand),
+    addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string): Promise<Workspace | null> => ipcRenderer.invoke('add-worktree-workspace', parentWorkspaceId, branchName),
     removeWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id),
     removeSession: (workspaceId: string, sessionId: string): Promise<boolean> => ipcRenderer.invoke('remove-session', workspaceId, sessionId),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
@@ -39,6 +40,9 @@ const api = {
     ghListPRs: (workspacePath: string): Promise<any[]> => ipcRenderer.invoke('gh-list-prs', workspacePath),
     ghRepoView: (workspacePath: string): Promise<any> => ipcRenderer.invoke('gh-repo-view', workspacePath),
     ghWorkflowStatus: (workspacePath: string): Promise<any[]> => ipcRenderer.invoke('gh-workflow-status', workspacePath),
+    ghPushBranch: (workspacePath: string, branchName: string): Promise<{ success: boolean }> => ipcRenderer.invoke('gh-push-branch', workspacePath, branchName),
+    ghMergePR: (workspacePath: string, prNumber: number): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke('gh-merge-pr', workspacePath, prNumber),
+    ghCreatePRFromWorktree: (workspacePath: string, branchName: string, title: string, body: string): Promise<{ success: boolean; url: string }> => ipcRenderer.invoke('gh-create-pr-from-worktree', workspacePath, branchName, title, body),
 
     // Editor
     openInEditor: (workspacePath: string, editorType?: string): Promise<{ success: boolean; editor?: string; error?: string }> => ipcRenderer.invoke('open-in-editor', workspacePath, editorType),

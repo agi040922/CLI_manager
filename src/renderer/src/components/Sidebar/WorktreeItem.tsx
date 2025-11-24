@@ -1,0 +1,104 @@
+import React from 'react'
+import { GitBranch, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
+import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
+import { SessionItem } from './SessionItem'
+
+interface WorktreeItemProps {
+    worktree: Workspace
+    expanded: boolean
+    activeSessionId?: string
+    sessionNotifications?: Map<string, NotificationStatus>
+    onToggleExpand: (id: string) => void
+    onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
+    onSelect: (workspace: Workspace, session: TerminalSession) => void
+    onRemoveSession: (workspaceId: string, sessionId: string) => void
+    onRemoveWorkspace: (id: string) => void
+    onOpenInEditor: (workspacePath: string) => void
+}
+
+/**
+ * Worktree 워크스페이스 항목 컴포넌트
+ * 메인 워크스페이스 아래에 들여쓰기되어 표시
+ */
+export function WorktreeItem({
+    worktree,
+    expanded,
+    activeSessionId,
+    sessionNotifications,
+    onToggleExpand,
+    onContextMenu,
+    onSelect,
+    onRemoveSession,
+    onRemoveWorkspace,
+    onOpenInEditor
+}: WorktreeItemProps) {
+    return (
+        <div className="space-y-0.5">
+            <div
+                onClick={() => onToggleExpand(worktree.id)}
+                onContextMenu={(e) => onContextMenu(e, worktree.id)}
+                className="group flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
+            >
+                <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                    {expanded ? (
+                        <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                    ) : (
+                        <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                    )}
+                    <GitBranch size={14} className="text-green-400 shrink-0" />
+                    <span className="font-medium text-sm text-green-100 truncate">
+                        {worktree.name}
+                    </span>
+                </div>
+                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onOpenInEditor(worktree.path)
+                        }}
+                        className="p-1 hover:bg-blue-500/20 rounded mr-1"
+                        title="Open in editor"
+                    >
+                        <FolderOpen size={12} className="text-gray-400 hover:text-blue-400" />
+                    </button>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onContextMenu(e, worktree.id)
+                        }}
+                        className="p-1 hover:bg-white/10 rounded mr-1"
+                    >
+                        <Plus size={12} className="text-gray-400" />
+                    </button>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onRemoveWorkspace(worktree.id)
+                        }}
+                        className="p-1 hover:bg-red-500/20 rounded"
+                        title="Delete worktree"
+                    >
+                        <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Worktree의 세션들 */}
+            {expanded && (
+                <div className="ml-4 pl-2 border-l border-white/5 space-y-0.5">
+                    {worktree.sessions?.map((session: TerminalSession) => (
+                        <SessionItem
+                            key={session.id}
+                            session={session}
+                            workspace={worktree}
+                            isActive={activeSessionId === session.id}
+                            notificationStatus={sessionNotifications?.get(session.id)}
+                            onSelect={onSelect}
+                            onRemove={onRemoveSession}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}

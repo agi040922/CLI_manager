@@ -10,6 +10,7 @@ interface SidebarProps {
     onAddWorkspace: () => void
     onRemoveWorkspace: (id: string) => void
     onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => void
+    onAddWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => void
     onRemoveSession: (workspaceId: string, sessionId: string) => void
     onCreatePlayground: () => void
     activeSessionId?: string
@@ -25,6 +26,7 @@ export function Sidebar({
     onAddWorkspace,
     onRemoveWorkspace,
     onAddSession,
+    onAddWorktreeWorkspace,
     onRemoveSession,
     onCreatePlayground,
     activeSessionId,
@@ -95,8 +97,12 @@ export function Sidebar({
     }
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     const [menuOpen, setMenuOpen] = useState<{ x: number, y: number, workspaceId: string } | null>(null)
+    const [worktreeMenuOpen, setWorktreeMenuOpen] = useState<{ x: number, y: number, workspace: Workspace } | null>(null)
     const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
+    const [showPRPrompt, setShowPRPrompt] = useState<{ workspace: Workspace } | null>(null)
     const [branchName, setBranchName] = useState('')
+    const [prTitle, setPRTitle] = useState('')
+    const [prBody, setPRBody] = useState('')
 
     // Initialize expanded state with all workspace IDs when workspaces change
     useEffect(() => {
@@ -124,12 +130,21 @@ export function Sidebar({
     const handleContextMenu = (e: React.MouseEvent, workspaceId: string) => {
         e.preventDefault()
         e.stopPropagation()
-        setMenuOpen({ x: e.clientX, y: e.clientY, workspaceId })
+
+        const workspace = workspaces.find(w => w.id === workspaceId)
+
+        // Worktree workspace인 경우 별도 메뉴
+        if (workspace?.parentWorkspaceId) {
+            setWorktreeMenuOpen({ x: e.clientX, y: e.clientY, workspace })
+        } else {
+            setMenuOpen({ x: e.clientX, y: e.clientY, workspaceId })
+        }
     }
 
     const handleAddSessionClick = (type: 'regular' | 'worktree', template?: TerminalTemplate) => {
         if (menuOpen) {
             if (type === 'worktree') {
+                // Worktree는 별도 workspace로 생성
                 setShowPrompt({ workspaceId: menuOpen.workspaceId })
             } else {
                 onAddSession(menuOpen.workspaceId, 'regular', undefined, template?.command)
@@ -151,7 +166,8 @@ export function Sidebar({
     const handlePromptSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         if (showPrompt && branchName) {
-            onAddSession(showPrompt.workspaceId, 'worktree', branchName)
+            // Worktree를 별도 workspace로 생성
+            onAddWorktreeWorkspace(showPrompt.workspaceId, branchName)
             setShowPrompt(null)
             setBranchName('')
         }
@@ -200,11 +216,54 @@ export function Sidebar({
         }
     }
 
+    // Handle GitHub actions for worktree
+    const handlePushToGitHub = async () => {
+        if (!worktreeMenuOpen) return
+
+        try {
+            await window.api.ghPushBranch(worktreeMenuOpen.workspace.path, worktreeMenuOpen.workspace.branchName!)
+            alert('Successfully pushed to GitHub!')
+        } catch (err: any) {
+            alert(`Failed to push: ${err.message}`)
+        } finally {
+            setWorktreeMenuOpen(null)
+        }
+    }
+
+    const handleCreatePR = () => {
+        if (!worktreeMenuOpen) return
+
+        setShowPRPrompt({ workspace: worktreeMenuOpen.workspace })
+        setWorktreeMenuOpen(null)
+    }
+
+    const handlePRPromptSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!showPRPrompt || !prTitle) return
+
+        try {
+            const result = await window.api.ghCreatePRFromWorktree(
+                showPRPrompt.workspace.path,
+                showPRPrompt.workspace.branchName!,
+                prTitle,
+                prBody
+            )
+            alert(`PR created: ${result.url}`)
+        } catch (err: any) {
+            alert(`Failed to create PR: ${err.message}`)
+        } finally {
+            setShowPRPrompt(null)
+            setPRTitle('')
+            setPRBody('')
+        }
+    }
+
     // Close menu on click outside
     useEffect(() => {
         const handleClick = () => {
             setMenuOpen(null)
             setBranchMenuOpen(null)
+            setWorktreeMenuOpen(null)
         }
         window.addEventListener('click', handleClick)
         return () => window.removeEventListener('click', handleClick)
@@ -212,6 +271,103 @@ export function Sidebar({
 
     return (
         <>
+            {/* Worktree Context Menu - Portal to body */}
+            {worktreeMenuOpen && createPortal(
+                <div
+                    className="fixed z-[9999] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-52 backdrop-blur-md"
+                    style={{ top: worktreeMenuOpen.y, left: worktreeMenuOpen.x }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Worktree Actions
+                    </div>
+
+                    <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                        onClick={handlePushToGitHub}
+                        title="Push branch to GitHub"
+                    >
+                        <GitBranch size={12} className="text-gray-400 shrink-0" />
+                        <span className="truncate">Push to GitHub</span>
+                    </button>
+
+                    <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                        onClick={handleCreatePR}
+                        title="Create pull request"
+                    >
+                        <GitBranch size={12} className="text-gray-400 shrink-0" />
+                        <span className="truncate">Create PR</span>
+                    </button>
+
+                    <div className="border-t border-white/10 my-0.5"></div>
+
+                    <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                        onClick={() => {
+                            if (worktreeMenuOpen) {
+                                onAddSession(worktreeMenuOpen.workspace.id, 'regular')
+                                setWorktreeMenuOpen(null)
+                            }
+                        }}
+                        title="Add new terminal"
+                    >
+                        <Terminal size={12} className="text-gray-400 shrink-0" />
+                        <span className="truncate">New Terminal</span>
+                    </button>
+                </div>,
+                document.body
+            )}
+
+            {/* PR Prompt Modal - Portal to body */}
+            {showPRPrompt && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-[#1e1e20] border border-white/10 rounded-lg p-4 w-96 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-sm font-medium text-white mb-3">Create Pull Request</h3>
+                        <form onSubmit={handlePRPromptSubmit}>
+                            <div className="mb-3">
+                                <label className="text-xs text-gray-400 mb-1 block">Title</label>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={prTitle}
+                                    onChange={e => setPRTitle(e.target.value)}
+                                    placeholder="PR title"
+                                    className="w-full bg-black/30 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                                />
+                            </div>
+                            <div className="mb-3">
+                                <label className="text-xs text-gray-400 mb-1 block">Description (optional)</label>
+                                <textarea
+                                    value={prBody}
+                                    onChange={e => setPRBody(e.target.value)}
+                                    placeholder="PR description"
+                                    rows={4}
+                                    className="w-full bg-black/30 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPRPrompt(null)}
+                                    className="px-3 py-1 text-xs text-gray-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500"
+                                    disabled={!prTitle}
+                                >
+                                    Create PR
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             {/* Branch Menu - Portal to body */}
             {branchMenuOpen && createPortal(
                 <div
@@ -360,7 +516,11 @@ export function Sidebar({
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                {workspaces.filter(w => !w.isPlayground).map(workspace => (
+                {workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId).map(workspace => {
+                    // 부모 workspace의 자식 worktree들 찾기
+                    const childWorktrees = workspaces.filter(w => w.parentWorkspaceId === workspace.id)
+
+                    return (
                     <div key={workspace.id} className="space-y-0.5">
                         <div
                             onClick={() => toggleExpand(workspace.id)}
@@ -424,6 +584,7 @@ export function Sidebar({
 
                         {expanded.has(workspace.id) && (
                             <div className="ml-4 pl-2 border-l border-white/5 space-y-0.5">
+                                {/* 부모 workspace의 세션들 */}
                                 {workspace.sessions?.map((session: TerminalSession) => (
                                     <div
                                         key={session.id}
@@ -454,10 +615,95 @@ export function Sidebar({
                                         </button>
                                     </div>
                                 ))}
+
+                                {/* 자식 worktree workspace들 */}
+                                {childWorktrees.map(worktree => (
+                                    <div key={worktree.id} className="space-y-0.5">
+                                        <div
+                                            onClick={() => toggleExpand(worktree.id)}
+                                            onContextMenu={(e) => handleContextMenu(e, worktree.id)}
+                                            className="group flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                                                {expanded.has(worktree.id) ? <ChevronDown size={14} className="text-gray-400 shrink-0" /> : <ChevronRight size={14} className="text-gray-400 shrink-0" />}
+                                                <GitBranch size={14} className="text-green-400 shrink-0" />
+                                                <span className="font-medium text-sm text-green-100 truncate">{worktree.name}</span>
+                                            </div>
+                                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        onOpenInEditor(worktree.path)
+                                                    }}
+                                                    className="p-1 hover:bg-blue-500/20 rounded mr-1"
+                                                    title="Open in editor"
+                                                >
+                                                    <FolderOpen size={12} className="text-gray-400 hover:text-blue-400" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleContextMenu(e, worktree.id)
+                                                    }}
+                                                    className="p-1 hover:bg-white/10 rounded mr-1"
+                                                >
+                                                    <Plus size={12} className="text-gray-400" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        onRemoveWorkspace(worktree.id)
+                                                    }}
+                                                    className="p-1 hover:bg-red-500/20 rounded"
+                                                    title="Delete worktree"
+                                                >
+                                                    <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Worktree의 세션들 */}
+                                        {expanded.has(worktree.id) && (
+                                            <div className="ml-4 pl-2 border-l border-white/5 space-y-0.5">
+                                                {worktree.sessions?.map((session: TerminalSession) => (
+                                                    <div
+                                                        key={session.id}
+                                                        className={clsx(
+                                                            "flex items-center gap-2 p-2 rounded transition-colors text-sm group",
+                                                            activeSessionId === session.id
+                                                                ? "bg-blue-500/20 text-blue-200"
+                                                                : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
+                                                        )}
+                                                    >
+                                                        <div
+                                                            onClick={() => onSelect(worktree, session)}
+                                                            className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+                                                        >
+                                                            <Terminal size={14} className="shrink-0" />
+                                                            <span className="truncate flex-1">{session.name}</span>
+                                                            {getNotificationBadge(session.id)}
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                onRemoveSession(worktree.id, session.id)
+                                                            }}
+                                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all shrink-0"
+                                                            title="Delete session"
+                                                        >
+                                                            <Trash2 size={12} className="text-gray-500 hover:text-red-400" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
-                ))}
+                    )
+                })}
             </div>
 
             <div className="border-t border-white/10">

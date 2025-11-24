@@ -26,6 +26,8 @@ export interface Workspace {
     sessions: TerminalSession[]
     createdAt: number
     isPlayground?: boolean
+    parentWorkspaceId?: string  // Worktree인 경우 부모 workspace ID
+    branchName?: string  // Worktree의 브랜치명
 }
 
 export interface AppConfig {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Sidebar } from './components/Sidebar'
+import { Sidebar } from './components/Sidebar/index'
 import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
@@ -88,6 +88,13 @@ function App() {
         }
     }
 
+    const handleAddWorktreeWorkspace = async (parentWorkspaceId: string, branchName: string) => {
+        const newWorktreeWorkspace = await window.api.addWorktreeWorkspace(parentWorkspaceId, branchName)
+        if (newWorktreeWorkspace) {
+            setWorkspaces(prev => [...prev, newWorktreeWorkspace])
+        }
+    }
+
     const handleRemoveSession = async (workspaceId: string, sessionId: string) => {
         // Kill the terminal process
         await window.api.killTerminal(sessionId)
@@ -135,6 +142,7 @@ function App() {
                 onAddWorkspace={handleAddWorkspace}
                 onRemoveWorkspace={handleRemoveWorkspace}
                 onAddSession={handleAddSession}
+                onAddWorktreeWorkspace={handleAddWorktreeWorkspace}
                 onRemoveSession={handleRemoveSession}
                 onCreatePlayground={handleCreatePlayground}
                 activeSessionId={activeSession?.id}

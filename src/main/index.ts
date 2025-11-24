@@ -133,43 +133,18 @@ app.whenReady().then(() => {
 
         if (!workspace) return null
 
+        // Worktree는 더 이상 session이 아니라 별도 workspace로 생성
+        if (type === 'worktree') {
+            console.warn('Use add-worktree-workspace instead')
+            return null
+        }
+
         let newSession: TerminalSession = {
             id: uuidv4(),
             name: 'Main',
             cwd: workspace.path,
             type,
             initialCommand
-        }
-
-        // Worktree logic
-        if (type === 'worktree' && branchName) {
-            const git = simpleGit(workspace.path)
-            const worktreePath = path.join(path.dirname(workspace.path), `${workspace.name}-worktrees`, branchName)
-
-            // Create worktree directory parent if it doesn't exist
-            const worktreesDir = path.dirname(worktreePath)
-            if (!existsSync(worktreesDir)) {
-                mkdirSync(worktreesDir, { recursive: true })
-            }
-
-            try {
-                // Check if it's a git repository
-                const isRepo = await git.checkIsRepo()
-                if (!isRepo) {
-                    console.error('Not a git repository')
-                    return null
-                }
-
-                // Use raw() method for worktree command
-                // git worktree add -b <branch> <path>
-                await git.raw(['worktree', 'add', '-b', branchName, worktreePath])
-
-                newSession.cwd = worktreePath
-                newSession.name = `🌿 ${branchName}`
-            } catch (e) {
-                console.error('Failed to create worktree:', e)
-                return null
-            }
         }
 
         workspace.sessions.push(newSession)
@@ -180,8 +155,89 @@ app.whenReady().then(() => {
         return newSession
     })
 
-    ipcMain.handle('remove-workspace', (_, id: string) => {
+    // Worktree를 별도 workspace로 생성
+    ipcMain.handle('add-worktree-workspace', async (_, parentWorkspaceId: string, branchName: string) => {
         const workspaces = store.get('workspaces') as Workspace[]
+        const parentWorkspace = workspaces.find((w: Workspace) => w.id === parentWorkspaceId)
+
+        if (!parentWorkspace) return null
+
+        const git = simpleGit(parentWorkspace.path)
+
+        // 브랜치명의 슬래시를 하이픈으로 치환
+        const sanitizedBranchName = branchName.replace(/\//g, '-')
+        const worktreePath = path.join(
+            path.dirname(parentWorkspace.path),
+            `${parentWorkspace.name}-worktrees`,
+            sanitizedBranchName
+        )
+
+        // Create worktree directory parent if it doesn't exist
+        const worktreesDir = path.dirname(worktreePath)
+        if (!existsSync(worktreesDir)) {
+            mkdirSync(worktreesDir, { recursive: true })
+        }
+
+        try {
+            // Check if it's a git repository
+            const isRepo = await git.checkIsRepo()
+            if (!isRepo) {
+                console.error('Not a git repository')
+                return null
+            }
+
+            // git worktree add -b <branch> <path>
+            await git.raw(['worktree', 'add', '-b', branchName, worktreePath])
+
+            // 새로운 worktree workspace 생성
+            const newWorktreeWorkspace: Workspace = {
+                id: uuidv4(),
+                name: `🌿 ${branchName}`,
+                path: worktreePath,
+                sessions: [
+                    {
+                        id: uuidv4(),
+                        name: 'Main',
+                        cwd: worktreePath,
+                        type: 'regular'
+                    }
+                ],
+                createdAt: Date.now(),
+                parentWorkspaceId: parentWorkspaceId,
+                branchName: branchName
+            }
+
+            store.set('workspaces', [...workspaces, newWorktreeWorkspace])
+            return newWorktreeWorkspace
+        } catch (e) {
+            console.error('Failed to create worktree:', e)
+            return null
+        }
+    })
+
+    ipcMain.handle('remove-workspace', async (_, id: string) => {
+        const workspaces = store.get('workspaces') as Workspace[]
+        const workspace = workspaces.find((w: Workspace) => w.id === id)
+
+        if (!workspace) return false
+
+        // Worktree workspace인 경우 git worktree remove 실행
+        if (workspace.parentWorkspaceId) {
+            const parentWorkspace = workspaces.find((w: Workspace) => w.id === workspace.parentWorkspaceId)
+
+            if (parentWorkspace) {
+                try {
+                    const git = simpleGit(parentWorkspace.path)
+                    // git worktree remove <path>
+                    await git.raw(['worktree', 'remove', workspace.path, '--force'])
+                    console.log(`Removed worktree: ${workspace.path}`)
+                } catch (e) {
+                    console.error('Failed to remove worktree:', e)
+                    // 실패해도 workspace는 삭제
+                }
+            }
+        }
+
         store.set('workspaces', workspaces.filter((w: Workspace) => w.id !== id))
         return true
     })
@@ -499,6 +555,51 @@ app.whenReady().then(() => {
             return JSON.parse(stdout)
         } catch (e: any) {
             console.error('GitHub workflow status error:', e)
+            throw new Error(e.message)
+        }
+    })
+
+    // Worktree용 GitHub 기능
+    ipcMain.handle('gh-push-branch', async (_, workspacePath: string, branchName: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            // Push branch to origin
+            await git.push('origin', branchName, ['--set-upstream'])
+            return { success: true }
+        } catch (e: any) {
+            console.error('GitHub push error:', e)
+            throw new Error(e.message)
+        }
+    })
+
+    ipcMain.handle('gh-merge-pr', async (_, workspacePath: string, prNumber: number) => {
+        try {
+            const cmd = `cd "${workspacePath}" && gh pr merge ${prNumber} --merge`
+            const { stdout } = await execAsync(cmd)
+            return { success: true, message: stdout }
+        } catch (e: any) {
+            console.error('GitHub PR merge error:', e)
+            throw new Error(e.message)
+        }
+    })
+
+    ipcMain.handle('gh-create-pr-from-worktree', async (_, workspacePath: string, branchName: string, title: string, body: string) => {
+        try {
+            // First, check if branch is pushed
+            const git = simpleGit(workspacePath)
+            const status = await git.status()
+
+            if (status.ahead > 0) {
+                // Push first
+                await git.push('origin', branchName, ['--set-upstream'])
+            }
+
+            // Create PR
+            const cmd = `cd "${workspacePath}" && gh pr create --title "${title}" --body "${body}" --head "${branchName}"`
+            const { stdout } = await execAsync(cmd)
+            return { success: true, url: stdout.trim() }
+        } catch (e: any) {
+            console.error('GitHub PR creation error:', e)
             throw new Error(e.message)
         }
     })
