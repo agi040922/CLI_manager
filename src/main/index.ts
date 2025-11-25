@@ -192,7 +192,7 @@ app.whenReady().then(() => {
             // 새로운 worktree workspace 생성
             const newWorktreeWorkspace: Workspace = {
                 id: uuidv4(),
-                name: `🌿 ${branchName}`,
+                name: branchName,
                 path: worktreePath,
                 sessions: [
                     {
