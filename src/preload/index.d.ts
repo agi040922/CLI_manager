@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings } from '../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult } from '../shared/types'
 
 declare global {
     interface Window {
@@ -8,7 +8,7 @@ declare global {
             getWorkspaces: () => Promise<Workspace[]>
             addWorkspace: () => Promise<Workspace | null>
             addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => Promise<import('../shared/types').TerminalSession | null>
-            addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => Promise<Workspace | null>
+            addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => Promise<IPCResult<Workspace>>
             removeWorkspace: (id: string) => Promise<boolean>
             removeSession: (workspaceId: string, sessionId: string) => Promise<boolean>
             createPlayground: () => Promise<Workspace | null>
@@ -25,7 +25,9 @@ declare global {
             // Git
             getGitStatus: (workspacePath: string) => Promise<any>
             gitStage: (workspacePath: string, file: string) => Promise<boolean>
+            gitStageAll: (workspacePath: string) => Promise<boolean>
             gitUnstage: (workspacePath: string, file: string) => Promise<boolean>
+            gitUnstageAll: (workspacePath: string) => Promise<boolean>
             gitCommit: (workspacePath: string, message: string) => Promise<boolean>
             gitPush: (workspacePath: string) => Promise<boolean>
             gitPull: (workspacePath: string) => Promise<boolean>
@@ -40,10 +42,10 @@ declare global {
             ghCreatePR: (workspacePath: string, title: string, body: string) => Promise<{ success: boolean; url: string }>
             ghListPRs: (workspacePath: string) => Promise<any[]>
             ghRepoView: (workspacePath: string) => Promise<any>
-            ghWorkflowStatus: (workspacePath: string) => Promise<any[]>
-            ghPushBranch: (workspacePath: string, branchName: string) => Promise<{ success: boolean }>
+            ghWorkflowStatus: (workspacePath: string) => Promise<IPCResult<any[]>>
+            ghPushBranch: (workspacePath: string, branchName: string) => Promise<IPCResult<void>>
             ghMergePR: (workspacePath: string, prNumber: number) => Promise<{ success: boolean; message: string }>
-            ghCreatePRFromWorktree: (workspacePath: string, branchName: string, title: string, body: string) => Promise<{ success: boolean; url: string }>
+            ghCreatePRFromWorktree: (workspacePath: string, branchName: string, title: string, body: string) => Promise<IPCResult<{ url: string }>>
 
             // Editor
             openInEditor: (workspacePath: string, editorType?: string) => Promise<{ success: boolean; editor?: string; error?: string }>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
-import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, IPCResult } from '../../../../shared/types'
+import { getErrorMessage } from '../../utils/errorMessages'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
@@ -147,10 +148,14 @@ export function Sidebar({
         if (!worktreeMenuOpen) return
 
         try {
-            await window.api.ghPushBranch(worktreeMenuOpen.workspace.path, worktreeMenuOpen.workspace.branchName!)
-            alert('Successfully pushed to GitHub!')
+            const result: IPCResult<void> = await window.api.ghPushBranch(worktreeMenuOpen.workspace.path, worktreeMenuOpen.workspace.branchName!)
+            if (result.success) {
+                alert('Successfully pushed to GitHub!')
+            } else {
+                alert(getErrorMessage(result.errorType, result.error))
+            }
         } catch (err: any) {
-            alert(`Failed to push: ${err.message}`)
+            alert(`푸시 실패: ${err.message}`)
         }
     }
 
@@ -163,15 +168,20 @@ export function Sidebar({
         if (!showPRPrompt) return
 
         try {
-            const result = await window.api.ghCreatePRFromWorktree(
+            const result: IPCResult<{ url: string }> = await window.api.ghCreatePRFromWorktree(
                 showPRPrompt.workspace.path,
                 showPRPrompt.workspace.branchName!,
                 title,
                 body
             )
-            alert(`PR created: ${result.url}`)
+
+            if (result.success && result.data) {
+                alert(`PR created: ${result.data.url}`)
+            } else {
+                alert(getErrorMessage(result.errorType, result.error))
+            }
         } catch (err: any) {
-            alert(`Failed to create PR: ${err.message}`)
+            alert(`PR 생성 실패: ${err.message}`)
         } finally {
             setShowPRPrompt(null)
         }

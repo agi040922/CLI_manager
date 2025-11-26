@@ -4,7 +4,8 @@ import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
-import { Workspace, TerminalSession, NotificationStatus, UserSettings } from '../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult } from '../../shared/types'
+import { getErrorMessage } from './utils/errorMessages'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -89,9 +90,12 @@ function App() {
     }
 
     const handleAddWorktreeWorkspace = async (parentWorkspaceId: string, branchName: string) => {
-        const newWorktreeWorkspace = await window.api.addWorktreeWorkspace(parentWorkspaceId, branchName)
-        if (newWorktreeWorkspace) {
-            setWorkspaces(prev => [...prev, newWorktreeWorkspace])
+        const result: IPCResult<Workspace> = await window.api.addWorktreeWorkspace(parentWorkspaceId, branchName)
+
+        if (result.success && result.data) {
+            setWorkspaces(prev => [...prev, result.data!])
+        } else {
+            alert(getErrorMessage(result.errorType, result.error))
         }
     }
 
@@ -159,7 +163,7 @@ function App() {
                     <div className="flex items-center gap-2 no-drag">
                         <button
                             onClick={() => setGitPanelOpen(true)}
-                            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+                            className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
                             title="Source Control"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
@@ -171,7 +175,7 @@ function App() {
                         </button>
                         <button
                             onClick={() => setSettingsOpen(true)}
-                            className="p-1.5 hover:bg-white/10 rounded transition-colors"
+                            className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
                             title="Settings"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
@@ -201,6 +205,7 @@ function App() {
                                     fontSize={settings.fontSize}
                                     fontFamily={settings.fontFamily}
                                     initialCommand={session.initialCommand}
+                                    notificationSettings={settings.notifications}
                                 />
                             </div>
                         ))

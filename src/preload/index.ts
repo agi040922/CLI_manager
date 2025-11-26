@@ -24,7 +24,9 @@ const api = {
     // Git
     getGitStatus: (workspacePath: string): Promise<any> => ipcRenderer.invoke('get-git-status', workspacePath),
     gitStage: (workspacePath: string, file: string): Promise<boolean> => ipcRenderer.invoke('git-stage', workspacePath, file),
+    gitStageAll: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-stage-all', workspacePath),
     gitUnstage: (workspacePath: string, file: string): Promise<boolean> => ipcRenderer.invoke('git-unstage', workspacePath, file),
+    gitUnstageAll: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-unstage-all', workspacePath),
     gitCommit: (workspacePath: string, message: string): Promise<boolean> => ipcRenderer.invoke('git-commit', workspacePath, message),
     gitPush: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-push', workspacePath),
     gitPull: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-pull', workspacePath),

@@ -3,7 +3,7 @@ import path, { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import Store from 'electron-store'
-import { AppConfig, Workspace, TerminalSession, UserSettings } from '../shared/types'
+import { AppConfig, Workspace, TerminalSession, UserSettings, IPCResult } from '../shared/types'
 import { v4 as uuidv4 } from 'uuid'
 import simpleGit from 'simple-git'
 import { existsSync, mkdirSync } from 'fs'
@@ -156,11 +156,13 @@ app.whenReady().then(() => {
     })
 
     // Worktree를 별도 workspace로 생성
-    ipcMain.handle('add-worktree-workspace', async (_, parentWorkspaceId: string, branchName: string) => {
+    ipcMain.handle('add-worktree-workspace', async (_, parentWorkspaceId: string, branchName: string): Promise<IPCResult<Workspace>> => {
         const workspaces = store.get('workspaces') as Workspace[]
         const parentWorkspace = workspaces.find((w: Workspace) => w.id === parentWorkspaceId)
 
-        if (!parentWorkspace) return null
+        if (!parentWorkspace) {
+            return { success: false, error: 'Parent workspace not found', errorType: 'UNKNOWN_ERROR' }
+        }
 
         const git = simpleGit(parentWorkspace.path)
 
@@ -182,8 +184,18 @@ app.whenReady().then(() => {
             // Check if it's a git repository
             const isRepo = await git.checkIsRepo()
             if (!isRepo) {
-                console.error('Not a git repository')
-                return null
+                return { success: false, error: 'Not a git repository', errorType: 'NOT_A_REPO' }
+            }
+
+            // Check if branch already exists
+            const branches = await git.branch()
+            if (branches.all.includes(branchName)) {
+                return { success: false, error: `Branch '${branchName}' already exists`, errorType: 'BRANCH_EXISTS' }
+            }
+
+            // Check if worktree path already exists
+            if (existsSync(worktreePath)) {
+                return { success: false, error: `Worktree path '${worktreePath}' already exists`, errorType: 'WORKTREE_EXISTS' }
             }
 
             // git worktree add -b <branch> <path>
@@ -208,10 +220,10 @@ app.whenReady().then(() => {
             }
 
             store.set('workspaces', [...workspaces, newWorktreeWorkspace])
-            return newWorktreeWorkspace
-        } catch (e) {
+            return { success: true, data: newWorktreeWorkspace }
+        } catch (e: any) {
             console.error('Failed to create worktree:', e)
-            return null
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
         }
     })
 
@@ -389,6 +401,17 @@ app.whenReady().then(() => {
         }
     })
 
+    ipcMain.handle('git-stage-all', async (_, workspacePath: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.add('.')
+            return true
+        } catch (e) {
+            console.error('Git stage all error:', e)
+            throw e
+        }
+    })
+
     ipcMain.handle('git-unstage', async (_, workspacePath: string, file: string) => {
         try {
             const git = simpleGit(workspacePath)
@@ -396,6 +419,17 @@ app.whenReady().then(() => {
             return true
         } catch (e) {
             console.error('Git unstage error:', e)
+            throw e
+        }
+    })
+
+    ipcMain.handle('git-unstage-all', async (_, workspacePath: string) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.reset(['HEAD']) // Reset mixed (default) unstages everything
+            return true
+        } catch (e) {
+            console.error('Git unstage all error:', e)
             throw e
         }
     })
@@ -552,23 +586,37 @@ app.whenReady().then(() => {
         try {
             const cmd = `cd "${workspacePath}" && gh run list --json status,conclusion,name,headBranch,createdAt,url --limit 10`
             const { stdout } = await execAsync(cmd)
-            return JSON.parse(stdout)
+            return { success: true, data: JSON.parse(stdout) }
         } catch (e: any) {
             console.error('GitHub workflow status error:', e)
-            throw new Error(e.message)
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
         }
     })
 
     // Worktree용 GitHub 기능
-    ipcMain.handle('gh-push-branch', async (_, workspacePath: string, branchName: string) => {
+    ipcMain.handle('gh-push-branch', async (_, workspacePath: string, branchName: string): Promise<IPCResult<void>> => {
         try {
+            // Check if gh is installed
+            try {
+                await execAsync('gh --version')
+            } catch {
+                return { success: false, error: 'GitHub CLI not found', errorType: 'GH_CLI_NOT_FOUND' }
+            }
+
+            // Check auth status
+            try {
+                await execAsync('gh auth status')
+            } catch {
+                return { success: false, error: 'Not authenticated with GitHub', errorType: 'GH_NOT_AUTHENTICATED' }
+            }
+
             const git = simpleGit(workspacePath)
             // Push branch to origin
             await git.push('origin', branchName, ['--set-upstream'])
             return { success: true }
         } catch (e: any) {
             console.error('GitHub push error:', e)
-            throw new Error(e.message)
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
         }
     })
 
@@ -583,8 +631,22 @@ app.whenReady().then(() => {
         }
     })
 
-    ipcMain.handle('gh-create-pr-from-worktree', async (_, workspacePath: string, branchName: string, title: string, body: string) => {
+    ipcMain.handle('gh-create-pr-from-worktree', async (_, workspacePath: string, branchName: string, title: string, body: string): Promise<IPCResult<{ url: string }>> => {
         try {
+            // Check if gh is installed
+            try {
+                await execAsync('gh --version')
+            } catch {
+                return { success: false, error: 'GitHub CLI not found', errorType: 'GH_CLI_NOT_FOUND' }
+            }
+
+            // Check auth status
+            try {
+                await execAsync('gh auth status')
+            } catch {
+                return { success: false, error: 'Not authenticated with GitHub', errorType: 'GH_NOT_AUTHENTICATED' }
+            }
+
             // First, check if branch is pushed
             const git = simpleGit(workspacePath)
             const status = await git.status()
@@ -597,10 +659,10 @@ app.whenReady().then(() => {
             // Create PR
             const cmd = `cd "${workspacePath}" && gh pr create --title "${title}" --body "${body}" --head "${branchName}"`
             const { stdout } = await execAsync(cmd)
-            return { success: true, url: stdout.trim() }
+            return { success: true, data: { url: stdout.trim() } }
         } catch (e: any) {
             console.error('GitHub PR creation error:', e)
-            throw new Error(e.message)
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
         }
     })
 

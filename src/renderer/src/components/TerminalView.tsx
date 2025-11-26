@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { AlertCircle, CheckCircle, Bell } from 'lucide-react'
+import { TerminalPatternMatcher } from '../utils/terminalPatterns'
 
 interface TerminalViewProps {
     id: string
@@ -12,6 +13,15 @@ interface TerminalViewProps {
     fontSize?: number
     fontFamily?: string
     initialCommand?: string
+    notificationSettings?: {
+        enabled: boolean
+        tools: {
+            cc: boolean
+            codex: boolean
+            gemini: boolean
+            generic: boolean
+        }
+    }
 }
 
 interface Notification {
@@ -27,7 +37,8 @@ export function TerminalView({
     onNotification,
     fontSize = 13,
     fontFamily = 'Menlo, Monaco, "Courier New", monospace',
-    initialCommand
+    initialCommand,
+    notificationSettings
 }: TerminalViewProps) {
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
@@ -35,110 +46,36 @@ export function TerminalView({
     const [notifications, setNotifications] = useState<Notification[]>([])
     const outputBufferRef = useRef<string>('')
     const lastNotificationRef = useRef<{ type: string; message: string; time: number } | null>(null)
-    const claudeResponseStartRef = useRef<boolean>(false)  // Track Claude response start
+    const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
 
     // Detection patterns
     const detectOutput = (text: string) => {
-        // Strip ANSI codes for pattern matching
-        const cleanText = text.replace(/\x1b\[[0-9;]*m/g, '')
+        // Check if notifications are globally enabled
+        if (notificationSettings?.enabled === false) return
 
-        // Detect Claude Code response start (⏺ symbol)
-        if (/⏺/.test(cleanText)) {
-            claudeResponseStartRef.current = true
-            return  // Just detect start, don't show notification
-        }
+        const result = matcherRef.current.process(text)
+        if (result) {
+            // Check if specific tool notification is enabled
+            // We need to map the tool name from the matcher to the settings key
+            // matcher returns 'cc', 'codex', 'gemini', 'generic'
+            // settings has keys cc, codex, gemini, generic
 
-        // Claude Code user interaction patterns (high priority)
-        const interactionPatterns = [
-            /\?$/m,  // Question ends with ?
-            /\[Y\/n\]/i,  // Yes/No selection
-            /\[y\/N\]/i,
-            /approve|permission|allow|grant/i,  // Permission request
-            /waiting for|awaiting|pending/i,  // Waiting
-            /continue\?|proceed\?/i,  // Proceed confirmation
-            /press any key|press enter/i,  // Key input wait
-            /Enter to select/i,  // Selection wait
-            /Tab\/Arrow keys to navigate/i  // Navigation wait
-        ]
+            // Extract tool name from message or context if possible, 
+            // but TerminalPatternMatcher doesn't return the raw tool key directly in the result.
+            // Let's update TerminalPatternMatcher to return the tool key or infer it.
+            // Actually, looking at TerminalPatternMatcher, it returns { type, message }.
+            // The message usually contains the tool name prefix e.g. "Claude Code: ..."
 
-        // Error patterns
-        const errorPatterns = [
-            /error:/i,
-            /failed/i,
-            /exception/i,
-            /fatal/i,
-            /cannot find/i,
-            /command not found/i,
-            /npm ERR!/i,
-            /webpack compilation failed/i,
-            /permission denied/i,
-            /access denied/i
-        ]
+            let toolKey = 'generic'
+            if (result.message.startsWith('Claude Code')) toolKey = 'cc'
+            else if (result.message.startsWith('Codex')) toolKey = 'codex'
+            else if (result.message.startsWith('Gemini')) toolKey = 'gemini'
 
-        // Success patterns (task completion detection)
-        const successPatterns = [
-            // General build/test completion
-            /compiled successfully/i,
-            /build successful/i,
-            /done in/i,
-            /✓|✔/,
-            /successfully installed/i,
-            /webpack compiled/i,
-            /✨|🎉/,  // Emoji success indicators
-            /completed|finished|done/i,  // Task completion
-            /all tests passed/i,
-            /deployment successful/i,
-            /success!/i,
-            /ready in/i
-        ]
+            const isEnabled = notificationSettings?.tools?.[toolKey as keyof typeof notificationSettings.tools] ?? true
 
-        // Detect Claude Code completion (> prompt after ⏺ response)
-        if (claudeResponseStartRef.current && /^>\s*$/m.test(cleanText)) {
-            claudeResponseStartRef.current = false  // Reset
-            addNotification('success', 'Claude Code task completed')
-            return
-        }
-
-        let detectedType: 'error' | 'success' | 'info' | null = null
-        let detectedMessage = ''
-
-        // Priority: interaction > error > success
-        for (const pattern of interactionPatterns) {
-            if (pattern.test(cleanText)) {
-                detectedType = 'info'
-                const lines = cleanText.split('\n')
-                const interactionLine = lines.find(line => pattern.test(line))
-                detectedMessage = interactionLine?.trim().slice(0, 100) || 'User input required'
-                break
+            if (isEnabled) {
+                addNotification(result.type, result.message)
             }
-        }
-
-        if (!detectedType) {
-            for (const pattern of errorPatterns) {
-                if (pattern.test(cleanText)) {
-                    detectedType = 'error'
-                    const lines = cleanText.split('\n')
-                    const errorLine = lines.find(line => pattern.test(line))
-                    detectedMessage = errorLine?.trim().slice(0, 100) || 'Error detected'
-                    break
-                }
-            }
-        }
-
-        if (!detectedType) {
-            for (const pattern of successPatterns) {
-                if (pattern.test(cleanText)) {
-                    detectedType = 'success'
-                    const lines = cleanText.split('\n')
-                    const successLine = lines.find(line => pattern.test(line))
-                    detectedMessage = successLine?.trim().slice(0, 100) || 'Success'
-                    break
-                }
-            }
-        }
-
-        if (detectedType) {
-            addNotification(detectedType, detectedMessage)
         }
     }
 
@@ -328,18 +265,16 @@ export function TerminalView({
                         {notif.type === 'success' && <CheckCircle size={20} className="text-green-400 shrink-0 mt-0.5" />}
                         {notif.type === 'info' && <Bell size={20} className="text-amber-300 shrink-0 mt-0.5 animate-bounce" />}
                         <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium ${
-                                notif.type === 'error' ? 'text-red-200' :
+                            <p className={`text-sm font-medium ${notif.type === 'error' ? 'text-red-200' :
                                 notif.type === 'success' ? 'text-green-200' :
-                                'text-amber-100'
-                            }`}>
+                                    'text-amber-100'
+                                }`}>
                                 {notif.type === 'error' ? '⚠️ Error Detected' :
-                                 notif.type === 'success' ? '✅ Build Complete' :
-                                 '🔔 Action Required'}
+                                    notif.type === 'success' ? '✅ Build Complete' :
+                                        '🔔 Action Required'}
                             </p>
-                            <p className={`text-xs mt-1 truncate max-w-xs ${
-                                notif.type === 'info' ? 'text-amber-100 font-medium' : 'text-gray-300'
-                            }`}>
+                            <p className={`text-xs mt-1 truncate max-w-xs ${notif.type === 'info' ? 'text-amber-100 font-medium' : 'text-gray-300'
+                                }`}>
                                 {notif.message}
                             </p>
                         </div>

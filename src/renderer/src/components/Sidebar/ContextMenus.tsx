@@ -131,56 +131,88 @@ export function WorktreeContextMenu({
     onAddSession,
     onClose
 }: WorktreeContextMenuProps) {
+    // GitHub 버튼 클릭 핸들러 - 명확하게 분리
+    const handlePushClick = (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onPushToGitHub()
+        onClose()
+    }
+
+    const handlePRClick = (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onCreatePR()
+        onClose()
+    }
+
+    const handleTerminalClick = (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onAddSession(workspace.id)
+        onClose()
+    }
+
+    const handleTemplateClick = (e: React.MouseEvent, template: TerminalTemplate) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onAddSession(workspace.id, template)
+        onClose()
+    }
+
     return createPortal(
         <div
-            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-52 backdrop-blur-md max-h-96 overflow-y-auto`}
-            style={{ top: y, left: x }}
+            className="fixed bg-[#1e1e20] border border-white/10 rounded shadow-xl py-1 w-52 backdrop-blur-md max-h-96 overflow-y-auto"
+            style={{
+                top: y,
+                left: x,
+                zIndex: MENU_Z_INDEX
+            }}
             onClick={e => e.stopPropagation()}
         >
-            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                Worktree Actions
+            {/* GitHub Actions Section */}
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                GitHub Actions
             </div>
 
             <button
-                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
-                onClick={() => {
-                    onPushToGitHub()
-                    onClose()
-                }}
+                className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                onClick={handlePushClick}
+                onMouseDown={(e) => e.stopPropagation()}
                 title="Push branch to GitHub"
+                type="button"
             >
-                <GitBranch size={12} className="text-gray-400 shrink-0" />
-                <span className="truncate">Push to GitHub</span>
+                <GitBranch size={13} className="text-green-400 shrink-0" />
+                <span className="truncate font-medium">Push to GitHub</span>
             </button>
 
             <button
-                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
-                onClick={() => {
-                    onCreatePR()
-                    onClose()
-                }}
+                className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                onClick={handlePRClick}
+                onMouseDown={(e) => e.stopPropagation()}
                 title="Create pull request"
+                type="button"
             >
-                <GitBranch size={12} className="text-gray-400 shrink-0" />
-                <span className="truncate">Create PR</span>
+                <GitBranch size={13} className="text-blue-400 shrink-0" />
+                <span className="truncate font-medium">Create PR</span>
             </button>
 
-            <div className="border-t border-white/10 my-0.5"></div>
+            <div className="border-t border-white/10 my-1"></div>
 
-            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+            {/* Terminal Section */}
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
                 New Terminal
             </div>
 
             {/* Plain Terminal */}
             <button
-                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
-                onClick={() => {
-                    onAddSession(workspace.id)
-                    onClose()
-                }}
+                className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                onClick={handleTerminalClick}
+                onMouseDown={(e) => e.stopPropagation()}
                 title="Basic terminal"
+                type="button"
             >
-                <Terminal size={12} className="text-gray-400 shrink-0" />
+                <Terminal size={13} className="text-gray-400 shrink-0" />
                 <span className="truncate">Plain Terminal</span>
             </button>
 
@@ -188,12 +220,11 @@ export function WorktreeContextMenu({
             {templates.map(template => (
                 <button
                     key={template.id}
-                    className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
-                    onClick={() => {
-                        onAddSession(workspace.id, template)
-                        onClose()
-                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                    onClick={(e) => handleTemplateClick(e, template)}
+                    onMouseDown={(e) => e.stopPropagation()}
                     title={template.description || template.command}
+                    type="button"
                 >
                     <span className="text-gray-400 shrink-0">
                         {getTemplateIcon(template.icon)}
