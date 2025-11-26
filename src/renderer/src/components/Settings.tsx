@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate } from '../../../shared/types'
-import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon } from 'lucide-react'
+import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 interface SettingsProps {
@@ -8,6 +8,8 @@ interface SettingsProps {
     onClose: () => void
     onSave?: (settings: UserSettings) => void
 }
+
+type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'github'
 
 export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
@@ -26,6 +28,7 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     const [githubCheckStatus, setGithubCheckStatus] = useState<'checking' | 'success' | 'error' | null>(null)
     const [templates, setTemplates] = useState<TerminalTemplate[]>([])
     const [editingTemplate, setEditingTemplate] = useState<TerminalTemplate | null>(null)
+    const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general')
 
     useEffect(() => {
         if (isOpen) {
@@ -116,10 +119,20 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
 
     if (!isOpen) return null
 
+    const categories = [
+        { id: 'general' as const, label: 'General', icon: <SettingsIcon size={16} /> },
+        { id: 'editor' as const, label: 'Editor', icon: <Code2 size={16} /> },
+        { id: 'terminal' as const, label: 'Terminal', icon: <Terminal size={16} /> },
+        { id: 'notifications' as const, label: 'Notifications', icon: <Bell size={16} /> },
+        { id: 'port-monitoring' as const, label: 'Port Monitoring', icon: <Monitor size={16} /> },
+        { id: 'templates' as const, label: 'Templates', icon: <Play size={16} /> },
+        { id: 'github' as const, label: 'GitHub', icon: <Github size={16} /> },
+    ]
+
     return (
         <>
             <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div className="bg-[#1e1e20] border border-white/10 rounded-lg w-[600px] max-h-[80vh] overflow-hidden shadow-2xl">
+                <div className="bg-[#1e1e20] border border-white/10 rounded-lg w-[800px] h-[600px] overflow-hidden shadow-2xl flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between p-4 border-b border-white/10">
                         <h2 className="text-lg font-semibold text-white">Settings</h2>
@@ -131,326 +144,402 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                         </button>
                     </div>
 
-                    {/* Content */}
-                    <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(80vh-120px)]">
-                        {/* GitHub Section */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-white">GitHub Configuration</h3>
-                            <p className="text-xs text-gray-400">
-                                Check your local Git configuration for GitHub authentication
-                            </p>
+                    {/* Content - Split Layout */}
+                    <div className="flex flex-1 overflow-hidden">
+                        {/* Left Sidebar - Categories */}
+                        <div className="w-48 border-r border-white/10 bg-black/20 p-2 overflow-y-auto">
+                            {categories.map(category => (
+                                <button
+                                    key={category.id}
+                                    onClick={() => setActiveCategory(category.id)}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${activeCategory === category.id
+                                            ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
+                                            : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                                        }`}
+                                >
+                                    {category.icon}
+                                    <span>{category.label}</span>
+                                </button>
+                            ))}
+                        </div>
 
-                            <button
-                                onClick={checkGitConfig}
-                                disabled={githubCheckStatus === 'checking'}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {githubCheckStatus === 'checking' ? 'Checking...' : 'Check Git Config'}
-                            </button>
-
-                            {settings.github && githubCheckStatus === 'success' && (
-                                <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded">
-                                    <div className="flex items-start gap-2">
-                                        <Check size={16} className="text-green-400 mt-0.5" />
-                                        <div className="flex-1">
-                                            <p className="text-sm text-green-300 font-medium">Git configured</p>
-                                            <p className="text-xs text-gray-400 mt-1">
-                                                Username: <span className="text-white">{settings.github.username}</span>
-                                            </p>
-                                            <p className="text-xs text-gray-400">
-                                                Email: <span className="text-white">{settings.github.email}</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {githubCheckStatus === 'error' && (
-                                <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded">
-                                    <div className="flex items-start gap-2">
-                                        <AlertCircle size={16} className="text-red-400 mt-0.5" />
-                                        <div className="flex-1">
-                                            <p className="text-sm text-red-300 font-medium">Git not configured</p>
-                                            <p className="text-xs text-gray-400 mt-1">
-                                                Git is not installed or configured. Set it up with these commands:
-                                            </p>
-                                            <div className="mt-2 space-y-1">
-                                                <code className="block text-xs text-white bg-black/30 px-2 py-1 rounded">
-                                                    git config --global user.name "Your Name"
-                                                </code>
-                                                <code className="block text-xs text-white bg-black/30 px-2 py-1 rounded">
-                                                    git config --global user.email "your@email.com"
-                                                </code>
+                        {/* Right Content Area */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {/* General Settings */}
+                            {activeCategory === 'general' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-3">Appearance</h3>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Theme</label>
+                                                <select
+                                                    value={settings.theme}
+                                                    onChange={e => setSettings(prev => ({ ...prev, theme: e.target.value as 'dark' | 'light' }))}
+                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="dark">Dark</option>
+                                                    <option value="light">Light</option>
+                                                </select>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Editor Settings */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-white">Editor</h3>
-                            <p className="text-xs text-gray-400">
-                                Choose which editor to open workspace folders with
-                            </p>
-
-                            <div>
-                                <label className="block text-xs text-gray-400 mb-1">Default Editor</label>
-                                <select
-                                    value={settings.defaultEditor}
-                                    onChange={e => setSettings(prev => ({ ...prev, defaultEditor: e.target.value as EditorType }))}
-                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                >
-                                    <option value="vscode">VS Code</option>
-                                    <option value="cursor">Cursor</option>
-                                    <option value="antigravity">Antigravity</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Terminal Settings */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-white">Terminal</h3>
-
-                            <div>
-                                <label className="block text-xs text-gray-400 mb-1">Default Shell</label>
-                                <select
-                                    value={settings.defaultShell}
-                                    onChange={e => setSettings(prev => ({ ...prev, defaultShell: e.target.value }))}
-                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                >
-                                    <option value="zsh">zsh</option>
-                                    <option value="bash">bash</option>
-                                    <option value="fish">fish</option>
-                                    <option value="sh">sh</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs text-gray-400 mb-1">Font Size</label>
-                                <input
-                                    type="number"
-                                    min={10}
-                                    max={24}
-                                    value={settings.fontSize}
-                                    onChange={e => setSettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) || 14 }))}
-                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs text-gray-400 mb-1">Font Family</label>
-                                <input
-                                    type="text"
-                                    value={settings.fontFamily}
-                                    onChange={e => setSettings(prev => ({ ...prev, fontFamily: e.target.value }))}
-                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Port Filter Settings */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-white">Port Monitoring</h3>
-                            <p className="text-xs text-gray-400">
-                                Enable filter to show only development server ports
-                            </p>
-
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="checkbox"
-                                    checked={settings.portFilter?.enabled ?? true}
-                                    onChange={e => setSettings(prev => ({
-                                        ...prev,
-                                        portFilter: {
-                                            enabled: e.target.checked,
-                                            minPort: prev.portFilter?.minPort ?? 3000,
-                                            maxPort: prev.portFilter?.maxPort ?? 9000
-                                        }
-                                    }))}
-                                    className="w-4 h-4 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
-                                />
-                                <label className="text-sm text-gray-300">Enable port filter</label>
-                            </div>
-
-                            {settings.portFilter?.enabled && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs text-gray-400 mb-1">Min Port</label>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            max={65535}
-                                            value={settings.portFilter?.minPort ?? 3000}
-                                            onChange={e => setSettings(prev => ({
-                                                ...prev,
-                                                portFilter: {
-                                                    enabled: prev.portFilter?.enabled ?? true,
-                                                    minPort: parseInt(e.target.value) || 3000,
-                                                    maxPort: prev.portFilter?.maxPort ?? 9000
-                                                }
-                                            }))}
-                                            className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs text-gray-400 mb-1">Max Port</label>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            max={65535}
-                                            value={settings.portFilter?.maxPort ?? 9000}
-                                            onChange={e => setSettings(prev => ({
-                                                ...prev,
-                                                portFilter: {
-                                                    enabled: prev.portFilter?.enabled ?? true,
-                                                    minPort: prev.portFilter?.minPort ?? 3000,
-                                                    maxPort: parseInt(e.target.value) || 9000
-                                                }
-                                            }))}
-                                            className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                        />
-                                    </div>
-                                </div>
+                                </>
                             )}
 
-                            <p className="text-xs text-gray-500">
-                                Common dev ports: 3000 (React), 5173 (Vite), 8080 (Server)
-                            </p>
-                        </div>
+                            {/* Editor Settings */}
+                            {activeCategory === 'editor' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">Default Editor</h3>
+                                        <p className="text-xs text-gray-400 mb-3">
+                                            Choose which editor to open workspace folders with
+                                        </p>
+                                        <div>
+                                            <select
+                                                value={settings.defaultEditor}
+                                                onChange={e => setSettings(prev => ({ ...prev, defaultEditor: e.target.value as EditorType }))}
+                                                className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                            >
+                                                <option value="vscode">VS Code</option>
+                                                <option value="cursor">Cursor</option>
+                                                <option value="antigravity">Antigravity</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
 
-                        {/* Notification Settings */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-semibold text-white">Notifications</h3>
-                            <p className="text-xs text-gray-400">
-                                Configure terminal output notifications
-                            </p>
+                            {/* Terminal Settings */}
+                            {activeCategory === 'terminal' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-3">Terminal Configuration</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Default Shell</label>
+                                                <select
+                                                    value={settings.defaultShell}
+                                                    onChange={e => setSettings(prev => ({ ...prev, defaultShell: e.target.value }))}
+                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="zsh">zsh</option>
+                                                    <option value="bash">bash</option>
+                                                    <option value="fish">fish</option>
+                                                    <option value="sh">sh</option>
+                                                </select>
+                                            </div>
 
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="checkbox"
-                                    checked={settings.notifications?.enabled ?? true}
-                                    onChange={e => setSettings(prev => ({
-                                        ...prev,
-                                        notifications: {
-                                            enabled: e.target.checked,
-                                            tools: prev.notifications?.tools ?? {
-                                                cc: true,
-                                                codex: true,
-                                                gemini: true,
-                                                generic: true
-                                            }
-                                        }
-                                    }))}
-                                    className="w-4 h-4 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
-                                />
-                                <label className="text-sm text-gray-300">Enable notifications</label>
-                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Font Size</label>
+                                                <input
+                                                    type="number"
+                                                    min={10}
+                                                    max={24}
+                                                    value={settings.fontSize}
+                                                    onChange={e => setSettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) || 14 }))}
+                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                />
+                                            </div>
 
-                            {(settings.notifications?.enabled ?? true) && (
-                                <div className="grid grid-cols-2 gap-3 pl-7">
-                                    {[
-                                        { id: 'cc', label: 'Claude Code' },
-                                        { id: 'codex', label: 'Codex' },
-                                        { id: 'gemini', label: 'Gemini' },
-                                        { id: 'generic', label: 'Generic Errors' }
-                                    ].map(tool => (
-                                        <div key={tool.id} className="flex items-center gap-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={settings.notifications?.tools?.[tool.id as keyof typeof settings.notifications.tools] ?? true}
-                                                onChange={e => setSettings(prev => ({
-                                                    ...prev,
-                                                    notifications: {
-                                                        enabled: prev.notifications?.enabled ?? true,
-                                                        tools: {
-                                                            ...(prev.notifications?.tools ?? {
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Font Family</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.fontFamily}
+                                                    onChange={e => setSettings(prev => ({ ...prev, fontFamily: e.target.value }))}
+                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Notification Settings */}
+                            {activeCategory === 'notifications' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">Terminal Output Notifications</h3>
+                                        <p className="text-xs text-gray-400 mb-3">
+                                            Configure when to receive notifications from terminal output
+                                        </p>
+
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={settings.notifications?.enabled ?? true}
+                                                    onChange={e => setSettings(prev => ({
+                                                        ...prev,
+                                                        notifications: {
+                                                            enabled: e.target.checked,
+                                                            tools: prev.notifications?.tools ?? {
                                                                 cc: true,
                                                                 codex: true,
                                                                 gemini: true,
                                                                 generic: true
-                                                            }),
-                                                            [tool.id]: e.target.checked
+                                                            }
                                                         }
-                                                    }
-                                                }))}
-                                                className="w-4 h-4 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <label className="text-sm text-gray-400">{tool.label}</label>
+                                                    }))}
+                                                    className="w-4 h-4 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <label className="text-sm text-gray-300">Enable notifications</label>
+                                            </div>
+
+                                            {(settings.notifications?.enabled ?? true) && (
+                                                <div className="pl-7 space-y-3">
+                                                    <p className="text-xs text-gray-500 mb-2">Choose which tools should trigger notifications:</p>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {[
+                                                            { id: 'cc', label: 'Claude Code', description: 'Notifications for Claude Code CLI' },
+                                                            { id: 'codex', label: 'Codex', description: 'Notifications for OpenAI Codex' },
+                                                            { id: 'gemini', label: 'Gemini', description: 'Notifications for Gemini CLI' },
+                                                            { id: 'generic', label: 'Generic Errors', description: 'System errors and warnings' }
+                                                        ].map(tool => (
+                                                            <div key={tool.id} className="flex items-start gap-2 p-3 bg-black/20 rounded border border-white/5">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={settings.notifications?.tools?.[tool.id as keyof typeof settings.notifications.tools] ?? true}
+                                                                    onChange={e => setSettings(prev => ({
+                                                                        ...prev,
+                                                                        notifications: {
+                                                                            enabled: prev.notifications?.enabled ?? true,
+                                                                            tools: {
+                                                                                ...(prev.notifications?.tools ?? {
+                                                                                    cc: true,
+                                                                                    codex: true,
+                                                                                    gemini: true,
+                                                                                    generic: true
+                                                                                }),
+                                                                                [tool.id]: e.target.checked
+                                                                            }
+                                                                        }
+                                                                    }))}
+                                                                    className="w-4 h-4 mt-0.5 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
+                                                                />
+                                                                <div className="flex-1">
+                                                                    <label className="text-sm text-gray-300 block">{tool.label}</label>
+                                                                    <p className="text-xs text-gray-500 mt-0.5">{tool.description}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Port Monitoring Settings */}
+                            {activeCategory === 'port-monitoring' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">Port Filter</h3>
+                                        <p className="text-xs text-gray-400 mb-3">
+                                            Enable filter to show only development server ports
+                                        </p>
+
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={settings.portFilter?.enabled ?? true}
+                                                    onChange={e => setSettings(prev => ({
+                                                        ...prev,
+                                                        portFilter: {
+                                                            enabled: e.target.checked,
+                                                            minPort: prev.portFilter?.minPort ?? 3000,
+                                                            maxPort: prev.portFilter?.maxPort ?? 9000
+                                                        }
+                                                    }))}
+                                                    className="w-4 h-4 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <label className="text-sm text-gray-300">Enable port filter</label>
+                                            </div>
+
+                                            {settings.portFilter?.enabled && (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="block text-xs text-gray-400 mb-1">Min Port</label>
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            max={65535}
+                                                            value={settings.portFilter?.minPort ?? 3000}
+                                                            onChange={e => setSettings(prev => ({
+                                                                ...prev,
+                                                                portFilter: {
+                                                                    enabled: prev.portFilter?.enabled ?? true,
+                                                                    minPort: parseInt(e.target.value) || 3000,
+                                                                    maxPort: prev.portFilter?.maxPort ?? 9000
+                                                                }
+                                                            }))}
+                                                            className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs text-gray-400 mb-1">Max Port</label>
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            max={65535}
+                                                            value={settings.portFilter?.maxPort ?? 9000}
+                                                            onChange={e => setSettings(prev => ({
+                                                                ...prev,
+                                                                portFilter: {
+                                                                    enabled: prev.portFilter?.enabled ?? true,
+                                                                    minPort: prev.portFilter?.minPort ?? 3000,
+                                                                    maxPort: parseInt(e.target.value) || 9000
+                                                                }
+                                                            }))}
+                                                            className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <p className="text-xs text-gray-500">
+                                                Common dev ports: 3000 (React), 5173 (Vite), 8080 (Server)
+                                            </p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Terminal Templates */}
+                            {activeCategory === 'templates' && (
+                                <>
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div>
+                                                <h3 className="text-sm font-semibold text-white">Terminal Templates</h3>
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    Create custom terminal templates with preset commands
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={handleAddTemplate}
+                                                className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex items-center gap-1"
+                                            >
+                                                <Plus size={14} />
+                                                Add Template
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {templates.map(template => (
+                                                <div
+                                                    key={template.id}
+                                                    className="p-3 bg-black/20 border border-white/10 rounded hover:border-white/20 transition-colors"
+                                                >
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="flex items-start gap-2 flex-1">
+                                                            <div className="text-gray-400 mt-0.5">
+                                                                {getTemplateIcon(template.icon)}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-sm font-medium text-white">{template.name}</div>
+                                                                {template.description && (
+                                                                    <div className="text-xs text-gray-500 mt-0.5">{template.description}</div>
+                                                                )}
+                                                                {template.command && (
+                                                                    <code className="block text-xs text-blue-300 mt-1 bg-black/30 px-2 py-1 rounded">
+                                                                        {template.command}
+                                                                    </code>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => setEditingTemplate(template)}
+                                                                className="p-1 hover:bg-white/10 rounded transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <SettingsIcon size={12} className="text-gray-400" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteTemplate(template.id)}
+                                                                className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                                                                title="Delete"
+                                                            >
+                                                                <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {templates.length === 0 && (
+                                                <div className="text-center py-12 text-gray-500 text-sm">
+                                                    No templates yet. Click "Add Template" to create one.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* GitHub Settings */}
+                            {activeCategory === 'github' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">GitHub Configuration</h3>
+                                        <p className="text-xs text-gray-400 mb-3">
+                                            Check your local Git configuration for GitHub authentication
+                                        </p>
+
+                                        <button
+                                            onClick={checkGitConfig}
+                                            disabled={githubCheckStatus === 'checking'}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {githubCheckStatus === 'checking' ? 'Checking...' : 'Check Git Config'}
+                                        </button>
+
+                                        {settings.github && githubCheckStatus === 'success' && (
+                                            <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded">
+                                                <div className="flex items-start gap-2">
+                                                    <Check size={16} className="text-green-400 mt-0.5" />
+                                                    <div className="flex-1">
+                                                        <p className="text-sm text-green-300 font-medium">Git configured</p>
+                                                        <p className="text-xs text-gray-400 mt-1">
+                                                            Username: <span className="text-white">{settings.github.username}</span>
+                                                        </p>
+                                                        <p className="text-xs text-gray-400">
+                                                            Email: <span className="text-white">{settings.github.email}</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {githubCheckStatus === 'error' && (
+                                            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded">
+                                                <div className="flex items-start gap-2">
+                                                    <AlertCircle size={16} className="text-red-400 mt-0.5" />
+                                                    <div className="flex-1">
+                                                        <p className="text-sm text-red-300 font-medium">Git not configured</p>
+                                                        <p className="text-xs text-gray-400 mt-1">
+                                                            Git is not installed or configured. Set it up with these commands:
+                                                        </p>
+                                                        <div className="mt-2 space-y-1">
+                                                            <code className="block text-xs text-white bg-black/30 px-2 py-1 rounded">
+                                                                git config --global user.name "Your Name"
+                                                            </code>
+                                                            <code className="block text-xs text-white bg-black/30 px-2 py-1 rounded">
+                                                                git config --global user.email "your@email.com"
+                                                            </code>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
                             )}
                         </div>
-
-                        {/* Terminal Templates */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-white">Terminal Templates</h3>
-                                <button
-                                    onClick={handleAddTemplate}
-                                    className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex items-center gap-1"
-                                >
-                                    <Plus size={12} />
-                                    Add Template
-                                </button>
-                            </div>
-                            <p className="text-xs text-gray-400">
-                                Create custom terminal templates with preset commands
-                            </p>
-
-                            <div className="space-y-2">
-                                {templates.map(template => (
-                                    <div
-                                        key={template.id}
-                                        className="p-3 bg-black/20 border border-white/10 rounded hover:border-white/20 transition-colors"
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="flex items-start gap-2 flex-1">
-                                                <div className="text-gray-400 mt-0.5">
-                                                    {getTemplateIcon(template.icon)}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-sm font-medium text-white">{template.name}</div>
-                                                    {template.description && (
-                                                        <div className="text-xs text-gray-500 mt-0.5">{template.description}</div>
-                                                    )}
-                                                    {template.command && (
-                                                        <code className="block text-xs text-blue-300 mt-1 bg-black/30 px-2 py-1 rounded">
-                                                            {template.command}
-                                                        </code>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    onClick={() => setEditingTemplate(template)}
-                                                    className="p-1 hover:bg-white/10 rounded transition-colors"
-                                                    title="Edit"
-                                                >
-                                                    <SettingsIcon size={12} className="text-gray-400" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteTemplate(template.id)}
-                                                    className="p-1 hover:bg-red-500/20 rounded transition-colors"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {templates.length === 0 && (
-                                    <div className="text-center py-8 text-gray-500 text-sm">
-                                        No templates yet. Click "Add Template" to create one.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
                     </div>
 
                     {/* Footer */}
