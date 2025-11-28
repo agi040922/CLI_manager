@@ -13,6 +13,7 @@ declare global {
             addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => Promise<IPCResult<Workspace>>
             removeWorkspace: (id: string) => Promise<boolean>
             removeSession: (workspaceId: string, sessionId: string) => Promise<boolean>
+            renameSession: (workspaceId: string, sessionId: string, newName: string) => Promise<boolean>
             createPlayground: () => Promise<Workspace | null>
 
             // Settings
@@ -27,7 +28,9 @@ declare global {
             // Git
             getGitStatus: (workspacePath: string) => Promise<any>
             gitStage: (workspacePath: string, file: string) => Promise<boolean>
+            gitStageAll: (workspacePath: string) => Promise<boolean>
             gitUnstage: (workspacePath: string, file: string) => Promise<boolean>
+            gitUnstageAll: (workspacePath: string) => Promise<boolean>
             gitCommit: (workspacePath: string, message: string) => Promise<boolean>
             gitPush: (workspacePath: string) => Promise<boolean>
             gitPull: (workspacePath: string) => Promise<boolean>

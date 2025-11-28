@@ -14,6 +14,10 @@ interface WorktreeItemProps {
     onRemoveSession: (workspaceId: string, sessionId: string) => void
     onRemoveWorkspace: (id: string) => void
     onOpenInEditor: (workspacePath: string) => void
+    onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void
+    renamingSessionId: string | null
+    onSessionContextMenu: (e: React.MouseEvent, workspaceId: string, sessionId: string) => void
+    onRenameCancel: () => void
 }
 
 /**
@@ -30,7 +34,11 @@ export function WorktreeItem({
     onSelect,
     onRemoveSession,
     onRemoveWorkspace,
-    onOpenInEditor
+    onOpenInEditor,
+    onRenameSession,
+    renamingSessionId,
+    onSessionContextMenu,
+    onRenameCancel
 }: WorktreeItemProps) {
     return (
         <div className="space-y-0.5">
@@ -93,8 +101,12 @@ export function WorktreeItem({
                             workspace={worktree}
                             isActive={activeSessionId === session.id}
                             notificationStatus={sessionNotifications?.get(session.id)}
+                            isRenaming={renamingSessionId === session.id}
                             onSelect={onSelect}
                             onRemove={onRemoveSession}
+                            onRename={onRenameSession}
+                            onContextMenu={onSessionContextMenu}
+                            onRenameCancel={onRenameCancel}
                         />
                     ))}
                 </div>

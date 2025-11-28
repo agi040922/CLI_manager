@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { AlertCircle, CheckCircle, Bell } from 'lucide-react'
-import { TerminalPatternMatcher } from '../utils/terminalPatterns'
+import { TerminalPatternMatcher, ToolType } from '../utils/terminalPatterns'
 
 interface TerminalViewProps {
     id: string
@@ -44,7 +44,6 @@ export function TerminalView({
     const xtermRef = useRef<Terminal | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
     const [notifications, setNotifications] = useState<Notification[]>([])
-    const outputBufferRef = useRef<string>('')
     const lastNotificationRef = useRef<{ type: string; message: string; time: number } | null>(null)
     const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
 
@@ -55,23 +54,8 @@ export function TerminalView({
 
         const result = matcherRef.current.process(text)
         if (result) {
-            // Check if specific tool notification is enabled
-            // We need to map the tool name from the matcher to the settings key
-            // matcher returns 'cc', 'codex', 'gemini', 'generic'
-            // settings has keys cc, codex, gemini, generic
-
-            // Extract tool name from message or context if possible, 
-            // but TerminalPatternMatcher doesn't return the raw tool key directly in the result.
-            // Let's update TerminalPatternMatcher to return the tool key or infer it.
-            // Actually, looking at TerminalPatternMatcher, it returns { type, message }.
-            // The message usually contains the tool name prefix e.g. "Claude Code: ..."
-
-            let toolKey = 'generic'
-            if (result.message.startsWith('Claude Code')) toolKey = 'cc'
-            else if (result.message.startsWith('Codex')) toolKey = 'codex'
-            else if (result.message.startsWith('Gemini')) toolKey = 'gemini'
-
-            const isEnabled = notificationSettings?.tools?.[toolKey as keyof typeof notificationSettings.tools] ?? true
+            const toolKey: ToolType = result.tool ?? 'generic'
+            const isEnabled = notificationSettings?.tools?.[toolKey] ?? true
 
             if (isEnabled) {
                 addNotification(result.type, result.message)
@@ -177,16 +161,10 @@ export function TerminalView({
             const cleanup = window.api.onTerminalData(id, (data) => {
                 term.write(data)
 
-                // Accumulate output for detection
-                outputBufferRef.current += data
-
-                // Detect patterns when we have a newline (end of a message)
-                if (data.includes('\n')) {
-                    detectOutput(outputBufferRef.current)
-                    // Keep only last 1000 chars to prevent memory issues
-                    if (outputBufferRef.current.length > 1000) {
-                        outputBufferRef.current = outputBufferRef.current.slice(-1000)
-                    }
+                try {
+                    detectOutput(data)
+                } catch (e) {
+                    console.error('Failed to detect terminal notification', e)
                 }
             })
 

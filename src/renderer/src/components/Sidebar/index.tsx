@@ -5,7 +5,7 @@ import { getErrorMessage } from '../../utils/errorMessages'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
-import { WorkspaceContextMenu, WorktreeContextMenu, BranchMenu } from './ContextMenus'
+import { WorkspaceContextMenu, WorktreeContextMenu, BranchMenu, SessionContextMenu } from './ContextMenus'
 import { BranchPromptModal, PRPromptModal } from './Modals'
 
 interface SidebarProps {
@@ -22,6 +22,7 @@ interface SidebarProps {
     onOpenInEditor: (workspacePath: string) => void
     onOpenSettings: () => void
     settingsOpen?: boolean
+    onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void
 }
 
 /**
@@ -46,7 +47,8 @@ export function Sidebar({
     sessionNotifications,
     onOpenInEditor,
     onOpenSettings,
-    settingsOpen
+    settingsOpen,
+    onRenameSession
 }: SidebarProps) {
     // 커스텀 훅으로 상태 관리
     const customTemplates = useTemplates(settingsOpen)
@@ -57,6 +59,8 @@ export function Sidebar({
     const [menuOpen, setMenuOpen] = useState<{ x: number, y: number, workspaceId: string } | null>(null)
     const [worktreeMenuOpen, setWorktreeMenuOpen] = useState<{ x: number, y: number, workspace: Workspace } | null>(null)
     const [branchMenuOpen, setBranchMenuOpen] = useState<{ x: number, y: number, workspaceId: string, workspacePath: string } | null>(null)
+    const [sessionMenuOpen, setSessionMenuOpen] = useState<{ x: number, y: number, workspaceId: string, sessionId: string } | null>(null)
+    const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null)
     const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
     const [showPRPrompt, setShowPRPrompt] = useState<{ workspace: Workspace } | null>(null)
 
@@ -77,6 +81,7 @@ export function Sidebar({
             setMenuOpen(null)
             setBranchMenuOpen(null)
             setWorktreeMenuOpen(null)
+            setSessionMenuOpen(null)
         }
         window.addEventListener('click', handleClick)
         return () => window.removeEventListener('click', handleClick)
@@ -102,6 +107,12 @@ export function Sidebar({
         } else {
             setMenuOpen({ x: e.clientX, y: e.clientY, workspaceId })
         }
+    }
+
+    const handleSessionContextMenu = (e: React.MouseEvent, workspaceId: string, sessionId: string) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setSessionMenuOpen({ x: e.clientX, y: e.clientY, workspaceId, sessionId })
     }
 
     const handleBranchClick = (e: React.MouseEvent, workspace: Workspace) => {
@@ -187,6 +198,11 @@ export function Sidebar({
         }
     }
 
+    const handleRenameSubmit = (workspaceId: string, sessionId: string, newName: string) => {
+        onRenameSession(workspaceId, sessionId, newName)
+        setRenamingSessionId(null)
+    }
+
     // 일반 워크스페이스와 Playground 분리
     const regularWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId)
     const playgroundWorkspaces = workspaces.filter(w => w.isPlayground)
@@ -237,6 +253,22 @@ export function Sidebar({
                 />
             )}
 
+            {sessionMenuOpen && (
+                <SessionContextMenu
+                    x={sessionMenuOpen.x}
+                    y={sessionMenuOpen.y}
+                    onRename={() => {
+                        setRenamingSessionId(sessionMenuOpen.sessionId)
+                        setSessionMenuOpen(null)
+                    }}
+                    onDelete={() => {
+                        onRemoveSession(sessionMenuOpen.workspaceId, sessionMenuOpen.sessionId)
+                        setSessionMenuOpen(null)
+                    }}
+                    onClose={() => setSessionMenuOpen(null)}
+                />
+            )}
+
             {/* Modals */}
             {showPrompt && (
                 <BranchPromptModal
@@ -280,13 +312,17 @@ export function Sidebar({
                                 branchInfo={workspaceBranches.get(workspace.id)}
                                 activeSessionId={activeSessionId}
                                 sessionNotifications={sessionNotifications}
+                                renamingSessionId={renamingSessionId}
                                 onToggleExpand={toggleExpand}
                                 onContextMenu={handleContextMenu}
+                                onSessionContextMenu={handleSessionContextMenu}
                                 onBranchClick={handleBranchClick}
                                 onSelect={onSelect}
                                 onRemoveSession={onRemoveSession}
                                 onRemoveWorkspace={onRemoveWorkspace}
                                 onOpenInEditor={onOpenInEditor}
+                                onRenameSession={handleRenameSubmit}
+                                onRenameCancel={() => setRenamingSessionId(null)}
                             />
                         )
                     })}
@@ -308,13 +344,17 @@ export function Sidebar({
                                     branchInfo={workspaceBranches.get(workspace.id)}
                                     activeSessionId={activeSessionId}
                                     sessionNotifications={sessionNotifications}
+                                    renamingSessionId={renamingSessionId}
                                     onToggleExpand={toggleExpand}
                                     onContextMenu={handleContextMenu}
+                                    onSessionContextMenu={handleSessionContextMenu}
                                     onBranchClick={handleBranchClick}
                                     onSelect={onSelect}
                                     onRemoveSession={onRemoveSession}
                                     onRemoveWorkspace={onRemoveWorkspace}
                                     onOpenInEditor={onOpenInEditor}
+                                    onRenameSession={handleRenameSubmit}
+                                    onRenameCancel={() => setRenamingSessionId(null)}
                                 />
                             ))}
                         </div>

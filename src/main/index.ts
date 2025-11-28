@@ -271,6 +271,25 @@ app.whenReady().then(() => {
         return true
     })
 
+    ipcMain.handle('rename-session', (_, workspaceId: string, sessionId: string, newName: string) => {
+        const workspaces = store.get('workspaces') as Workspace[]
+        const workspace = workspaces.find((w: Workspace) => w.id === workspaceId)
+
+        if (!workspace) return false
+
+        const session = workspace.sessions.find(s => s.id === sessionId)
+        if (!session) return false
+
+        session.name = newName
+
+        // Update store
+        store.set('workspaces', workspaces.map(w =>
+            w.id === workspaceId ? workspace : w
+        ))
+
+        return true
+    })
+
     ipcMain.handle('create-playground', async () => {
         // Create a readable timestamp for the playground name
         const now = new Date()

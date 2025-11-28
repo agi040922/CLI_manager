@@ -10,6 +10,7 @@ const api = {
     addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string): Promise<Workspace | null> => ipcRenderer.invoke('add-worktree-workspace', parentWorkspaceId, branchName),
     removeWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id),
     removeSession: (workspaceId: string, sessionId: string): Promise<boolean> => ipcRenderer.invoke('remove-session', workspaceId, sessionId),
+    renameSession: (workspaceId: string, sessionId: string, newName: string): Promise<boolean> => ipcRenderer.invoke('rename-session', workspaceId, sessionId, newName),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
 
     // Settings

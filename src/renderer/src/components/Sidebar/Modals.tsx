@@ -132,3 +132,56 @@ export function PRPromptModal({ onSubmit, onCancel }: PRPromptModalProps) {
         document.body
     )
 }
+
+interface ConfirmationModalProps {
+    title: string
+    message: string
+    onConfirm: () => void
+    onCancel: () => void
+    confirmText?: string
+    cancelText?: string
+    isDangerous?: boolean
+}
+
+/**
+ * 확인 모달
+ */
+export function ConfirmationModal({
+    title,
+    message,
+    onConfirm,
+    onCancel,
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
+    isDangerous = false
+}: ConfirmationModalProps) {
+    return createPortal(
+        <div className={`fixed inset-0 z-[${MENU_Z_INDEX}] flex items-center justify-center bg-black/50 backdrop-blur-sm`}>
+            <div
+                className="bg-[#1e1e20] border border-white/10 rounded-lg p-4 w-80 shadow-2xl"
+                onClick={e => e.stopPropagation()}
+            >
+                <h3 className="text-sm font-medium text-white mb-2">{title}</h3>
+                <p className="text-xs text-gray-400 mb-4">{message}</p>
+                <div className="flex justify-end gap-2">
+                    <button
+                        onClick={onCancel}
+                        className="px-3 py-1 text-xs text-gray-400 hover:text-white"
+                    >
+                        {cancelText}
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        className={`px-3 py-1 text-xs text-white rounded ${isDangerous
+                                ? 'bg-red-600 hover:bg-red-500'
+                                : 'bg-blue-600 hover:bg-blue-500'
+                            }`}
+                    >
+                        {confirmText}
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    )
+}

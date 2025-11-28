@@ -23,7 +23,16 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
             minPort: 3000,
             maxPort: 9000
         },
-        github: undefined
+        github: undefined,
+        notifications: {
+            enabled: false,  // 기본값을 false로 설정 (알림 끄기)
+            tools: {
+                cc: true,
+                codex: true,
+                gemini: true,
+                generic: true
+            }
+        }
     })
     const [githubCheckStatus, setGithubCheckStatus] = useState<'checking' | 'success' | 'error' | null>(null)
     const [templates, setTemplates] = useState<TerminalTemplate[]>([])

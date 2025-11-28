@@ -20,6 +20,10 @@ interface WorkspaceItemProps {
     onRemoveSession: (workspaceId: string, sessionId: string) => void
     onRemoveWorkspace: (id: string) => void
     onOpenInEditor: (workspacePath: string) => void
+    onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void
+    renamingSessionId: string | null
+    onSessionContextMenu: (e: React.MouseEvent, workspaceId: string, sessionId: string) => void
+    onRenameCancel: () => void
 }
 
 /**
@@ -40,7 +44,11 @@ export function WorkspaceItem({
     onSelect,
     onRemoveSession,
     onRemoveWorkspace,
-    onOpenInEditor
+    onOpenInEditor,
+    onRenameSession,
+    renamingSessionId,
+    onSessionContextMenu,
+    onRenameCancel
 }: WorkspaceItemProps) {
     return (
         <div className="space-y-0.5">
@@ -120,8 +128,12 @@ export function WorkspaceItem({
                             workspace={workspace}
                             isActive={activeSessionId === session.id}
                             notificationStatus={sessionNotifications?.get(session.id)}
+                            isRenaming={renamingSessionId === session.id}
                             onSelect={onSelect}
                             onRemove={onRemoveSession}
+                            onRename={onRenameSession}
+                            onContextMenu={onSessionContextMenu}
+                            onRenameCancel={onRenameCancel}
                         />
                     ))}
 
@@ -139,6 +151,10 @@ export function WorkspaceItem({
                             onRemoveSession={onRemoveSession}
                             onRemoveWorkspace={onRemoveWorkspace}
                             onOpenInEditor={onOpenInEditor}
+                            onRenameSession={onRenameSession}
+                            renamingSessionId={renamingSessionId}
+                            onSessionContextMenu={onSessionContextMenu}
+                            onRenameCancel={onRenameCancel}
                         />
                     ))}
                 </div>

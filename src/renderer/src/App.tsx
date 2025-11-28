@@ -4,6 +4,7 @@ import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
+import { ConfirmationModal } from './components/Sidebar/Modals'
 import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
 
@@ -24,7 +25,27 @@ function App() {
             enabled: true,
             minPort: 3000,
             maxPort: 9000
+        },
+        notifications: {
+            enabled: false,  // 기본값을 false로 설정 (알림 끄기)
+            tools: {
+                cc: true,
+                codex: true,
+                gemini: true,
+                generic: true
+            }
         }
+    })
+    const [confirmationModal, setConfirmationModal] = useState<{
+        isOpen: boolean
+        title: string
+        message: string
+        onConfirm: () => void
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { }
     })
 
     // Load workspaces and settings on mount
@@ -69,11 +90,35 @@ function App() {
     }
 
     const handleRemoveWorkspace = async (id: string) => {
-        await window.api.removeWorkspace(id)
-        setWorkspaces(prev => prev.filter(w => w.id !== id))
-        if (activeWorkspace?.id === id) {
-            setActiveWorkspace(null)
-            setActiveSession(null)
+        setConfirmationModal({
+            isOpen: true,
+            title: 'Delete Workspace',
+            message: 'Are you sure you want to delete this workspace? This action cannot be undone.',
+            onConfirm: async () => {
+                await window.api.removeWorkspace(id)
+                setWorkspaces(prev => prev.filter(w => w.id !== id))
+                if (activeWorkspace?.id === id) {
+                    setActiveWorkspace(null)
+                    setActiveSession(null)
+                }
+            }
+        })
+    }
+
+    const handleRenameSession = async (workspaceId: string, sessionId: string, newName: string) => {
+        const success = await window.api.renameSession(workspaceId, sessionId, newName)
+        if (success) {
+            setWorkspaces(prev => prev.map(w => {
+                if (w.id === workspaceId) {
+                    return {
+                        ...w,
+                        sessions: w.sessions.map(s =>
+                            s.id === sessionId ? { ...s, name: newName } : s
+                        )
+                    }
+                }
+                return w
+            }))
         }
     }
 
@@ -154,6 +199,7 @@ function App() {
                 onOpenInEditor={handleOpenInEditor}
                 onOpenSettings={() => setSettingsOpen(true)}
                 settingsOpen={settingsOpen}
+                onRenameSession={handleRenameSession}
             />
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
                 <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between">
@@ -233,6 +279,21 @@ function App() {
                 isOpen={gitPanelOpen}
                 onClose={() => setGitPanelOpen(false)}
             />
+
+            {/* Confirmation Modal */}
+            {confirmationModal.isOpen && (
+                <ConfirmationModal
+                    title={confirmationModal.title}
+                    message={confirmationModal.message}
+                    onConfirm={() => {
+                        confirmationModal.onConfirm()
+                        setConfirmationModal(prev => ({ ...prev, isOpen: false }))
+                    }}
+                    onCancel={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
+                    isDangerous={true}
+                    confirmText="Delete"
+                />
+            )}
         </div>
     )
 }

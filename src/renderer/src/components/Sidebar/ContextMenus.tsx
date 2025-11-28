@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Terminal, GitBranch, Settings as SettingsIcon } from 'lucide-react'
+import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2 } from 'lucide-react'
 import { Workspace, TerminalTemplate } from '../../../../shared/types'
 import { getTemplateIcon } from '../../constants/icons'
 import { MENU_Z_INDEX } from '../../constants/styles'
@@ -273,11 +273,10 @@ export function BranchMenu({
                 return (
                     <button
                         key={branch}
-                        className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center gap-2 ${
-                            isCurrentBranch
-                                ? "bg-blue-500/20 text-blue-300 font-medium"
-                                : "text-gray-300 hover:bg-white/10 hover:text-white"
-                        }`}
+                        className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center gap-2 ${isCurrentBranch
+                            ? "bg-blue-500/20 text-blue-300 font-medium"
+                            : "text-gray-300 hover:bg-white/10 hover:text-white"
+                            }`}
                         onClick={() => {
                             if (!isCurrentBranch) {
                                 onCheckout(branch)
@@ -292,6 +291,56 @@ export function BranchMenu({
                     </button>
                 )
             })}
+        </div>,
+        document.body
+    )
+}
+
+interface SessionContextMenuProps {
+    x: number
+    y: number
+    onRename: () => void
+    onDelete: () => void
+    onClose: () => void
+}
+
+/**
+ * 세션 우클릭 컨텍스트 메뉴
+ * 이름 변경, 삭제 기능 제공
+ */
+export function SessionContextMenu({
+    x,
+    y,
+    onRename,
+    onDelete,
+    onClose
+}: SessionContextMenuProps) {
+    return createPortal(
+        <div
+            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-32 backdrop-blur-md`}
+            style={{ top: y, left: x }}
+            onClick={e => e.stopPropagation()}
+        >
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onRename()
+                    onClose()
+                }}
+            >
+                <Edit2 size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Rename</span>
+            </button>
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onDelete()
+                    onClose()
+                }}
+            >
+                <Trash2 size={12} className="text-red-400 shrink-0" />
+                <span className="truncate">Delete</span>
+            </button>
         </div>,
         document.body
     )
