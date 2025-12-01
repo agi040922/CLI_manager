@@ -2,14 +2,14 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { AlertCircle, CheckCircle, Bell } from 'lucide-react'
-import { TerminalPatternMatcher, ToolType } from '../utils/terminalPatterns'
+import { AlertCircle, CheckCircle, Bell, AlertTriangle } from 'lucide-react'
+import { TerminalPatternMatcher, ToolType, NotificationType } from '../utils/terminalPatterns'
 
 interface TerminalViewProps {
     id: string
     cwd: string
     visible: boolean
-    onNotification?: (type: 'info' | 'error' | 'success') => void
+    onNotification?: (type: NotificationType) => void
     fontSize?: number
     fontFamily?: string
     initialCommand?: string
@@ -26,7 +26,7 @@ interface TerminalViewProps {
 
 interface Notification {
     id: string
-    type: 'error' | 'success' | 'info'
+    type: NotificationType
     message: string
 }
 
@@ -47,8 +47,13 @@ export function TerminalView({
     const lastNotificationRef = useRef<{ type: string; message: string; time: number } | null>(null)
     const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
 
-    // Detection patterns
-    const detectOutput = (text: string) => {
+    // Detection patterns - DISABLED: Will be enabled in a future update
+    const detectOutput = (_text: string) => {
+        // Notification feature is temporarily disabled
+        // Will be re-enabled when the pattern matching is improved
+        return
+
+        /*
         // Check if notifications are globally enabled
         if (notificationSettings?.enabled === false) return
 
@@ -61,9 +66,10 @@ export function TerminalView({
                 addNotification(result.type, result.message)
             }
         }
+        */
     }
 
-    const addNotification = (type: 'error' | 'success' | 'info', message: string) => {
+    const addNotification = (type: NotificationType, message: string) => {
         // Prevent duplicates: ignore if same type and message within 3 seconds
         const now = Date.now()
         const last = lastNotificationRef.current
@@ -85,8 +91,8 @@ export function TerminalView({
         // Notify parent component
         onNotification?.(type)
 
-        // info type (user intervention needed): 10s, others: 5s auto dismiss
-        const dismissTime = type === 'info' ? 10000 : 5000
+        // info/warning (user intervention needed): 10s, others: 5s auto dismiss
+        const dismissTime = (type === 'info' || type === 'warning') ? 10000 : 5000
         setTimeout(() => {
             setNotifications(prev => prev.filter(n => n.id !== newNotif.id))
         }, dismissTime)
@@ -232,27 +238,35 @@ export function TerminalView({
                         className={`
                             pointer-events-auto
                             flex items-start gap-3 p-4 rounded-lg shadow-2xl
-                            backdrop-blur-md border
+                            backdrop-blur-md border min-w-[300px] max-w-[400px]
                             animate-in slide-in-from-right-5 duration-300
                             ${notif.type === 'error' ? 'bg-red-500/20 border-red-500/30' : ''}
                             ${notif.type === 'success' ? 'bg-green-500/20 border-green-500/30' : ''}
+                            ${notif.type === 'warning' ? 'bg-orange-500/20 border-orange-500/30 ring-1 ring-orange-400/30' : ''}
                             ${notif.type === 'info' ? 'bg-amber-500/30 border-amber-500/50 ring-2 ring-amber-400/50 animate-pulse' : ''}
                         `}
                     >
                         {notif.type === 'error' && <AlertCircle size={20} className="text-red-400 shrink-0 mt-0.5" />}
                         {notif.type === 'success' && <CheckCircle size={20} className="text-green-400 shrink-0 mt-0.5" />}
+                        {notif.type === 'warning' && <AlertTriangle size={20} className="text-orange-400 shrink-0 mt-0.5" />}
                         {notif.type === 'info' && <Bell size={20} className="text-amber-300 shrink-0 mt-0.5 animate-bounce" />}
                         <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium ${notif.type === 'error' ? 'text-red-200' :
+                            <p className={`text-sm font-medium ${
+                                notif.type === 'error' ? 'text-red-200' :
                                 notif.type === 'success' ? 'text-green-200' :
-                                    'text-amber-100'
-                                }`}>
-                                {notif.type === 'error' ? '⚠️ Error Detected' :
-                                    notif.type === 'success' ? '✅ Build Complete' :
-                                        '🔔 Action Required'}
+                                notif.type === 'warning' ? 'text-orange-200' :
+                                'text-amber-100'
+                            }`}>
+                                {notif.type === 'error' ? '❌ 오류 발생' :
+                                 notif.type === 'success' ? '✅ 완료' :
+                                 notif.type === 'warning' ? '⚠️ 주의' :
+                                 '🔔 입력 필요'}
                             </p>
-                            <p className={`text-xs mt-1 truncate max-w-xs ${notif.type === 'info' ? 'text-amber-100 font-medium' : 'text-gray-300'
-                                }`}>
+                            <p className={`text-xs mt-1 break-words ${
+                                notif.type === 'info' ? 'text-amber-100 font-medium' :
+                                notif.type === 'warning' ? 'text-orange-100' :
+                                'text-gray-300'
+                            }`}>
                                 {notif.message}
                             </p>
                         </div>

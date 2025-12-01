@@ -71,7 +71,7 @@ function App() {
         })
     }
 
-    const handleNotification = (sessionId: string, type: 'info' | 'error' | 'success') => {
+    const handleNotification = (sessionId: string, type: 'info' | 'error' | 'success' | 'warning') => {
         // 현재 활성 세션이 아닐 때만 알림 표시
         if (activeSession?.id !== sessionId) {
             setSessionNotifications(prev => {

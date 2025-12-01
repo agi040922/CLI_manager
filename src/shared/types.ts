@@ -1,4 +1,4 @@
-export type NotificationStatus = 'none' | 'info' | 'error' | 'success'
+export type NotificationStatus = 'none' | 'info' | 'error' | 'success' | 'warning'
 
 export type EditorType = 'vscode' | 'cursor' | 'antigravity'
 

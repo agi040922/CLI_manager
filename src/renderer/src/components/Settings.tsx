@@ -274,68 +274,19 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                                             Configure when to receive notifications from terminal output
                                         </p>
 
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={settings.notifications?.enabled ?? true}
-                                                    onChange={e => setSettings(prev => ({
-                                                        ...prev,
-                                                        notifications: {
-                                                            enabled: e.target.checked,
-                                                            tools: prev.notifications?.tools ?? {
-                                                                cc: true,
-                                                                codex: true,
-                                                                gemini: true,
-                                                                generic: true
-                                                            }
-                                                        }
-                                                    }))}
-                                                    className="w-4 h-4 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
-                                                />
-                                                <label className="text-sm text-gray-300">Enable notifications</label>
+                                        {/* Coming Soon Notice */}
+                                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                                            <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
+                                                <Bell size={28} className="text-blue-400" />
                                             </div>
-
-                                            {(settings.notifications?.enabled ?? true) && (
-                                                <div className="pl-7 space-y-3">
-                                                    <p className="text-xs text-gray-500 mb-2">Choose which tools should trigger notifications:</p>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        {[
-                                                            { id: 'cc', label: 'Claude Code', description: 'Notifications for Claude Code CLI' },
-                                                            { id: 'codex', label: 'Codex', description: 'Notifications for OpenAI Codex' },
-                                                            { id: 'gemini', label: 'Gemini', description: 'Notifications for Gemini CLI' },
-                                                            { id: 'generic', label: 'Generic Errors', description: 'System errors and warnings' }
-                                                        ].map(tool => (
-                                                            <div key={tool.id} className="flex items-start gap-2 p-3 bg-black/20 rounded border border-white/5">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={settings.notifications?.tools?.[tool.id as keyof typeof settings.notifications.tools] ?? true}
-                                                                    onChange={e => setSettings(prev => ({
-                                                                        ...prev,
-                                                                        notifications: {
-                                                                            enabled: prev.notifications?.enabled ?? true,
-                                                                            tools: {
-                                                                                ...(prev.notifications?.tools ?? {
-                                                                                    cc: true,
-                                                                                    codex: true,
-                                                                                    gemini: true,
-                                                                                    generic: true
-                                                                                }),
-                                                                                [tool.id]: e.target.checked
-                                                                            }
-                                                                        }
-                                                                    }))}
-                                                                    className="w-4 h-4 mt-0.5 rounded border-white/10 bg-black/30 text-blue-600 focus:ring-blue-500"
-                                                                />
-                                                                <div className="flex-1">
-                                                                    <label className="text-sm text-gray-300 block">{tool.label}</label>
-                                                                    <p className="text-xs text-gray-500 mt-0.5">{tool.description}</p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
+                                            <h4 className="text-lg font-medium text-white mb-2">Coming Soon</h4>
+                                            <p className="text-sm text-gray-400 max-w-sm">
+                                                Terminal output notifications for Claude Code, Codex, and other AI tools
+                                                will be available in a future update.
+                                            </p>
+                                            <div className="mt-4 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
+                                                <span className="text-xs text-blue-300">In Development</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </>
