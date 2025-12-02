@@ -35,6 +35,7 @@ export interface TerminalTemplate {
     icon: string
     description: string
     command: string
+    cwd?: string
 }
 
 export interface Workspace {
@@ -80,4 +81,21 @@ export interface UserSettings {
             generic: boolean
         }
     }
+    ignoredPorts?: number[]
+    ignoredProcesses?: string[]
+    portActionLogs?: PortActionLog[]
+}
+
+export interface PortActionLog {
+    timestamp: number
+    action: 'kill' | 'ignore-port' | 'ignore-process'
+    target: string
+    details?: string
+}
+
+export interface PortInfo {
+    port: number
+    pid: number
+    command: string
+    cwd?: string
 }

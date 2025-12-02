@@ -55,7 +55,7 @@ export function WorkspaceItem({
             <div
                 onClick={() => onToggleExpand(workspace.id)}
                 onContextMenu={(e) => onContextMenu(e, workspace.id)}
-                className="group flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                className="group relative flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
             >
                 <div className="flex flex-col gap-0.5 overflow-hidden flex-1 min-w-0">
                     <div className="flex items-center gap-2 overflow-hidden">
@@ -86,7 +86,7 @@ export function WorkspaceItem({
                         </div>
                     )}
                 </div>
-                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute right-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#0f0f12] shadow-[-10px_0_10px_#0f0f12]">
                     <button
                         onClick={(e) => {
                             e.stopPropagation()

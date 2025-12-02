@@ -1,11 +1,9 @@
 import { exec } from 'child_process'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
+import { PortInfo } from '../shared/types'
+import { promisify } from 'util'
 
-interface PortInfo {
-    port: number
-    pid: number
-    command: string
-}
+const execAsync = promisify(exec)
 
 export class PortManager {
     private interval: NodeJS.Timeout | null = null
@@ -13,6 +11,11 @@ export class PortManager {
     constructor() {
         // Start monitoring
         this.startMonitoring()
+        
+        // Register IPC handlers
+        ipcMain.handle('kill-process', async (_, pid: number) => {
+            return this.killProcess(pid)
+        })
     }
 
     private startMonitoring() {
@@ -25,15 +28,10 @@ export class PortManager {
         }, 5000)
     }
 
-    private checkPorts() {
+    private async checkPorts() {
         // lsof -i -P -n -sTCP:LISTEN
-        // -i: internet files
-        // -P: no port names
-        // -n: no host names
-        // -sTCP:LISTEN: only TCP listeners
-        exec('lsof -i -P -n -sTCP:LISTEN', (error, stdout) => {
+        exec('lsof -i -P -n -sTCP:LISTEN', async (error, stdout) => {
             if (error) {
-                // lsof returns exit code 1 if no ports are found, which is fine
                 if (error.code !== 1) {
                     console.error('lsof error:', error)
                 }
@@ -41,12 +39,12 @@ export class PortManager {
                 return
             }
 
-            const ports = this.parseLsof(stdout)
+            const ports = await this.parseLsof(stdout)
             this.broadcast(ports)
         })
     }
 
-    private parseLsof(output: string): PortInfo[] {
+    private async parseLsof(output: string): Promise<PortInfo[]> {
         const lines = output.split('\n')
         const ports: PortInfo[] = []
         const seen = new Set<string>()
@@ -60,9 +58,11 @@ export class PortManager {
 
             const command = parts[0]
             const pid = parseInt(parts[1])
-            const address = parts[8] // e.g., "localhost:3000" or "*:8080" or "127.0.0.1:3000"
+            const address = parts[8]
 
             // Only show localhost ports (127.0.0.1 or localhost)
+            // User requested to see where it's open, so maybe we should relax this?
+            // But for now, let's stick to localhost as per original design but add CWD info.
             if (!address.includes('localhost') && !address.includes('127.0.0.1')) {
                 continue
             }
@@ -73,7 +73,19 @@ export class PortManager {
                 const key = `${port}-${pid}`
 
                 if (!seen.has(key)) {
-                    ports.push({ port, pid, command })
+                    // Fetch CWD
+                    let cwd = ''
+                    try {
+                        const { stdout } = await execAsync(`lsof -p ${pid} -d cwd -F n`)
+                        const match = stdout.match(/^n(.+)$/m)
+                        if (match) {
+                            cwd = match[1]
+                        }
+                    } catch (e) {
+                        // Ignore error
+                    }
+
+                    ports.push({ port, pid, command, cwd })
                     seen.add(key)
                 }
             }
@@ -83,10 +95,22 @@ export class PortManager {
     }
 
     private broadcast(ports: PortInfo[]) {
-        const windows = require('electron').BrowserWindow.getAllWindows()
+        const windows = BrowserWindow.getAllWindows()
         windows.forEach((win: any) => {
             win.webContents.send('port-update', ports)
         })
+    }
+
+    public async killProcess(pid: number): Promise<boolean> {
+        try {
+            process.kill(pid)
+            // Force refresh
+            this.checkPorts()
+            return true
+        } catch (e) {
+            console.error(`Failed to kill process ${pid}:`, e)
+            return false
+        }
     }
 
     public stop() {

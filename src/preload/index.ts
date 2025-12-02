@@ -67,7 +67,8 @@ const api = {
         const listener = (_: any, ports: any[]) => callback(ports)
         ipcRenderer.on('port-update', listener)
         return () => ipcRenderer.removeListener('port-update', listener)
-    }
+    },
+    killProcess: (pid: number): Promise<boolean> => ipcRenderer.invoke('kill-process', pid)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

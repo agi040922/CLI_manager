@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings, IPCResult } from '../../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, PortInfo } from '../../shared/types'
 
 declare global {
     interface Window {
@@ -61,7 +61,8 @@ declare global {
             onTerminalData: (id: string, callback: (data: string) => void) => () => void
 
             // Ports
-            onPortUpdate: (callback: (ports: { port: number, pid: number, command: string }[]) => void) => () => void
+            onPortUpdate: (callback: (ports: PortInfo[]) => void) => () => void
+            killProcess: (pid: number) => Promise<boolean>
         }
     }
 }

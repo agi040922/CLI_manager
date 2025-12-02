@@ -5,8 +5,9 @@ import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
 import { ConfirmationModal } from './components/Sidebar/Modals'
-import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult } from '../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
+import { PanelLeft } from 'lucide-react'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -47,6 +48,10 @@ function App() {
         message: '',
         onConfirm: () => { }
     })
+
+    // Sidebar state
+    const [sidebarWidth, setSidebarWidth] = useState(256)
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
     // Load workspaces and settings on mount
     useEffect(() => {
@@ -183,29 +188,105 @@ function App() {
         }
     }
 
+    const [settingsCategory, setSettingsCategory] = useState<any>('general')
+
+    const logPortAction = async (action: 'kill' | 'ignore-port' | 'ignore-process', target: string, details?: string) => {
+        const newLog: PortActionLog = {
+            timestamp: Date.now(),
+            action,
+            target,
+            details
+        }
+        
+        const newSettings = {
+            ...settings,
+            portActionLogs: [...(settings.portActionLogs || []), newLog]
+        }
+        
+        // We need to update settings state immediately to reflect changes in UI if needed,
+        // but for logs we might want to be careful about state updates if they happen frequently.
+        // However, these actions are user-triggered and infrequent enough.
+        setSettings(newSettings)
+        await window.api.saveSettings(newSettings)
+        return newSettings
+    }
+
+    const handleIgnorePort = async (port: number) => {
+        const newSettings = await logPortAction('ignore-port', port.toString())
+        
+        const updatedSettings = {
+            ...newSettings,
+            ignoredPorts: [...(newSettings.ignoredPorts || []), port]
+        }
+        setSettings(updatedSettings)
+        await window.api.saveSettings(updatedSettings)
+    }
+
+    const handleIgnoreProcess = async (processName: string) => {
+        const newSettings = await logPortAction('ignore-process', processName)
+
+        const updatedSettings = {
+            ...newSettings,
+            ignoredProcesses: [...(newSettings.ignoredProcesses || []), processName]
+        }
+        setSettings(updatedSettings)
+        await window.api.saveSettings(updatedSettings)
+    }
+
+    const handleKillProcess = async (pid: number) => {
+        await window.api.killProcess(pid)
+        await logPortAction('kill', pid.toString(), 'Process terminated by user')
+    }
+
+    const handleSaveSettings = async (newSettings: UserSettings) => {
+        setSettings(newSettings)
+        await window.api.saveSettings(newSettings)
+    }
+
+    const handleOpenSettings = (category: 'general' | 'port-monitoring') => {
+        setSettingsCategory(category)
+        setSettingsOpen(true)
+    }
+
     return (
         <div className="flex h-screen w-screen bg-transparent">
-            <Sidebar
-                workspaces={workspaces}
-                onSelect={handleSelect}
-                onAddWorkspace={handleAddWorkspace}
-                onRemoveWorkspace={handleRemoveWorkspace}
-                onAddSession={handleAddSession}
-                onAddWorktreeWorkspace={handleAddWorktreeWorkspace}
-                onRemoveSession={handleRemoveSession}
-                onCreatePlayground={handleCreatePlayground}
-                activeSessionId={activeSession?.id}
-                sessionNotifications={sessionNotifications}
-                onOpenInEditor={handleOpenInEditor}
-                onOpenSettings={() => setSettingsOpen(true)}
-                settingsOpen={settingsOpen}
-                onRenameSession={handleRenameSession}
-            />
+            {isSidebarOpen && (
+                <Sidebar
+                    workspaces={workspaces}
+                    onSelect={handleSelect}
+                    onAddWorkspace={handleAddWorkspace}
+                    onRemoveWorkspace={handleRemoveWorkspace}
+                    onAddSession={handleAddSession}
+                    onAddWorktreeWorkspace={handleAddWorktreeWorkspace}
+                    onRemoveSession={handleRemoveSession}
+                    onCreatePlayground={handleCreatePlayground}
+                    activeSessionId={activeSession?.id}
+                    sessionNotifications={sessionNotifications}
+                    onOpenInEditor={handleOpenInEditor}
+                    onOpenSettings={() => handleOpenSettings('general')}
+                    settingsOpen={settingsOpen}
+                    onRenameSession={handleRenameSession}
+                    width={sidebarWidth}
+                    setWidth={setSidebarWidth}
+                    onClose={() => setIsSidebarOpen(false)}
+                />
+            )}
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
                 <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between">
-                    <span className="text-sm text-gray-400">
-                        {activeWorkspace ? activeWorkspace.name : 'Select a workspace to get started'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        {!isSidebarOpen && (
+                            <button
+                                onClick={() => setIsSidebarOpen(true)}
+                                className="p-1.5 hover:bg-white/10 rounded transition-colors no-drag text-gray-400"
+                                title="Open Sidebar"
+                            >
+                                <PanelLeft size={16} />
+                            </button>
+                        )}
+                        <span className="text-sm text-gray-400">
+                            {activeWorkspace ? activeWorkspace.name : 'Select a workspace to get started'}
+                        </span>
+                    </div>
                     <div className="flex items-center gap-2 no-drag">
                         <button
                             onClick={() => setGitPanelOpen(true)}
@@ -220,7 +301,7 @@ function App() {
                             </svg>
                         </button>
                         <button
-                            onClick={() => setSettingsOpen(true)}
+                            onClick={() => handleOpenSettings('general')}
                             className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
                             title="Settings"
                         >
@@ -263,14 +344,23 @@ function App() {
                         </div>
                     )}
                 </div>
-                <StatusBar portFilter={settings.portFilter} />
+                <StatusBar 
+                    portFilter={settings.portFilter} 
+                    ignoredPorts={settings.ignoredPorts}
+                    ignoredProcesses={settings.ignoredProcesses}
+                    onIgnorePort={handleIgnorePort}
+                    onIgnoreProcess={handleIgnoreProcess}
+                    onKillProcess={handleKillProcess}
+                    onOpenSettings={() => handleOpenSettings('port-monitoring')}
+                />
             </div>
 
             {/* Settings Modal */}
             <Settings
                 isOpen={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
-                onSave={(newSettings) => setSettings(newSettings)}
+                onSave={handleSaveSettings}
+                initialCategory={settingsCategory}
             />
 
             {/* Git Panel */}

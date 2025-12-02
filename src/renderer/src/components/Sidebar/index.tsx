@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Plus } from 'lucide-react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { Plus, PanelLeftClose } from 'lucide-react'
 import { Workspace, TerminalSession, NotificationStatus, IPCResult } from '../../../../shared/types'
 import { getErrorMessage } from '../../utils/errorMessages'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
@@ -23,6 +23,9 @@ interface SidebarProps {
     onOpenSettings: () => void
     settingsOpen?: boolean
     onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void
+    width: number
+    setWidth: (width: number) => void
+    onClose: () => void
 }
 
 /**
@@ -48,7 +51,10 @@ export function Sidebar({
     onOpenInEditor,
     onOpenSettings,
     settingsOpen,
-    onRenameSession
+    onRenameSession,
+    width,
+    setWidth,
+    onClose
 }: SidebarProps) {
     // 커스텀 훅으로 상태 관리
     const customTemplates = useTemplates(settingsOpen)
@@ -63,6 +69,44 @@ export function Sidebar({
     const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null)
     const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
     const [showPRPrompt, setShowPRPrompt] = useState<{ workspace: Workspace } | null>(null)
+
+    // Resizing logic
+    const isResizing = useRef(false)
+    const sidebarRef = useRef<HTMLDivElement>(null)
+
+    const startResizing = useCallback(() => {
+        isResizing.current = true
+        document.body.style.cursor = 'col-resize'
+        document.body.style.userSelect = 'none' // Prevent text selection while resizing
+    }, [])
+
+    const stopResizing = useCallback(() => {
+        isResizing.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+    }, [])
+
+    const resize = useCallback(
+        (mouseMoveEvent: MouseEvent) => {
+            if (isResizing.current) {
+                const newWidth = mouseMoveEvent.clientX
+                if (newWidth >= 50 && newWidth <= 480) { // Min 50px, Max 480px
+                    setWidth(newWidth)
+                }
+            }
+        },
+        [setWidth]
+    )
+
+    useEffect(() => {
+        window.addEventListener('mousemove', resize)
+        window.addEventListener('mouseup', stopResizing)
+        return () => {
+            window.removeEventListener('mousemove', resize)
+            window.removeEventListener('mouseup', stopResizing)
+        }
+    }, [resize, stopResizing])
+
 
     // 워크스페이스 자동 펼치기
     useEffect(() => {
@@ -288,15 +332,29 @@ export function Sidebar({
             )}
 
             {/* Sidebar Content */}
-            <div className="w-64 glass-panel m-2 rounded-lg flex flex-col overflow-hidden">
-                <div className="p-3 border-b border-white/10 flex items-center justify-between draggable">
+            <div
+                ref={sidebarRef}
+                className="glass-panel mx-2 mb-2 mt-1 rounded-lg flex flex-col overflow-hidden relative"
+                style={{ width: width, minWidth: 50, maxWidth: 480 }}
+            >
+                <div className="py-1.5 px-2 border-b border-white/10 flex items-center justify-between draggable">
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Workspaces</span>
-                    <button
-                        onClick={onAddWorkspace}
-                        className="p-1 hover:bg-white/10 rounded transition-colors no-drag"
-                    >
-                        <Plus size={14} className="text-gray-400" />
-                    </button>
+                    <div className="flex items-center gap-1 no-drag">
+                        <button
+                            onClick={onAddWorkspace}
+                            className="p-1 hover:bg-white/10 rounded transition-colors"
+                            title="Add Workspace"
+                        >
+                            <Plus size={14} className="text-gray-400" />
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="p-1 hover:bg-white/10 rounded transition-colors"
+                            title="Close Sidebar"
+                        >
+                            <PanelLeftClose size={14} className="text-gray-400" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -368,6 +426,12 @@ export function Sidebar({
                         </button>
                     </div>
                 </div>
+
+                {/* Resize Handle */}
+                <div
+                    className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500/50 transition-colors z-50"
+                    onMouseDown={startResizing}
+                />
             </div>
         </>
     )

@@ -30,7 +30,10 @@ const store = new Store<AppConfig>({
                 enabled: true,
                 minPort: 3000,
                 maxPort: 9000
-            }
+            },
+            ignoredPorts: [],
+            ignoredProcesses: [],
+            portActionLogs: []
         }
     }
 }) as any

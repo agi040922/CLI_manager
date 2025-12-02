@@ -7,11 +7,12 @@ interface SettingsProps {
     isOpen: boolean
     onClose: () => void
     onSave?: (settings: UserSettings) => void
+    initialCategory?: SettingsCategory
 }
 
 type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'github'
 
-export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
+export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
         theme: 'dark',
         fontSize: 14,
@@ -37,10 +38,11 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     const [githubCheckStatus, setGithubCheckStatus] = useState<'checking' | 'success' | 'error' | null>(null)
     const [templates, setTemplates] = useState<TerminalTemplate[]>([])
     const [editingTemplate, setEditingTemplate] = useState<TerminalTemplate | null>(null)
-    const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general')
+    const [activeCategory, setActiveCategory] = useState<SettingsCategory>(initialCategory)
 
     useEffect(() => {
         if (isOpen) {
+            setActiveCategory(initialCategory)
             // Load settings from main process
             window.api.getSettings().then((loadedSettings: UserSettings) => {
                 if (loadedSettings) {
@@ -58,7 +60,7 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
             // Automatically check git config when settings open
             checkGitConfig()
         }
-    }, [isOpen])
+    }, [isOpen, initialCategory])
 
     const handleSave = async () => {
         await window.api.saveSettings(settings)
@@ -365,6 +367,57 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                                             </p>
                                         </div>
                                     </div>
+
+                                    <div className="mt-8 pt-8 border-t border-white/10">
+                                        <h3 className="text-sm font-semibold text-white mb-3">Action Logs</h3>
+                                        <p className="text-xs text-gray-400 mb-3">
+                                            History of port and process actions
+                                        </p>
+
+                                        <div className="border border-white/10 rounded overflow-hidden">
+                                            <table className="w-full text-left text-xs">
+                                                <thead className="bg-white/5 text-gray-400">
+                                                    <tr>
+                                                        <th className="px-3 py-2 font-medium">Time</th>
+                                                        <th className="px-3 py-2 font-medium">Action</th>
+                                                        <th className="px-3 py-2 font-medium">Target</th>
+                                                        <th className="px-3 py-2 font-medium">Details</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5">
+                                                    {settings.portActionLogs?.slice().reverse().map((log, i) => (
+                                                        <tr key={i} className="hover:bg-white/5">
+                                                            <td className="px-3 py-2 text-gray-400 whitespace-nowrap">
+                                                                {new Date(log.timestamp).toLocaleString()}
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-medium ${
+                                                                    log.action === 'kill' ? 'bg-red-500/20 text-red-300' :
+                                                                    log.action === 'ignore-port' ? 'bg-yellow-500/20 text-yellow-300' :
+                                                                    'bg-blue-500/20 text-blue-300'
+                                                                }`}>
+                                                                    {log.action.replace('-', ' ')}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-white font-mono">
+                                                                {log.target}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-gray-500">
+                                                                {log.details || '-'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {(!settings.portActionLogs || settings.portActionLogs.length === 0) && (
+                                                        <tr>
+                                                            <td colSpan={4} className="px-3 py-8 text-center text-gray-500">
+                                                                No actions recorded yet
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </>
                             )}
 
@@ -499,6 +552,8 @@ export function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                                     </div>
                                 </>
                             )}
+
+
                         </div>
                     </div>
 
