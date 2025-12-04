@@ -83,7 +83,8 @@ export class PortManager {
                     // Fetch CWD
                     let cwd = ''
                     try {
-                        const { stdout } = await execAsync(`lsof -p ${pid} -d cwd -F n`)
+                        // Use -a to ensure we get only the cwd entry for this specific pid
+                        const { stdout } = await execAsync(`lsof -a -p ${pid} -d cwd -F n`)
                         const match = stdout.match(/^n(.+)$/m)
                         if (match) {
                             cwd = match[1]

@@ -381,6 +381,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' 
                                                     <tr>
                                                         <th className="px-3 py-2 font-medium">Time</th>
                                                         <th className="px-3 py-2 font-medium">Action</th>
+                                                        <th className="px-3 py-2 font-medium">Port</th>
                                                         <th className="px-3 py-2 font-medium">Target</th>
                                                         <th className="px-3 py-2 font-medium">Details</th>
                                                     </tr>
@@ -400,6 +401,9 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' 
                                                                     {log.action.replace('-', ' ')}
                                                                 </span>
                                                             </td>
+                                                            <td className="px-3 py-2 text-blue-300 font-mono">
+                                                                {log.port || '-'}
+                                                            </td>
                                                             <td className="px-3 py-2 text-white font-mono">
                                                                 {log.target}
                                                             </td>
@@ -410,7 +414,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' 
                                                     ))}
                                                     {(!settings.portActionLogs || settings.portActionLogs.length === 0) && (
                                                         <tr>
-                                                            <td colSpan={4} className="px-3 py-8 text-center text-gray-500">
+                                                            <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
                                                                 No actions recorded yet
                                                             </td>
                                                         </tr>

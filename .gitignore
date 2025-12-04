@@ -43,3 +43,7 @@ coverage/
 # Temp files
 *.tmp
 .cache/
+
+# Electron Builder output
+release/
+dist/

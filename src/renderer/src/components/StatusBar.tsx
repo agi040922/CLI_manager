@@ -18,8 +18,8 @@ interface StatusBarProps {
     ignoredPorts?: number[]
     ignoredProcesses?: string[]
     onIgnorePort: (port: number) => void
-    onIgnoreProcess: (processName: string) => void
-    onKillProcess: (pid: number) => void
+    onIgnoreProcess: (processName: string, port: number) => void
+    onKillProcess: (pid: number, port: number) => void
     onOpenSettings?: () => void
 }
 
@@ -77,7 +77,7 @@ export function StatusBar({
 
     const handleKillProcess = async () => {
         if (contextMenu) {
-            onKillProcess(contextMenu.port.pid)
+            onKillProcess(contextMenu.port.pid, contextMenu.port.port)
             setContextMenu(null)
         }
     }
@@ -93,7 +93,7 @@ export function StatusBar({
         if (contextMenu) {
             const processName = getProcessName(contextMenu.port.cwd)
             if (processName) {
-                onIgnoreProcess(processName)
+                onIgnoreProcess(processName, contextMenu.port.port)
             }
             setContextMenu(null)
         }
@@ -150,8 +150,8 @@ export function StatusBar({
 
     return (
         <div className="h-6 bg-[#1e1e20] border-t border-white/10 flex items-center px-3 text-[10px] select-none relative">
-            <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5 text-gray-400">
+            <div className="flex items-center gap-4 w-full">
+                <div className="flex items-center gap-1.5 text-gray-400 shrink-0">
                     <Activity size={12} className="text-green-400" />
                     <span>Active Ports:</span>
                     <button
@@ -176,8 +176,7 @@ export function StatusBar({
                         </div>
                     )}
                 </div>
-                
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap min-w-0 flex-1">
                     {filteredPorts.map(p => (
                         <div 
                             key={`${p.port}-${p.pid}`} 

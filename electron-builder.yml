@@ -1,0 +1,65 @@
+appId: com.climanger.app
+productName: CLImanger
+copyright: Copyright © 2024 LightSoft
+
+# GitHub Releases를 통한 자동 업데이트 설정
+publish:
+  provider: github
+  owner: agi040922
+  repo: CLI_manager
+  releaseType: release
+
+# macOS 설정
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+# Windows 설정
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+
+# Linux 설정
+linux:
+  icon: build/icons
+  target:
+    - AppImage
+    - deb
+  category: Development
+
+# 빌드 디렉토리 설정
+directories:
+  output: release
+  buildResources: build
+
+# 파일 포함/제외
+files:
+  - out/**/*
+  - "!node_modules/**/*"
+  - node_modules/electron-store/**/*
+  - node_modules/node-pty/**/*
+  - node_modules/simple-git/**/*
+
+# asar 압축
+asar: true

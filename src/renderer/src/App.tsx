@@ -190,11 +190,12 @@ function App() {
 
     const [settingsCategory, setSettingsCategory] = useState<any>('general')
 
-    const logPortAction = async (action: 'kill' | 'ignore-port' | 'ignore-process', target: string, details?: string) => {
+    const logPortAction = async (action: 'kill' | 'ignore-port' | 'ignore-process', target: string, port?: number, details?: string) => {
         const newLog: PortActionLog = {
             timestamp: Date.now(),
             action,
             target,
+            port,
             details
         }
         
@@ -212,8 +213,8 @@ function App() {
     }
 
     const handleIgnorePort = async (port: number) => {
-        const newSettings = await logPortAction('ignore-port', port.toString())
-        
+        const newSettings = await logPortAction('ignore-port', port.toString(), port)
+
         const updatedSettings = {
             ...newSettings,
             ignoredPorts: [...(newSettings.ignoredPorts || []), port]
@@ -222,8 +223,8 @@ function App() {
         await window.api.saveSettings(updatedSettings)
     }
 
-    const handleIgnoreProcess = async (processName: string) => {
-        const newSettings = await logPortAction('ignore-process', processName)
+    const handleIgnoreProcess = async (processName: string, port: number) => {
+        const newSettings = await logPortAction('ignore-process', processName, port)
 
         const updatedSettings = {
             ...newSettings,
@@ -233,9 +234,9 @@ function App() {
         await window.api.saveSettings(updatedSettings)
     }
 
-    const handleKillProcess = async (pid: number) => {
+    const handleKillProcess = async (pid: number, port: number) => {
         await window.api.killProcess(pid)
-        await logPortAction('kill', pid.toString(), 'Process terminated by user')
+        await logPortAction('kill', pid.toString(), port, 'Process terminated by user')
     }
 
     const handleSaveSettings = async (newSettings: UserSettings) => {

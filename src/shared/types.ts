@@ -92,6 +92,7 @@ export interface PortActionLog {
     timestamp: number
     action: 'kill' | 'ignore-port' | 'ignore-process'
     target: string
+    port?: number  // 관련 포트 번호
     details?: string
 }
 

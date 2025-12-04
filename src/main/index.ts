@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import path, { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
 import Store from 'electron-store'
 import { AppConfig, Workspace, TerminalSession, UserSettings, IPCResult } from '../shared/types'
@@ -12,6 +13,10 @@ import { promisify } from 'util'
 
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
+
+// Auto Updater 설정
+autoUpdater.autoDownload = true
+autoUpdater.autoInstallOnAppQuit = true
 
 const execAsync = promisify(exec)
 
@@ -84,7 +89,12 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
     // Set app user model id for windows
-    electronApp.setAppUserModelId('com.electron')
+    electronApp.setAppUserModelId('com.climanger')
+
+    // 자동 업데이트 체크 (프로덕션 환경에서만)
+    if (!is.dev) {
+        autoUpdater.checkForUpdatesAndNotify()
+    }
 
     // Default open or close DevTools by F12 in development
     // and ignore CommandOrControl + R in production.
@@ -836,3 +846,41 @@ app.on('window-all-closed', () => {
 
 // In this file you can include the rest of your app"s specific main process
 // code. You can also put them in separate files and require them here.
+
+// ============================================
+// Auto Updater 이벤트 핸들러
+// ============================================
+autoUpdater.on('checking-for-update', () => {
+    console.log('업데이트 확인 중...')
+})
+
+autoUpdater.on('update-available', (info) => {
+    console.log('새 업데이트가 있습니다:', info.version)
+})
+
+autoUpdater.on('update-not-available', () => {
+    console.log('현재 최신 버전입니다.')
+})
+
+autoUpdater.on('download-progress', (progress) => {
+    console.log(`다운로드 진행: ${Math.round(progress.percent)}%`)
+})
+
+autoUpdater.on('update-downloaded', (info) => {
+    console.log('업데이트 다운로드 완료:', info.version)
+    // 사용자에게 알림 (선택사항: 다이얼로그로 재시작 묻기)
+    dialog.showMessageBox({
+        type: 'info',
+        title: '업데이트 준비 완료',
+        message: `새 버전 ${info.version}이 다운로드되었습니다.\n앱을 재시작하면 업데이트가 적용됩니다.`,
+        buttons: ['지금 재시작', '나중에']
+    }).then((result) => {
+        if (result.response === 0) {
+            autoUpdater.quitAndInstall()
+        }
+    })
+})
+
+autoUpdater.on('error', (err) => {
+    console.error('업데이트 오류:', err)
+})
