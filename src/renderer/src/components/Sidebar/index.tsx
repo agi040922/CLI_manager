@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, PanelLeftClose } from 'lucide-react'
-import { Workspace, TerminalSession, NotificationStatus, IPCResult } from '../../../../shared/types'
-import { getErrorMessage } from '../../utils/errorMessages'
+import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
 import { WorkspaceContextMenu, WorktreeContextMenu, BranchMenu, SessionContextMenu } from './ContextMenus'
-import { BranchPromptModal, PRPromptModal } from './Modals'
+import { BranchPromptModal } from './Modals'
 
 interface SidebarProps {
     workspaces: Workspace[]
@@ -68,7 +67,6 @@ export function Sidebar({
     const [sessionMenuOpen, setSessionMenuOpen] = useState<{ x: number, y: number, workspaceId: string, sessionId: string } | null>(null)
     const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null)
     const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
-    const [showPRPrompt, setShowPRPrompt] = useState<{ workspace: Workspace } | null>(null)
 
     // Resizing logic
     const isResizing = useRef(false)
@@ -198,47 +196,68 @@ export function Sidebar({
         }
     }
 
-    // GitHub 관련 핸들러
-    const handlePushToGitHub = async () => {
+    // Local Git handlers
+    const handleMergeToMain = async () => {
         if (!worktreeMenuOpen) return
 
+        const parentWorkspace = workspaces.find(w => w.id === worktreeMenuOpen.workspace.parentWorkspaceId)
+        if (!parentWorkspace) {
+            alert('Parent workspace not found.')
+            return
+        }
+
+        const confirmed = window.confirm(
+            `Merge "${worktreeMenuOpen.workspace.branchName}" into main/master?\n\n` +
+            `This will be performed in the parent workspace (${parentWorkspace.name}).`
+        )
+        if (!confirmed) return
+
         try {
-            const result: IPCResult<void> = await window.api.ghPushBranch(worktreeMenuOpen.workspace.path, worktreeMenuOpen.workspace.branchName!)
+            const result = await window.api.gitMerge(parentWorkspace.path, worktreeMenuOpen.workspace.branchName!)
             if (result.success) {
-                alert('Successfully pushed to GitHub!')
+                alert('Merge completed successfully!')
             } else {
-                alert(getErrorMessage(result.errorType, result.error))
+                if (result.data?.conflicts && result.data.conflicts.length > 0) {
+                    alert(`Merge conflict occurred:\n${result.data.conflicts.join('\n')}\n\nPlease resolve conflicts and commit.`)
+                } else {
+                    alert(`Merge failed: ${result.error}`)
+                }
             }
         } catch (err: any) {
-            alert(`푸시 실패: ${err.message}`)
+            alert(`Merge failed: ${err.message}`)
         }
     }
 
-    const handleCreatePR = () => {
+    const handlePullFromMain = async () => {
         if (!worktreeMenuOpen) return
-        setShowPRPrompt({ workspace: worktreeMenuOpen.workspace })
-    }
 
-    const handlePRSubmit = async (title: string, body: string) => {
-        if (!showPRPrompt) return
+        const parentWorkspace = workspaces.find(w => w.id === worktreeMenuOpen.workspace.parentWorkspaceId)
+        if (!parentWorkspace) {
+            alert('Parent workspace not found.')
+            return
+        }
+
+        const parentBranches = workspaceBranches.get(parentWorkspace.id)
+        const mainBranch = parentBranches?.current || 'main'
+
+        const confirmed = window.confirm(
+            `Pull changes from "${mainBranch}" into "${worktreeMenuOpen.workspace.branchName}"?`
+        )
+        if (!confirmed) return
 
         try {
-            const result: IPCResult<{ url: string }> = await window.api.ghCreatePRFromWorktree(
-                showPRPrompt.workspace.path,
-                showPRPrompt.workspace.branchName!,
-                title,
-                body
-            )
-
-            if (result.success && result.data) {
-                alert(`PR created: ${result.data.url}`)
+            const result = await window.api.gitMerge(worktreeMenuOpen.workspace.path, mainBranch)
+            if (result.success) {
+                alert('Successfully pulled changes from main!')
             } else {
-                alert(getErrorMessage(result.errorType, result.error))
+                if (result.data?.conflicts && result.data.conflicts.length > 0) {
+                    alert(`Merge conflict occurred:\n${result.data.conflicts.join('\n')}\n\nPlease resolve conflicts and commit.`)
+                } else {
+                    alert(`Merge failed: ${result.error}`)
+                }
             }
         } catch (err: any) {
-            alert(`PR 생성 실패: ${err.message}`)
-        } finally {
-            setShowPRPrompt(null)
+            alert(`Merge failed: ${err.message}`)
         }
     }
 
@@ -277,8 +296,8 @@ export function Sidebar({
                     y={worktreeMenuOpen.y}
                     workspace={worktreeMenuOpen.workspace}
                     templates={customTemplates}
-                    onPushToGitHub={handlePushToGitHub}
-                    onCreatePR={handleCreatePR}
+                    onMergeToMain={handleMergeToMain}
+                    onPullFromMain={handlePullFromMain}
                     onAddSession={(workspaceId, template) => {
                         onAddSession(workspaceId, 'regular', undefined, template?.command)
                     }}
@@ -321,13 +340,6 @@ export function Sidebar({
                         setShowPrompt(null)
                     }}
                     onCancel={() => setShowPrompt(null)}
-                />
-            )}
-
-            {showPRPrompt && (
-                <PRPromptModal
-                    onSubmit={handlePRSubmit}
-                    onCancel={() => setShowPRPrompt(null)}
                 />
             )}
 

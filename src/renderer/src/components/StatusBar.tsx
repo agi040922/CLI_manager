@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Activity, Filter, Folder, XCircle } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Activity, Filter, Folder, XCircle, RefreshCw } from 'lucide-react'
 import { PortInfo } from '../../../shared/types'
 
 interface PortFilter {
@@ -22,17 +23,18 @@ interface StatusBarProps {
     onOpenSettings?: () => void
 }
 
-export function StatusBar({ 
-    portFilter, 
-    ignoredPorts = [], 
-    ignoredProcesses = [], 
-    onIgnorePort, 
+export function StatusBar({
+    portFilter,
+    ignoredPorts = [],
+    ignoredProcesses = [],
+    onIgnorePort,
     onIgnoreProcess,
     onKillProcess,
     onOpenSettings
 }: StatusBarProps) {
     const [ports, setPorts] = useState<PortInfo[]>([])
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, port: PortInfo } | null>(null)
+    const [isRefreshing, setIsRefreshing] = useState(false)
 
     useEffect(() => {
         // Subscribe to port updates
@@ -55,7 +57,22 @@ export function StatusBar({
 
     const handleContextMenu = (e: React.MouseEvent, port: PortInfo) => {
         e.preventDefault()
-        setContextMenu({ x: e.clientX, y: e.clientY, port })
+        const menuWidth = 140
+        const menuHeight = port.cwd ? 110 : 85
+        const padding = 4
+
+        // Position near the cursor while keeping the menu inside the viewport.
+        let x = e.clientX + padding
+        let y = e.clientY + padding
+
+        if (x + menuWidth > window.innerWidth) {
+            x = Math.max(padding, e.clientX - menuWidth - padding)
+        }
+        if (y + menuHeight > window.innerHeight) {
+            y = Math.max(padding, e.clientY - menuHeight - padding)
+        }
+
+        setContextMenu({ x, y, port })
     }
 
     const handleKillProcess = async () => {
@@ -88,6 +105,27 @@ export function StatusBar({
         return parts[parts.length - 1]
     }
 
+    const handleRefresh = async () => {
+        if (isRefreshing) return // 이미 새로고침 중이면 무시
+
+        setIsRefreshing(true)
+
+        // 3초 후에 무조건 멈추는 타임아웃
+        const timeout = setTimeout(() => {
+            setIsRefreshing(false)
+        }, 3000)
+
+        try {
+            await window.api.refreshPorts()
+        } catch (e) {
+            console.error('Failed to refresh ports:', e)
+        }
+
+        // 완료 후 타임아웃 취소하고 애니메이션 딜레이 후 멈춤
+        clearTimeout(timeout)
+        setTimeout(() => setIsRefreshing(false), 500)
+    }
+
     const filteredPorts = ports.filter(p => {
         // Filter by port range if enabled
         if (portFilter?.enabled) {
@@ -116,8 +154,19 @@ export function StatusBar({
                 <div className="flex items-center gap-1.5 text-gray-400">
                     <Activity size={12} className="text-green-400" />
                     <span>Active Ports:</span>
+                    <button
+                        onClick={handleRefresh}
+                        className="p-0.5 hover:bg-white/10 rounded transition-colors"
+                        title="Refresh ports"
+                        disabled={isRefreshing}
+                    >
+                        <RefreshCw
+                            size={10}
+                            className={`text-gray-500 hover:text-gray-300 ${isRefreshing ? 'animate-spin' : ''}`}
+                        />
+                    </button>
                     {portFilter?.enabled && (
-                        <div 
+                        <div
                             onClick={onOpenSettings}
                             className="flex items-center gap-1 text-gray-500 hover:text-blue-400 cursor-pointer transition-colors"
                             title="Click to configure port range"
@@ -151,26 +200,29 @@ export function StatusBar({
                 </div>
             </div>
 
-            {/* Custom Context Menu */}
-            {contextMenu && (
-                <div 
-                    className="fixed z-50 bg-[#252526] border border-white/10 rounded shadow-xl py-1 min-w-[160px]"
-                    style={{ top: contextMenu.y, left: contextMenu.x }}
+            {/* Custom Context Menu - 클릭 위치 바로 위에 표시 (메뉴 높이 약 130px) */}
+            {contextMenu && createPortal(
+                <div
+                    className="fixed z-50 bg-[#252526] border border-white/10 rounded shadow-xl py-0.5 min-w-[140px]"
+                    style={{
+                        top: contextMenu.y,
+                        left: contextMenu.x
+                    }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-white/5 mb-1">
+                    <div className="px-2 py-1 text-[10px] text-gray-400 border-b border-white/5 mb-0.5">
                         Port {contextMenu.port.port} ({getProcessName(contextMenu.port.cwd)})
                     </div>
                     <button 
                         onClick={handleKillProcess}
-                        className="w-full text-left px-3 py-1.5 text-red-400 hover:bg-white/5 flex items-center gap-2"
+                        className="w-full text-left px-2 py-1 text-xs text-red-400 hover:bg-white/5 flex items-center gap-1.5"
                     >
                         <XCircle size={12} />
                         Kill Process
                     </button>
                     <button 
                         onClick={handleIgnorePort}
-                        className="w-full text-left px-3 py-1.5 text-gray-300 hover:bg-white/5 flex items-center gap-2"
+                        className="w-full text-left px-2 py-1 text-xs text-gray-300 hover:bg-white/5 flex items-center gap-1.5"
                     >
                         <Filter size={12} />
                         Ignore Port {contextMenu.port.port}
@@ -178,13 +230,14 @@ export function StatusBar({
                     {contextMenu.port.cwd && (
                         <button 
                             onClick={handleIgnoreProcess}
-                            className="w-full text-left px-3 py-1.5 text-gray-300 hover:bg-white/5 flex items-center gap-2"
+                            className="w-full text-left px-2 py-1 text-xs text-gray-300 hover:bg-white/5 flex items-center gap-1.5"
                         >
                             <Folder size={12} />
                             Ignore '{getProcessName(contextMenu.port.cwd)}'
                         </button>
                     )}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     )

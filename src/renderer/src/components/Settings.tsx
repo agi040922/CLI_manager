@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate } from '../../../shared/types'
-import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github } from 'lucide-react'
+import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 interface SettingsProps {
@@ -10,7 +10,7 @@ interface SettingsProps {
     initialCategory?: SettingsCategory
 }
 
-type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'github'
+type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github'
 
 export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
@@ -137,6 +137,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' 
         { id: 'notifications' as const, label: 'Notifications', icon: <Bell size={16} /> },
         { id: 'port-monitoring' as const, label: 'Port Monitoring', icon: <Monitor size={16} /> },
         { id: 'templates' as const, label: 'Templates', icon: <Play size={16} /> },
+        { id: 'git' as const, label: 'Git (Local)', icon: <GitBranch size={16} /> },
         { id: 'github' as const, label: 'GitHub', icon: <Github size={16} /> },
     ]
 
@@ -489,6 +490,75 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' 
                                                     No templates yet. Click "Add Template" to create one.
                                                 </div>
                                             )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Git (Local) Settings */}
+                            {activeCategory === 'git' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">Git Worktree Settings</h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Configure local Git worktree storage location
+                                        </p>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Worktree Storage Path</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={settings.worktreePath || ''}
+                                                        onChange={e => setSettings(prev => ({ ...prev, worktreePath: e.target.value || undefined }))}
+                                                        placeholder="Leave empty for default (next to workspace)"
+                                                        className="flex-1 bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                    />
+                                                    <button
+                                                        onClick={async () => {
+                                                            // Open folder selection dialog
+                                                            const result = await window.api.selectDirectory?.()
+                                                            if (result) {
+                                                                setSettings(prev => ({ ...prev, worktreePath: result }))
+                                                            }
+                                                        }}
+                                                        className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded transition-colors flex items-center gap-1"
+                                                        title="Browse folder"
+                                                    >
+                                                        <FolderOpen size={14} />
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-2">
+                                                    Default: <code className="bg-black/30 px-1 rounded">{'<workspace>/../<name>-worktrees/<branch>'}</code>
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Custom: <code className="bg-black/30 px-1 rounded">{'<custom-path>/<workspace-name>/<branch>'}</code>
+                                                </p>
+                                            </div>
+
+                                            {settings.worktreePath && (
+                                                <button
+                                                    onClick={() => setSettings(prev => ({ ...prev, worktreePath: undefined }))}
+                                                    className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                                                >
+                                                    Reset to default path
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-8 pt-8 border-t border-white/10">
+                                        <h3 className="text-sm font-semibold text-white mb-1">Worktree Deletion Options</h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Configure what happens when deleting a worktree
+                                        </p>
+
+                                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded">
+                                            <p className="text-xs text-yellow-200">
+                                                <strong>Note:</strong> Deleting a worktree removes the local directory and git worktree metadata.
+                                                The local branch is also deleted by default. Remote branches on GitHub are not affected.
+                                            </p>
                                         </div>
                                     </div>
                                 </>

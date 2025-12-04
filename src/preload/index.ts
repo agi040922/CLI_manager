@@ -8,7 +8,7 @@ const api = {
     addWorkspace: (): Promise<Workspace | null> => ipcRenderer.invoke('add-workspace'),
     addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<TerminalSession | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand),
     addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string): Promise<Workspace | null> => ipcRenderer.invoke('add-worktree-workspace', parentWorkspaceId, branchName),
-    removeWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id),
+    removeWorkspace: (id: string, deleteBranch?: boolean): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id, deleteBranch ?? true),
     removeSession: (workspaceId: string, sessionId: string): Promise<boolean> => ipcRenderer.invoke('remove-session', workspaceId, sessionId),
     renameSession: (workspaceId: string, sessionId: string, newName: string): Promise<boolean> => ipcRenderer.invoke('rename-session', workspaceId, sessionId, newName),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
@@ -35,6 +35,9 @@ const api = {
     gitReset: (workspacePath: string, commitHash: string, hard?: boolean): Promise<boolean> => ipcRenderer.invoke('git-reset', workspacePath, commitHash, hard),
     gitListBranches: (workspacePath: string): Promise<{ current: string; all: string[]; branches: any } | null> => ipcRenderer.invoke('git-list-branches', workspacePath),
     gitCheckout: (workspacePath: string, branchName: string): Promise<boolean> => ipcRenderer.invoke('git-checkout', workspacePath, branchName),
+    gitMerge: (workspacePath: string, branchName: string): Promise<{ success: boolean; data?: { merged: boolean; conflicts?: string[] }; error?: string }> => ipcRenderer.invoke('git-merge', workspacePath, branchName),
+    gitMergeAbort: (workspacePath: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git-merge-abort', workspacePath),
+    gitDeleteBranch: (workspacePath: string, branchName: string, force?: boolean): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git-delete-branch', workspacePath, branchName, force),
 
     // GitHub CLI
     ghCheckAuth: (): Promise<{ authenticated: boolean; message: string }> => ipcRenderer.invoke('gh-check-auth'),
@@ -49,6 +52,9 @@ const api = {
 
     // Editor
     openInEditor: (workspacePath: string, editorType?: string): Promise<{ success: boolean; editor?: string; error?: string }> => ipcRenderer.invoke('open-in-editor', workspacePath, editorType),
+
+    // Dialog
+    selectDirectory: (): Promise<string | null> => ipcRenderer.invoke('select-directory'),
 
     // Terminal
     createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),
@@ -68,7 +74,8 @@ const api = {
         ipcRenderer.on('port-update', listener)
         return () => ipcRenderer.removeListener('port-update', listener)
     },
-    killProcess: (pid: number): Promise<boolean> => ipcRenderer.invoke('kill-process', pid)
+    killProcess: (pid: number): Promise<boolean> => ipcRenderer.invoke('kill-process', pid),
+    refreshPorts: (): Promise<boolean> => ipcRenderer.invoke('refresh-ports')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

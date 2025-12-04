@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2 } from 'lucide-react'
+import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive } from 'lucide-react'
 import { Workspace, TerminalTemplate } from '../../../../shared/types'
 import { getTemplateIcon } from '../../constants/icons'
 import { MENU_Z_INDEX } from '../../constants/styles'
@@ -111,38 +111,38 @@ interface WorktreeContextMenuProps {
     y: number
     workspace: Workspace
     templates: TerminalTemplate[]
-    onPushToGitHub: () => void
-    onCreatePR: () => void
+    parentWorkspacePath?: string  // 부모 워크스페이스 경로 (merge용)
+    onMergeToMain: () => void  // 현재 브랜치를 main으로 머지
+    onPullFromMain: () => void  // main에서 현재 브랜치로 머지
     onAddSession: (workspaceId: string, template?: TerminalTemplate) => void
     onClose: () => void
 }
 
 /**
  * Worktree 우클릭 컨텍스트 메뉴
- * GitHub push, PR 생성, 커스텀 터미널 추가 기능 제공
+ * 로컬 Git 작업, 터미널 추가 기능 제공
  */
 export function WorktreeContextMenu({
     x,
     y,
     workspace,
     templates,
-    onPushToGitHub,
-    onCreatePR,
+    onMergeToMain,
+    onPullFromMain,
     onAddSession,
     onClose
 }: WorktreeContextMenuProps) {
-    // GitHub 버튼 클릭 핸들러 - 명확하게 분리
-    const handlePushClick = (e: React.MouseEvent) => {
+    const handleMergeToMainClick = (e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        onPushToGitHub()
+        onMergeToMain()
         onClose()
     }
 
-    const handlePRClick = (e: React.MouseEvent) => {
+    const handlePullFromMainClick = (e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        onCreatePR()
+        onPullFromMain()
         onClose()
     }
 
@@ -162,7 +162,7 @@ export function WorktreeContextMenu({
 
     return createPortal(
         <div
-            className="fixed bg-[#1e1e20] border border-white/10 rounded shadow-xl py-1 w-52 backdrop-blur-md max-h-96 overflow-y-auto"
+            className="fixed bg-[#1e1e20] border border-white/10 rounded shadow-xl py-1 w-48 backdrop-blur-md max-h-[400px] overflow-y-auto"
             style={{
                 top: y,
                 left: x,
@@ -170,31 +170,32 @@ export function WorktreeContextMenu({
             }}
             onClick={e => e.stopPropagation()}
         >
-            {/* GitHub Actions Section */}
-            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                GitHub Actions
+            {/* Local Git Section - 로컬 작업 */}
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                <HardDrive size={10} />
+                Local Git
             </div>
 
             <button
-                className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
-                onClick={handlePushClick}
+                className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                onClick={handleMergeToMainClick}
                 onMouseDown={(e) => e.stopPropagation()}
-                title="Push branch to GitHub"
+                title="Merge this branch into main/master"
                 type="button"
             >
-                <GitBranch size={13} className="text-green-400 shrink-0" />
-                <span className="truncate font-medium">Push to GitHub</span>
+                <GitMerge size={13} className="text-purple-400 shrink-0" />
+                <span className="truncate">Merge to main</span>
             </button>
 
             <button
-                className="w-full text-left px-3 py-2.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
-                onClick={handlePRClick}
+                className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                onClick={handlePullFromMainClick}
                 onMouseDown={(e) => e.stopPropagation()}
-                title="Create pull request"
+                title="Merge main/master into this branch"
                 type="button"
             >
-                <GitBranch size={13} className="text-blue-400 shrink-0" />
-                <span className="truncate font-medium">Create PR</span>
+                <Download size={13} className="text-cyan-400 shrink-0" />
+                <span className="truncate">Pull from main</span>
             </button>
 
             <div className="border-t border-white/10 my-1"></div>

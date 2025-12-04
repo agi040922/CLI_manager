@@ -136,7 +136,7 @@ app.whenReady().then(() => {
 
         if (!workspace) return null
 
-        // Worktree는 더 이상 session이 아니라 별도 workspace로 생성
+        // Worktree is now created as a separate workspace, not a session
         if (type === 'worktree') {
             console.warn('Use add-worktree-workspace instead')
             return null
@@ -158,7 +158,7 @@ app.whenReady().then(() => {
         return newSession
     })
 
-    // Worktree를 별도 workspace로 생성
+    // Create worktree as a separate workspace
     ipcMain.handle('add-worktree-workspace', async (_, parentWorkspaceId: string, branchName: string): Promise<IPCResult<Workspace>> => {
         const workspaces = store.get('workspaces') as Workspace[]
         const parentWorkspace = workspaces.find((w: Workspace) => w.id === parentWorkspaceId)
@@ -168,14 +168,24 @@ app.whenReady().then(() => {
         }
 
         const git = simpleGit(parentWorkspace.path)
+        const settings = store.get('settings') as UserSettings
 
-        // 브랜치명의 슬래시를 하이픈으로 치환
+        // Replace slashes in branch name with hyphens
         const sanitizedBranchName = branchName.replace(/\//g, '-')
-        const worktreePath = path.join(
-            path.dirname(parentWorkspace.path),
-            `${parentWorkspace.name}-worktrees`,
-            sanitizedBranchName
-        )
+
+        // Determine worktree path: use custom path if set, otherwise default
+        let worktreePath: string
+        if (settings?.worktreePath) {
+            // Custom path: {worktreePath}/{workspace-name}/{branch-name}
+            worktreePath = path.join(settings.worktreePath, parentWorkspace.name, sanitizedBranchName)
+        } else {
+            // Default path: {workspace}/../{name}-worktrees/{branch}
+            worktreePath = path.join(
+                path.dirname(parentWorkspace.path),
+                `${parentWorkspace.name}-worktrees`,
+                sanitizedBranchName
+            )
+        }
 
         // Create worktree directory parent if it doesn't exist
         const worktreesDir = path.dirname(worktreePath)
@@ -204,7 +214,7 @@ app.whenReady().then(() => {
             // git worktree add -b <branch> <path>
             await git.raw(['worktree', 'add', '-b', branchName, worktreePath])
 
-            // 새로운 worktree workspace 생성
+            // Create new worktree workspace
             const newWorktreeWorkspace: Workspace = {
                 id: uuidv4(),
                 name: branchName,
@@ -230,25 +240,38 @@ app.whenReady().then(() => {
         }
     })
 
-    ipcMain.handle('remove-workspace', async (_, id: string) => {
+    ipcMain.handle('remove-workspace', async (_, id: string, deleteBranch: boolean = true) => {
         const workspaces = store.get('workspaces') as Workspace[]
         const workspace = workspaces.find((w: Workspace) => w.id === id)
 
         if (!workspace) return false
 
         // Worktree workspace인 경우 git worktree remove 실행
-        if (workspace.parentWorkspaceId) {
+        if (workspace.parentWorkspaceId && workspace.branchName) {
             const parentWorkspace = workspaces.find((w: Workspace) => w.id === workspace.parentWorkspaceId)
 
             if (parentWorkspace) {
+                const git = simpleGit(parentWorkspace.path)
+
                 try {
-                    const git = simpleGit(parentWorkspace.path)
-                    // git worktree remove <path>
+                    // 1. git worktree remove <path>
                     await git.raw(['worktree', 'remove', workspace.path, '--force'])
                     console.log(`Removed worktree: ${workspace.path}`)
                 } catch (e) {
                     console.error('Failed to remove worktree:', e)
-                    // 실패해도 workspace는 삭제
+                    // Continue even if failed (may already be deleted)
+                }
+
+                // 2. Delete local branch (if deleteBranch is true)
+                if (deleteBranch) {
+                    try {
+                        // -D flag for force delete (including unmerged branches)
+                        await git.branch(['-D', workspace.branchName])
+                        console.log(`Deleted local branch: ${workspace.branchName}`)
+                    } catch (e) {
+                        console.error('Failed to delete branch:', e)
+                        // Continue with workspace deletion even if branch deletion fails
+                    }
                 }
             }
         }
@@ -549,6 +572,69 @@ app.whenReady().then(() => {
         }
     })
 
+    // Git merge - merge local branches
+    ipcMain.handle('git-merge', async (_, workspacePath: string, branchName: string): Promise<IPCResult<{ merged: boolean; conflicts?: string[] }>> => {
+        try {
+            const git = simpleGit(workspacePath)
+
+            // Execute merge
+            const result = await git.merge([branchName])
+
+            // Check for conflicts
+            if (result.failed) {
+                const status = await git.status()
+                return {
+                    success: false,
+                    error: 'Merge conflict occurred',
+                    errorType: 'UNKNOWN_ERROR',
+                    data: { merged: false, conflicts: status.conflicted }
+                }
+            }
+
+            return { success: true, data: { merged: true } }
+        } catch (e: any) {
+            console.error('Git merge error:', e)
+            // Handle conflict case
+            if (e.message?.includes('CONFLICTS') || e.message?.includes('conflict')) {
+                const git = simpleGit(workspacePath)
+                const status = await git.status()
+                return {
+                    success: false,
+                    error: 'Merge conflict occurred',
+                    errorType: 'UNKNOWN_ERROR',
+                    data: { merged: false, conflicts: status.conflicted }
+                }
+            }
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
+        }
+    })
+
+    // Git merge abort - cancel merge
+    ipcMain.handle('git-merge-abort', async (_, workspacePath: string): Promise<IPCResult<void>> => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.merge(['--abort'])
+            return { success: true }
+        } catch (e: any) {
+            console.error('Git merge abort error:', e)
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
+        }
+    })
+
+    // Git branch delete - delete local branch
+    ipcMain.handle('git-delete-branch', async (_, workspacePath: string, branchName: string, force: boolean = false): Promise<IPCResult<void>> => {
+        try {
+            const git = simpleGit(workspacePath)
+            // -d for merged branches only, -D for force delete
+            const flag = force ? '-D' : '-d'
+            await git.branch([flag, branchName])
+            return { success: true }
+        } catch (e: any) {
+            console.error('Git delete branch error:', e)
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
+        }
+    })
+
     // GitHub CLI handlers
     ipcMain.handle('gh-check-auth', async () => {
         try {
@@ -686,6 +772,19 @@ app.whenReady().then(() => {
             console.error('GitHub PR creation error:', e)
             return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
         }
+    })
+
+    // Directory selection dialog
+    ipcMain.handle('select-directory', async () => {
+        const result = await dialog.showOpenDialog({
+            properties: ['openDirectory', 'createDirectory']
+        })
+
+        if (result.canceled || result.filePaths.length === 0) {
+            return null
+        }
+
+        return result.filePaths[0]
     })
 
     // Editor open handler
