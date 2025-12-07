@@ -326,6 +326,28 @@ app.whenReady().then(() => {
         return true
     })
 
+    // 세션 순서 변경 핸들러
+    ipcMain.handle('reorder-sessions', (_, workspaceId: string, sessionIds: string[]) => {
+        const workspaces = store.get('workspaces') as Workspace[]
+        const workspace = workspaces.find((w: Workspace) => w.id === workspaceId)
+
+        if (!workspace) return false
+
+        // sessionIds 순서대로 세션 정렬
+        const reorderedSessions = sessionIds
+            .map(id => workspace.sessions.find(s => s.id === id))
+            .filter((s): s is TerminalSession => s !== undefined)
+
+        workspace.sessions = reorderedSessions
+
+        // Update store
+        store.set('workspaces', workspaces.map(w =>
+            w.id === workspaceId ? workspace : w
+        ))
+
+        return true
+    })
+
     ipcMain.handle('create-playground', async () => {
         // Create a readable timestamp for the playground name
         const now = new Date()
@@ -795,6 +817,37 @@ app.whenReady().then(() => {
         }
 
         return result.filePaths[0]
+    })
+
+    ipcMain.handle('check-tools', async () => {
+        const tools = {
+            git: false,
+            gh: false,
+            brew: false
+        }
+
+        try {
+            await execAsync('git --version')
+            tools.git = true
+        } catch (e) {
+            console.log('Git not found')
+        }
+
+        try {
+            await execAsync('gh --version')
+            tools.gh = true
+        } catch (e) {
+            console.log('GitHub CLI not found')
+        }
+
+        try {
+            await execAsync('brew --version')
+            tools.brew = true
+        } catch (e) {
+            console.log('Homebrew not found')
+        }
+
+        return tools
     })
 
     // Editor open handler

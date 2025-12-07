@@ -12,6 +12,7 @@ declare global {
             removeWorkspace: (id: string, deleteBranch?: boolean) => Promise<boolean>
             removeSession: (workspaceId: string, sessionId: string) => Promise<boolean>
             renameSession: (workspaceId: string, sessionId: string, newName: string) => Promise<boolean>
+            reorderSessions: (workspaceId: string, sessionIds: string[]) => Promise<boolean>
             createPlayground: () => Promise<Workspace | null>
 
             // Settings

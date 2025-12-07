@@ -8,6 +8,7 @@ import { ConfirmationModal } from './components/Sidebar/Modals'
 import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft } from 'lucide-react'
+import { Onboarding } from './components/Onboarding'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -53,17 +54,28 @@ function App() {
     const [sidebarWidth, setSidebarWidth] = useState(256)
     const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
+    // Onboarding state
+    const [showOnboarding, setShowOnboarding] = useState(false)
+
     // Load workspaces and settings on mount
     useEffect(() => {
         window.api.getWorkspaces().then(setWorkspaces)
         window.api.getSettings().then(loadedSettings => {
             if (loadedSettings) {
                 setSettings(loadedSettings)
+                if (!loadedSettings.hasCompletedOnboarding) {
+                    setShowOnboarding(true)
+                }
             }
         }).catch(err => {
             console.error('Failed to load settings:', err)
         })
     }, [])
+
+    const handleOnboardingComplete = () => {
+        setShowOnboarding(false)
+        setSettings(prev => ({ ...prev, hasCompletedOnboarding: true }))
+    }
 
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
         setActiveWorkspace(workspace)
@@ -125,6 +137,21 @@ function App() {
                 return w
             }))
         }
+    }
+
+    // 세션 순서 변경 핸들러
+    const handleReorderSessions = async (workspaceId: string, sessions: TerminalSession[]) => {
+        // 1. UI 즉시 업데이트 (반응성 향상)
+        setWorkspaces(prev => prev.map(w => {
+            if (w.id === workspaceId) {
+                return { ...w, sessions }
+            }
+            return w
+        }))
+
+        // 2. 서버에 순서 저장
+        const sessionIds = sessions.map(s => s.id)
+        await window.api.reorderSessions(workspaceId, sessionIds)
     }
 
     const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string, initialCommand?: string) => {
@@ -251,6 +278,8 @@ function App() {
 
     return (
         <div className="flex h-screen w-screen bg-transparent">
+            {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+            
             {isSidebarOpen && (
                 <Sidebar
                     workspaces={workspaces}
@@ -267,6 +296,7 @@ function App() {
                     onOpenSettings={() => handleOpenSettings('general')}
                     settingsOpen={settingsOpen}
                     onRenameSession={handleRenameSession}
+                    onReorderSessions={handleReorderSessions}
                     width={sidebarWidth}
                     setWidth={setSidebarWidth}
                     onClose={() => setIsSidebarOpen(false)}
@@ -362,6 +392,10 @@ function App() {
                 onClose={() => setSettingsOpen(false)}
                 onSave={handleSaveSettings}
                 initialCategory={settingsCategory}
+                onResetOnboarding={() => {
+                    setShowOnboarding(true)
+                    setSettings(prev => ({ ...prev, hasCompletedOnboarding: false }))
+                }}
             />
 
             {/* Git Panel */}

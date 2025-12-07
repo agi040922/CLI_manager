@@ -1,6 +1,7 @@
 import React from 'react'
-import { Terminal, Trash2 } from 'lucide-react'
+import { Terminal, Trash2, GripVertical } from 'lucide-react'
 import clsx from 'clsx'
+import { Reorder, useDragControls } from 'framer-motion'
 import { TerminalSession, NotificationStatus, Workspace } from '../../../../shared/types'
 import { NOTIFICATION_COLORS } from '../../constants/styles'
 
@@ -20,6 +21,7 @@ interface SessionItemProps {
 /**
  * 터미널 세션 항목 컴포넌트
  * 세션 선택, 알림 표시, 삭제 기능 제공
+ * 드래그 앤 드롭으로 같은 워크스페이스 내에서 순서 변경 가능
  */
 export function SessionItem({
     session,
@@ -35,6 +37,7 @@ export function SessionItem({
 }: SessionItemProps) {
     const [tempName, setTempName] = React.useState(session.name)
     const inputRef = React.useRef<HTMLInputElement>(null)
+    const dragControls = useDragControls()
 
     React.useEffect(() => {
         if (isRenaming && inputRef.current) {
@@ -72,15 +75,33 @@ export function SessionItem({
     }
 
     return (
-        <div
+        <Reorder.Item
+            value={session}
+            dragListener={false}
+            dragControls={dragControls}
+            layout={false}
             className={clsx(
-                "flex items-center gap-2 p-2 rounded transition-colors text-sm group",
+                "flex items-center gap-1 py-1 px-1.5 rounded transition-colors text-sm group",
                 isActive
                     ? "bg-blue-500/20 text-blue-200"
                     : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
             )}
             onContextMenu={(e) => onContextMenu(e, workspace.id, session.id)}
+            whileDrag={{
+                scale: 1.02,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                backgroundColor: "rgba(59, 130, 246, 0.1)"
+            }}
         >
+            {/* 드래그 핸들 */}
+            <div
+                onPointerDown={(e) => dragControls.start(e)}
+                className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity shrink-0"
+                title="Drag to reorder"
+            >
+                <GripVertical size={12} className="text-gray-500" />
+            </div>
+
             <div
                 onClick={() => !isRenaming && onSelect(workspace, session)}
                 className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
@@ -114,6 +135,6 @@ export function SessionItem({
                     <Trash2 size={12} className="text-gray-500 hover:text-red-400" />
                 </button>
             )}
-        </div>
+        </Reorder.Item>
     )
 }

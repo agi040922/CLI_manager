@@ -22,6 +22,7 @@ interface SidebarProps {
     onOpenSettings: () => void
     settingsOpen?: boolean
     onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void
+    onReorderSessions: (workspaceId: string, sessions: TerminalSession[]) => void
     width: number
     setWidth: (width: number) => void
     onClose: () => void
@@ -51,6 +52,7 @@ export function Sidebar({
     onOpenSettings,
     settingsOpen,
     onRenameSession,
+    onReorderSessions,
     width,
     setWidth,
     onClose
@@ -369,7 +371,7 @@ export function Sidebar({
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
                     {regularWorkspaces.map(workspace => {
                         const childWorktrees = workspaces.filter(w => w.parentWorkspaceId === workspace.id)
                         return (
@@ -393,6 +395,7 @@ export function Sidebar({
                                 onOpenInEditor={onOpenInEditor}
                                 onRenameSession={handleRenameSubmit}
                                 onRenameCancel={() => setRenamingSessionId(null)}
+                                onReorderSessions={onReorderSessions}
                             />
                         )
                     })}
@@ -425,6 +428,7 @@ export function Sidebar({
                                     onOpenInEditor={onOpenInEditor}
                                     onRenameSession={handleRenameSubmit}
                                     onRenameCancel={() => setRenamingSessionId(null)}
+                                    onReorderSessions={onReorderSessions}
                                 />
                             ))}
                         </div>

@@ -11,15 +11,20 @@ declare global {
             addWorkspace: () => Promise<Workspace | null>
             addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => Promise<TerminalSession | null>
             addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => Promise<IPCResult<Workspace>>
-            removeWorkspace: (id: string) => Promise<boolean>
+            removeWorkspace: (id: string, deleteBranch?: boolean) => Promise<boolean>
             removeSession: (workspaceId: string, sessionId: string) => Promise<boolean>
             renameSession: (workspaceId: string, sessionId: string, newName: string) => Promise<boolean>
+            reorderSessions: (workspaceId: string, sessionIds: string[]) => Promise<boolean>
             createPlayground: () => Promise<Workspace | null>
 
             // Settings
             getSettings: () => Promise<UserSettings>
             saveSettings: (settings: UserSettings) => Promise<boolean>
             checkGitConfig: () => Promise<{ username: string; email: string } | null>
+            checkTools: () => Promise<{ git: boolean; gh: boolean; brew: boolean }>
+
+            // Dialog
+            selectDirectory: () => Promise<string | null>
 
             // Templates
             getTemplates: () => Promise<any[]>
@@ -38,6 +43,9 @@ declare global {
             gitReset: (workspacePath: string, commitHash: string, hard?: boolean) => Promise<boolean>
             gitListBranches: (workspacePath: string) => Promise<{ current: string; all: string[]; branches: any } | null>
             gitCheckout: (workspacePath: string, branchName: string) => Promise<boolean>
+            gitMerge: (workspacePath: string, branchName: string) => Promise<{ success: boolean; data?: { merged: boolean; conflicts?: string[] }; error?: string }>
+            gitMergeAbort: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
+            gitDeleteBranch: (workspacePath: string, branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string }>
 
             // GitHub CLI
             ghCheckAuth: () => Promise<{ authenticated: boolean; message: string }>
@@ -63,6 +71,7 @@ declare global {
             // Ports
             onPortUpdate: (callback: (ports: PortInfo[]) => void) => () => void
             killProcess: (pid: number) => Promise<boolean>
+            refreshPorts: () => Promise<boolean>
         }
     }
 }

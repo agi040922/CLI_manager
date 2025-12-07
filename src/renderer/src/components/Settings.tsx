@@ -8,11 +8,12 @@ interface SettingsProps {
     onClose: () => void
     onSave?: (settings: UserSettings) => void
     initialCategory?: SettingsCategory
+    onResetOnboarding?: () => void
 }
 
 type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github'
 
-export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' }: SettingsProps) {
+export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
         theme: 'dark',
         fontSize: 14,
@@ -194,6 +195,30 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general' 
                                                     <option value="light">Light</option>
                                                 </select>
                                             </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-6 pt-6 border-t border-white/10">
+                                        <h3 className="text-sm font-semibold text-white mb-3">Onboarding</h3>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm text-gray-300">Reset Onboarding Status</p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Show the welcome screen again on next launch
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    const newSettings = { ...settings, hasCompletedOnboarding: false }
+                                                    setSettings(newSettings)
+                                                    await window.api.saveSettings(newSettings)
+                                                    onResetOnboarding?.()
+                                                    onClose()
+                                                }}
+                                                className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 text-white rounded transition-colors"
+                                            >
+                                                Reset Status
+                                            </button>
                                         </div>
                                     </div>
                                 </>

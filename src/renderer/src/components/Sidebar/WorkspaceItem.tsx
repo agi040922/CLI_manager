@@ -1,6 +1,7 @@
 import React from 'react'
 import { Folder, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown, GitBranch } from 'lucide-react'
 import clsx from 'clsx'
+import { Reorder } from 'framer-motion'
 import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
 import { SessionItem } from './SessionItem'
 import { WorktreeItem } from './WorktreeItem'
@@ -24,6 +25,7 @@ interface WorkspaceItemProps {
     renamingSessionId: string | null
     onSessionContextMenu: (e: React.MouseEvent, workspaceId: string, sessionId: string) => void
     onRenameCancel: () => void
+    onReorderSessions: (workspaceId: string, sessions: TerminalSession[]) => void
 }
 
 /**
@@ -48,14 +50,15 @@ export function WorkspaceItem({
     onRenameSession,
     renamingSessionId,
     onSessionContextMenu,
-    onRenameCancel
+    onRenameCancel,
+    onReorderSessions
 }: WorkspaceItemProps) {
     return (
-        <div className="space-y-0.5">
+        <div>
             <div
                 onClick={() => onToggleExpand(workspace.id)}
                 onContextMenu={(e) => onContextMenu(e, workspace.id)}
-                className="group relative flex items-center justify-between p-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                className="group relative flex items-center justify-between py-1.5 px-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
             >
                 <div className="flex flex-col gap-0.5 overflow-hidden flex-1 min-w-0">
                     <div className="flex items-center gap-2 overflow-hidden">
@@ -120,22 +123,31 @@ export function WorkspaceItem({
 
             {expanded && (
                 <div className="ml-4 pl-2 border-l border-white/5 space-y-0.5">
-                    {/* 부모 workspace의 세션들 */}
-                    {workspace.sessions?.map((session: TerminalSession) => (
-                        <SessionItem
-                            key={session.id}
-                            session={session}
-                            workspace={workspace}
-                            isActive={activeSessionId === session.id}
-                            notificationStatus={sessionNotifications?.get(session.id)}
-                            isRenaming={renamingSessionId === session.id}
-                            onSelect={onSelect}
-                            onRemove={onRemoveSession}
-                            onRename={onRenameSession}
-                            onContextMenu={onSessionContextMenu}
-                            onRenameCancel={onRenameCancel}
-                        />
-                    ))}
+                    {/* 부모 workspace의 세션들 - 드래그 앤 드롭 지원 */}
+                    {workspace.sessions && workspace.sessions.length > 0 && (
+                        <Reorder.Group
+                            axis="y"
+                            values={workspace.sessions}
+                            onReorder={(newOrder) => onReorderSessions(workspace.id, newOrder)}
+                            className="space-y-0.5"
+                        >
+                            {workspace.sessions.map((session: TerminalSession) => (
+                                <SessionItem
+                                    key={session.id}
+                                    session={session}
+                                    workspace={workspace}
+                                    isActive={activeSessionId === session.id}
+                                    notificationStatus={sessionNotifications?.get(session.id)}
+                                    isRenaming={renamingSessionId === session.id}
+                                    onSelect={onSelect}
+                                    onRemove={onRemoveSession}
+                                    onRename={onRenameSession}
+                                    onContextMenu={onSessionContextMenu}
+                                    onRenameCancel={onRenameCancel}
+                                />
+                            ))}
+                        </Reorder.Group>
+                    )}
 
                     {/* 자식 worktree workspace들 */}
                     {childWorktrees.map(worktree => (
@@ -155,6 +167,7 @@ export function WorkspaceItem({
                             renamingSessionId={renamingSessionId}
                             onSessionContextMenu={onSessionContextMenu}
                             onRenameCancel={onRenameCancel}
+                            onReorderSessions={onReorderSessions}
                         />
                     ))}
                 </div>

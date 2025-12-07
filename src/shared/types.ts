@@ -86,6 +86,7 @@ export interface UserSettings {
     portActionLogs?: PortActionLog[]
     // Git Worktree 설정
     worktreePath?: string  // 커스텀 worktree 저장 경로 (없으면 기본 경로 사용)
+    hasCompletedOnboarding?: boolean
 }
 
 export interface PortActionLog {
