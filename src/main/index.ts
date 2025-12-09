@@ -62,12 +62,32 @@ function createWindow(): void {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
             contextIsolation: true,
-            nodeIntegration: false
+            nodeIntegration: false,
+            zoomFactor: 1  // 줌 팩터를 1로 고정
         }
     })
 
     mainWindow.on('ready-to-show', () => {
         mainWindow.show()
+    })
+
+    // Cmd+/- 기본 줌 완전 비활성화 (터미널 폰트만 조정)
+    // 줌 레벨을 1로 고정하여 전체 UI 줌 방지
+    mainWindow.webContents.setZoomFactor(1)
+    mainWindow.webContents.setZoomLevel(0)
+    mainWindow.webContents.setVisualZoomLevelLimits(1, 1)
+
+    // before-input-event로 Cmd+/-/0 키를 가로채서 터미널 폰트 조정
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        // macOS: meta (Cmd), Windows/Linux: control
+        const isModifier = input.meta || input.control
+
+        if (isModifier && (input.key === '=' || input.key === '+' || input.key === '-' || input.key === '0')) {
+            // 기본 줌 동작 방지
+            event.preventDefault()
+            // 렌더러로 IPC 전송 (터미널 폰트 크기 조정)
+            mainWindow.webContents.send('terminal-zoom', input.key)
+        }
     })
 
     mainWindow.webContents.setWindowOpenHandler((details) => {

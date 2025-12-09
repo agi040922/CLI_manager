@@ -72,6 +72,12 @@ declare global {
             onPortUpdate: (callback: (ports: PortInfo[]) => void) => () => void
             killProcess: (pid: number) => Promise<boolean>
             refreshPorts: () => Promise<boolean>
+
+            // Terminal Zoom
+            onTerminalZoom: (callback: (key: string) => void) => () => void
+
+            // UI Zoom
+            zoomUi: (action: 'in' | 'out' | 'reset') => void
         }
     }
 }

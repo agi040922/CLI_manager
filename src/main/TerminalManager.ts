@@ -41,6 +41,12 @@ export class TerminalManager {
     }
 
     private createTerminal(id: string, cwd: string, cols: number = 80, rows: number = 30) {
+        // 이미 존재하는 터미널이면 생성 건너뛰기
+        if (this.terminals.has(id)) {
+            console.log(`Terminal ${id} already exists, skipping creation`)
+            return
+        }
+
         const ptyProcess = pty.spawn(shell, [], {
             name: 'xterm-256color',
             cols,
@@ -48,15 +54,11 @@ export class TerminalManager {
             cwd,
             env: {
                 ...process.env,
-                // Prevent double prompt by clearing on start
-                TERM_PROGRAM: 'CLImanger'
+                TERM_PROGRAM: 'CLImanger',
+                // Disable zsh's partial line indicator (the % that appears when no newline at end)
+                PROMPT_EOL_MARK: ''
             } as any
         })
-
-        // Clear the initial prompt to prevent double %
-        setTimeout(() => {
-            ptyProcess.write('\x0c') // Form feed - clears screen
-        }, 100)
 
         ptyProcess.onData((data: string) => {
             // Send data to renderer

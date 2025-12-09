@@ -26,6 +26,7 @@ interface SidebarProps {
     width: number
     setWidth: (width: number) => void
     onClose: () => void
+    fontSize?: number  // Sidebar font size for workspace/session names
 }
 
 /**
@@ -55,7 +56,8 @@ export function Sidebar({
     onReorderSessions,
     width,
     setWidth,
-    onClose
+    onClose,
+    fontSize = 14
 }: SidebarProps) {
     // 커스텀 훅으로 상태 관리
     const customTemplates = useTemplates(settingsOpen)
@@ -385,6 +387,7 @@ export function Sidebar({
                                 activeSessionId={activeSessionId}
                                 sessionNotifications={sessionNotifications}
                                 renamingSessionId={renamingSessionId}
+                                fontSize={fontSize}
                                 onToggleExpand={toggleExpand}
                                 onContextMenu={handleContextMenu}
                                 onSessionContextMenu={handleSessionContextMenu}
@@ -418,6 +421,7 @@ export function Sidebar({
                                     activeSessionId={activeSessionId}
                                     sessionNotifications={sessionNotifications}
                                     renamingSessionId={renamingSessionId}
+                                    fontSize={fontSize}
                                     onToggleExpand={toggleExpand}
                                     onContextMenu={handleContextMenu}
                                     onSessionContextMenu={handleSessionContextMenu}

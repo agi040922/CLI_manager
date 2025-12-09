@@ -58,8 +58,8 @@ export interface AppConfig {
 
 export interface UserSettings {
     theme: 'dark' | 'light'
-    fontSize: number
-    fontFamily: string
+    fontSize: number  // UI 요소(사이드바 파일/폴더명 등)에만 적용
+    fontFamily?: string  // deprecated - 사용 안 함
     defaultShell: string
     defaultEditor: EditorType
     portFilter?: {

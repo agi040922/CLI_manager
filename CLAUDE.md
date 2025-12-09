@@ -248,6 +248,12 @@ User Action (Renderer)
 
 ## Development Guidelines
 
+### Language Policy
+
+- **Code & UI**: All code, variable names, comments, UI text, error messages, and logs MUST be written in **English**
+- **Explanations**: When explaining code or providing guidance, use **Korean** for clarity
+- **Documentation**: This CLAUDE.md uses Korean for descriptions, but actual code should remain in English
+
 ### 코드 작성 시 주의사항
 
 1. **컴포넌트 크기**: 단일 컴포넌트는 300줄 이하로 유지

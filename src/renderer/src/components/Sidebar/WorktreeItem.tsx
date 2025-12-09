@@ -9,6 +9,7 @@ interface WorktreeItemProps {
     expanded: boolean
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
+    fontSize?: number  // Sidebar font size
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
     onSelect: (workspace: Workspace, session: TerminalSession) => void
@@ -31,6 +32,7 @@ export function WorktreeItem({
     expanded,
     activeSessionId,
     sessionNotifications,
+    fontSize = 14,
     onToggleExpand,
     onContextMenu,
     onSelect,
@@ -57,7 +59,10 @@ export function WorktreeItem({
                         <ChevronRight size={14} className="text-gray-400 shrink-0" />
                     )}
                     <GitBranch size={14} className="text-green-400 shrink-0" />
-                    <span className="font-medium text-sm text-green-100 truncate">
+                    <span
+                        className="font-medium text-green-100 truncate"
+                        style={{ fontSize: `${fontSize}px` }}
+                    >
                         {worktree.name}
                     </span>
                 </div>
@@ -111,6 +116,7 @@ export function WorktreeItem({
                                 isActive={activeSessionId === session.id}
                                 notificationStatus={sessionNotifications?.get(session.id)}
                                 isRenaming={renamingSessionId === session.id}
+                                fontSize={fontSize}
                                 onSelect={onSelect}
                                 onRemove={onRemoveSession}
                                 onRename={onRenameSession}

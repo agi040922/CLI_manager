@@ -183,7 +183,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                 <>
                                     <div>
                                         <h3 className="text-sm font-semibold text-white mb-3">Appearance</h3>
-                                        <div className="space-y-3">
+                                        <div className="space-y-4">
                                             <div>
                                                 <label className="block text-xs text-gray-400 mb-1">Theme</label>
                                                 <select
@@ -194,6 +194,21 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                     <option value="dark">Dark</option>
                                                     <option value="light">Light</option>
                                                 </select>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Sidebar Font Size</label>
+                                                <p className="text-xs text-gray-500 mb-2">
+                                                    Adjust the font size for workspace and session names in the sidebar
+                                                </p>
+                                                <input
+                                                    type="number"
+                                                    min={10}
+                                                    max={18}
+                                                    value={settings.fontSize}
+                                                    onChange={e => setSettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) || 14 }))}
+                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -266,28 +281,14 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                     <option value="sh">sh</option>
                                                 </select>
                                             </div>
+                                        </div>
+                                    </div>
 
-                                            <div>
-                                                <label className="block text-xs text-gray-400 mb-1">Font Size</label>
-                                                <input
-                                                    type="number"
-                                                    min={10}
-                                                    max={24}
-                                                    value={settings.fontSize}
-                                                    onChange={e => setSettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) || 14 }))}
-                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-xs text-gray-400 mb-1">Font Family</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.fontFamily}
-                                                    onChange={e => setSettings(prev => ({ ...prev, fontFamily: e.target.value }))}
-                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                />
-                                            </div>
+                                    <div className="mt-6 pt-6 border-t border-white/10">
+                                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
+                                            <p className="text-xs text-blue-200">
+                                                <strong>Tip:</strong> Use <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘+</kbd> / <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘-</kbd> to adjust terminal font size, <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘0</kbd> to reset
+                                            </p>
                                         </div>
                                     </div>
                                 </>

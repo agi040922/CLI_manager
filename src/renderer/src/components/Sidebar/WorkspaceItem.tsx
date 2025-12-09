@@ -14,6 +14,7 @@ interface WorkspaceItemProps {
     branchInfo?: { current: string; all: string[] }
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
+    fontSize?: number  // Sidebar font size
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
     onBranchClick: (e: React.MouseEvent, workspace: Workspace) => void
@@ -40,6 +41,7 @@ export function WorkspaceItem({
     branchInfo,
     activeSessionId,
     sessionNotifications,
+    fontSize = 14,
     onToggleExpand,
     onContextMenu,
     onBranchClick,
@@ -72,10 +74,13 @@ export function WorkspaceItem({
                         ) : (
                             <Folder size={16} className="text-blue-400 shrink-0" />
                         )}
-                        <span className={clsx(
-                            "font-medium text-sm truncate",
-                            workspace.isPlayground ? "text-yellow-100" : ""
-                        )}>
+                        <span
+                            className={clsx(
+                                "font-medium truncate",
+                                workspace.isPlayground ? "text-yellow-100" : ""
+                            )}
+                            style={{ fontSize: `${fontSize}px` }}
+                        >
                             {workspace.name}
                         </span>
                     </div>
@@ -139,6 +144,7 @@ export function WorkspaceItem({
                                     isActive={activeSessionId === session.id}
                                     notificationStatus={sessionNotifications?.get(session.id)}
                                     isRenaming={renamingSessionId === session.id}
+                                    fontSize={fontSize}
                                     onSelect={onSelect}
                                     onRemove={onRemoveSession}
                                     onRename={onRenameSession}
@@ -157,6 +163,7 @@ export function WorkspaceItem({
                             expanded={expandedSet.has(worktree.id)}
                             activeSessionId={activeSessionId}
                             sessionNotifications={sessionNotifications}
+                            fontSize={fontSize}
                             onToggleExpand={onToggleExpand}
                             onContextMenu={onContextMenu}
                             onSelect={onSelect}

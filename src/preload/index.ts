@@ -77,7 +77,19 @@ const api = {
         return () => ipcRenderer.removeListener('port-update', listener)
     },
     killProcess: (pid: number): Promise<boolean> => ipcRenderer.invoke('kill-process', pid),
-    refreshPorts: (): Promise<boolean> => ipcRenderer.invoke('refresh-ports')
+    refreshPorts: (): Promise<boolean> => ipcRenderer.invoke('refresh-ports'),
+
+    // Terminal Zoom (Cmd+/- 이벤트 수신)
+    onTerminalZoom: (callback: (key: string) => void): () => void => {
+        const listener = (_: any, key: string) => callback(key)
+        ipcRenderer.on('terminal-zoom', listener)
+        return () => ipcRenderer.removeListener('terminal-zoom', listener)
+    },
+
+    // UI Zoom (전체 UI 줌 조정)
+    zoomUi: (action: 'in' | 'out' | 'reset'): void => {
+        ipcRenderer.send('zoom-ui', action)
+    }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

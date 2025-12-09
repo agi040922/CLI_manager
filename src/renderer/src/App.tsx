@@ -57,6 +57,14 @@ function App() {
     // Onboarding state
     const [showOnboarding, setShowOnboarding] = useState(false)
 
+    // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
+    const [terminalFontSize, setTerminalFontSize] = useState(14)
+
+    // 터미널 폰트 크기 조정 상수
+    const MIN_FONT_SIZE = 8
+    const MAX_FONT_SIZE = 32
+    const FONT_SIZE_STEP = 1
+
     // Load workspaces and settings on mount
     useEffect(() => {
         window.api.getWorkspaces().then(setWorkspaces)
@@ -70,6 +78,27 @@ function App() {
         }).catch(err => {
             console.error('Failed to load settings:', err)
         })
+    }, [])
+
+    // Cmd+/- 터미널 폰트 크기 조정 (Main process에서 IPC로 전달받음)
+    // settings.fontSize는 UI용이므로 별도의 terminalFontSize 상태를 조절
+    useEffect(() => {
+        const cleanup = window.api.onTerminalZoom((key: string) => {
+            // Cmd/Ctrl + = 또는 + (확대)
+            if (key === '=' || key === '+') {
+                setTerminalFontSize(prev => Math.min(prev + FONT_SIZE_STEP, MAX_FONT_SIZE))
+            }
+            // Cmd/Ctrl + - (축소)
+            else if (key === '-') {
+                setTerminalFontSize(prev => Math.max(prev - FONT_SIZE_STEP, MIN_FONT_SIZE))
+            }
+            // Cmd/Ctrl + 0 (기본 크기로 리셋)
+            else if (key === '0') {
+                setTerminalFontSize(14)  // 기본 폰트 크기
+            }
+        })
+
+        return cleanup
     }, [])
 
     const handleOnboardingComplete = () => {
@@ -300,6 +329,7 @@ function App() {
                     width={sidebarWidth}
                     setWidth={setSidebarWidth}
                     onClose={() => setIsSidebarOpen(false)}
+                    fontSize={settings.fontSize}
                 />
             )}
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
@@ -314,7 +344,10 @@ function App() {
                                 <PanelLeft size={16} />
                             </button>
                         )}
-                        <span className="text-sm text-gray-400">
+                        <span
+                            className="text-gray-400"
+                            style={{ fontSize: `${settings.fontSize}px` }}
+                        >
                             {activeWorkspace ? activeWorkspace.name : 'Select a workspace to get started'}
                         </span>
                     </div>
@@ -343,7 +376,7 @@ function App() {
                         </button>
                     </div>
                 </div>
-                <div className="flex-1 p-4 relative">
+                <div className="flex-1 p-4 relative overflow-hidden min-h-0">
                     {/* Render ALL sessions but hide inactive ones to keep them alive */}
                     {workspaces.map(workspace => (
                         workspace.sessions?.map(session => (
@@ -360,8 +393,7 @@ function App() {
                                     cwd={session.cwd}
                                     visible={activeSession?.id === session.id}
                                     onNotification={(type) => handleNotification(session.id, type)}
-                                    fontSize={settings.fontSize}
-                                    fontFamily={settings.fontFamily}
+                                    fontSize={terminalFontSize}
                                     initialCommand={session.initialCommand}
                                     notificationSettings={settings.notifications}
                                 />

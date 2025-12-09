@@ -10,6 +10,7 @@ interface SessionItemProps {
     workspace: Workspace
     isActive: boolean
     notificationStatus?: NotificationStatus
+    fontSize?: number  // Sidebar font size
     onSelect: (workspace: Workspace, session: TerminalSession) => void
     onRemove: (workspaceId: string, sessionId: string) => void
     onRename: (workspaceId: string, sessionId: string, newName: string) => void
@@ -28,6 +29,7 @@ export function SessionItem({
     workspace,
     isActive,
     notificationStatus,
+    fontSize = 14,
     onSelect,
     onRemove,
     onRename,
@@ -79,7 +81,7 @@ export function SessionItem({
             value={session}
             dragListener={false}
             dragControls={dragControls}
-            layout={false}
+            layout="position"
             className={clsx(
                 "flex items-center gap-1 py-1 px-1.5 rounded transition-colors text-sm group",
                 isActive
@@ -119,7 +121,7 @@ export function SessionItem({
                         onClick={(e) => e.stopPropagation()}
                     />
                 ) : (
-                    <span className="truncate flex-1">{session.name}</span>
+                    <span className="truncate flex-1" style={{ fontSize: `${fontSize}px` }}>{session.name}</span>
                 )}
                 {getNotificationBadge()}
             </div>

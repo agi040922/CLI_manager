@@ -11,7 +11,6 @@ interface TerminalViewProps {
     visible: boolean
     onNotification?: (type: NotificationType) => void
     fontSize?: number
-    fontFamily?: string
     initialCommand?: string
     notificationSettings?: {
         enabled: boolean
@@ -30,13 +29,15 @@ interface Notification {
     message: string
 }
 
+// 터미널 폰트 패밀리 (고정값)
+const TERMINAL_FONT_FAMILY = 'Menlo, Monaco, "Courier New", monospace'
+
 export function TerminalView({
     id,
     cwd,
     visible,
     onNotification,
-    fontSize = 13,
-    fontFamily = 'Menlo, Monaco, "Courier New", monospace',
+    fontSize = 14,
     initialCommand,
     notificationSettings
 }: TerminalViewProps) {
@@ -46,6 +47,8 @@ export function TerminalView({
     const [notifications, setNotifications] = useState<Notification[]>([])
     const lastNotificationRef = useRef<{ type: string; message: string; time: number } | null>(null)
     const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
+    // 초기화 직후 불필요한 resize를 방지하기 위한 플래그
+    const isInitializedRef = useRef<boolean>(false)
 
     // Detection patterns - DISABLED: Will be enabled in a future update
     const detectOutput = (_text: string) => {
@@ -100,6 +103,9 @@ export function TerminalView({
 
     // Handle visibility changes
     useEffect(() => {
+        // 초기화 직후에는 resize 건너뛰기 (createTerminal에서 이미 올바른 크기로 생성됨)
+        if (!isInitializedRef.current) return
+
         if (visible && fitAddonRef.current && xtermRef.current) {
             // Small delay to ensure layout is computed after display: block
             requestAnimationFrame(() => {
@@ -114,6 +120,26 @@ export function TerminalView({
         }
     }, [visible, id])
 
+    // fontSize 변경 시 터미널 재생성 없이 동적으로 업데이트
+    useEffect(() => {
+        if (xtermRef.current && fitAddonRef.current) {
+            xtermRef.current.options.fontSize = fontSize
+            // visible 상태일 때만 fit 호출 (display:none 상태에서는 크기 계산이 잘못됨)
+            // 비활성 터미널은 visible이 true가 될 때 visibility useEffect에서 fit 호출됨
+            if (visible) {
+                requestAnimationFrame(() => {
+                    try {
+                        fitAddonRef.current?.fit()
+                        const { cols, rows } = xtermRef.current!
+                        window.api.resizeTerminal(id, cols, rows)
+                    } catch (e) {
+                        console.error('Failed to resize after font change:', e)
+                    }
+                })
+            }
+        }
+    }, [fontSize, id, visible])
+
     useEffect(() => {
         if (!terminalRef.current) return
 
@@ -124,7 +150,7 @@ export function TerminalView({
                 cursor: '#ffffff',
                 selectionBackground: 'rgba(255, 255, 255, 0.3)'
             },
-            fontFamily,
+            fontFamily: TERMINAL_FONT_FAMILY,
             fontSize,
             allowProposedApi: true,
             cursorBlink: true
@@ -134,11 +160,6 @@ export function TerminalView({
         term.loadAddon(fitAddon)
 
         term.open(terminalRef.current)
-
-        // Initial fit
-        if (visible) {
-            fitAddon.fit()
-        }
 
         xtermRef.current = term
         fitAddonRef.current = fitAddon
@@ -182,8 +203,11 @@ export function TerminalView({
                 }, 500)
             }
 
-            // Initial resize is NO LONGER needed here because we passed dimensions to createTerminal
-            // window.api.resizeTerminal(id, term.cols, term.rows)
+            // 초기화 완료 표시 - 이후 resize 이벤트는 정상 처리됨
+            // 약간의 딜레이를 두어 초기 프롬프트가 완전히 출력된 후에 resize 허용
+            setTimeout(() => {
+                isInitializedRef.current = true
+            }, 300)
 
             return () => {
                 cleanup()
@@ -207,7 +231,8 @@ export function TerminalView({
 
         // Add ResizeObserver for container size changes (e.g. display: block)
         const resizeObserver = new ResizeObserver(() => {
-            if (visible) {
+            // 초기화 완료 후에만 resize 처리
+            if (visible && isInitializedRef.current) {
                 // Small delay to ensure layout is computed
                 requestAnimationFrame(() => {
                     handleResize()
@@ -224,10 +249,47 @@ export function TerminalView({
             resizeObserver.disconnect()
             term.dispose()
         }
-    }, [id, cwd, fontSize, fontFamily])
+    // fontSize는 별도 useEffect에서 동적으로 처리하므로 의존성에서 제외
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, cwd])
+
+    // 파일 드래그 앤 드롭 핸들러
+    // 파일을 터미널로 드래그하면 경로가 입력됨
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+    }
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        const files = e.dataTransfer.files
+        if (files.length > 0) {
+            // 파일 경로들을 공백으로 구분하여 입력
+            // 경로에 공백이 있으면 이스케이프 처리
+            const paths = Array.from(files)
+                .map(file => {
+                    // Electron에서는 file.path로 전체 경로를 얻을 수 있음
+                    const filePath = (file as any).path as string
+                    // 공백이 포함된 경로는 백슬래시로 이스케이프
+                    return filePath.replace(/ /g, '\\ ')
+                })
+                .join(' ')
+
+            // 터미널에 경로 입력
+            if (xtermRef.current) {
+                window.api.writeTerminal(id, paths)
+            }
+        }
+    }
 
     return (
-        <div className="w-full h-full relative">
+        <div
+            className="w-full h-full relative"
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
             <div className="w-full h-full" ref={terminalRef} />
 
             {/* Notifications */}
