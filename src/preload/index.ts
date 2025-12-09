@@ -19,6 +19,7 @@ const api = {
     saveSettings: (settings: UserSettings): Promise<boolean> => ipcRenderer.invoke('save-settings', settings),
     checkGitConfig: (): Promise<{ username: string; email: string } | null> => ipcRenderer.invoke('check-git-config'),
     checkTools: (): Promise<{ git: boolean; gh: boolean; brew: boolean }> => ipcRenderer.invoke('check-tools'),
+    getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
 
     // Templates
     getTemplates: (): Promise<any[]> => ipcRenderer.invoke('get-templates'),

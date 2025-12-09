@@ -443,6 +443,11 @@ app.whenReady().then(() => {
         return true
     })
 
+    // App Version
+    ipcMain.handle('get-app-version', () => {
+        return app.getVersion()
+    })
+
     // Template handlers
     ipcMain.handle('get-templates', () => {
         return store.get('customTemplates') || []

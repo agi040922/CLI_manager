@@ -40,6 +40,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
     const [templates, setTemplates] = useState<TerminalTemplate[]>([])
     const [editingTemplate, setEditingTemplate] = useState<TerminalTemplate | null>(null)
     const [activeCategory, setActiveCategory] = useState<SettingsCategory>(initialCategory)
+    const [appVersion, setAppVersion] = useState<string>('')
 
     useEffect(() => {
         if (isOpen) {
@@ -60,6 +61,9 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
 
             // Automatically check git config when settings open
             checkGitConfig()
+
+            // Get app version
+            window.api.getAppVersion().then(setAppVersion)
         }
     }, [isOpen, initialCategory])
 
@@ -160,20 +164,27 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                     {/* Content - Split Layout */}
                     <div className="flex flex-1 overflow-hidden">
                         {/* Left Sidebar - Categories */}
-                        <div className="w-48 border-r border-white/10 bg-black/20 p-2 overflow-y-auto">
-                            {categories.map(category => (
-                                <button
-                                    key={category.id}
-                                    onClick={() => setActiveCategory(category.id)}
-                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${activeCategory === category.id
-                                            ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
-                                            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                                        }`}
-                                >
-                                    {category.icon}
-                                    <span>{category.label}</span>
-                                </button>
-                            ))}
+                        <div className="w-48 border-r border-white/10 bg-black/20 overflow-hidden flex flex-col">
+                            <div className="flex-1 overflow-y-auto p-2">
+                                {categories.map(category => (
+                                    <button
+                                        key={category.id}
+                                        onClick={() => setActiveCategory(category.id)}
+                                        className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${activeCategory === category.id
+                                                ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
+                                                : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                                            }`}
+                                    >
+                                        {category.icon}
+                                        <span>{category.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            {appVersion && (
+                                <div className="p-3 text-[10px] text-gray-500 text-center border-t border-white/5">
+                                    v{appVersion}
+                                </div>
+                            )}
                         </div>
 
                         {/* Right Content Area */}

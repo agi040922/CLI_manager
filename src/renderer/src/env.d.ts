@@ -22,6 +22,7 @@ declare global {
             saveSettings: (settings: UserSettings) => Promise<boolean>
             checkGitConfig: () => Promise<{ username: string; email: string } | null>
             checkTools: () => Promise<{ git: boolean; gh: boolean; brew: boolean }>
+            getAppVersion: () => Promise<string>
 
             // Dialog
             selectDirectory: () => Promise<string | null>
