@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate } from '../../../shared/types'
-import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen } from 'lucide-react'
+import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Download, RefreshCw, Loader2 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
+
+type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
+
+interface UpdateState {
+    status: UpdateStatus
+    version?: string
+    percent?: number
+    message?: string
+}
 
 interface SettingsProps {
     isOpen: boolean
@@ -41,6 +50,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
     const [editingTemplate, setEditingTemplate] = useState<TerminalTemplate | null>(null)
     const [activeCategory, setActiveCategory] = useState<SettingsCategory>(initialCategory)
     const [appVersion, setAppVersion] = useState<string>('')
+    const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
 
     useEffect(() => {
         if (isOpen) {
@@ -64,8 +74,32 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
 
             // Get app version
             window.api.getAppVersion().then(setAppVersion)
+
+            // Listen for update status
+            const unsubscribe = window.api.onUpdateStatus((data) => {
+                setUpdateState({
+                    status: data.status as UpdateStatus,
+                    version: data.version,
+                    percent: data.percent,
+                    message: data.message
+                })
+            })
+
+            return () => unsubscribe()
         }
     }, [isOpen, initialCategory])
+
+    const handleCheckForUpdate = async () => {
+        setUpdateState({ status: 'checking' })
+        const result = await window.api.checkForUpdate()
+        if (!result.success) {
+            setUpdateState({ status: 'error', message: result.error })
+        }
+    }
+
+    const handleInstallUpdate = () => {
+        window.api.installUpdate()
+    }
 
     const handleSave = async () => {
         await window.api.saveSettings(settings)
@@ -180,11 +214,74 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                     </button>
                                 ))}
                             </div>
-                            {appVersion && (
-                                <div className="p-3 text-[10px] text-gray-500 text-center border-t border-white/5">
-                                    v{appVersion}
-                                </div>
-                            )}
+                            {/* Version and Update Section */}
+                            <div className="p-3 border-t border-white/5 space-y-2">
+                                {appVersion && (
+                                    <div className="text-[10px] text-gray-500 text-center">
+                                        v{appVersion}
+                                    </div>
+                                )}
+
+                                {/* Update Status */}
+                                {updateState.status === 'checking' && (
+                                    <div className="flex items-center justify-center gap-1 text-[10px] text-blue-400">
+                                        <Loader2 size={10} className="animate-spin" />
+                                        <span>Checking...</span>
+                                    </div>
+                                )}
+
+                                {updateState.status === 'available' && (
+                                    <div className="text-[10px] text-green-400 text-center">
+                                        v{updateState.version} available
+                                    </div>
+                                )}
+
+                                {updateState.status === 'downloading' && (
+                                    <div className="space-y-1">
+                                        <div className="text-[10px] text-blue-400 text-center">
+                                            Downloading... {updateState.percent}%
+                                        </div>
+                                        <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-blue-500 transition-all duration-300"
+                                                style={{ width: `${updateState.percent || 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {updateState.status === 'ready' && (
+                                    <button
+                                        onClick={handleInstallUpdate}
+                                        className="w-full px-2 py-1 text-[10px] bg-green-600 hover:bg-green-500 text-white rounded transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        <Download size={10} />
+                                        Install v{updateState.version}
+                                    </button>
+                                )}
+
+                                {updateState.status === 'not-available' && (
+                                    <div className="text-[10px] text-gray-500 text-center">
+                                        Up to date
+                                    </div>
+                                )}
+
+                                {updateState.status === 'error' && (
+                                    <div className="text-[10px] text-red-400 text-center truncate" title={updateState.message}>
+                                        Update error
+                                    </div>
+                                )}
+
+                                {(updateState.status === 'idle' || updateState.status === 'not-available' || updateState.status === 'error') && (
+                                    <button
+                                        onClick={handleCheckForUpdate}
+                                        className="w-full px-2 py-1 text-[10px] bg-white/10 hover:bg-white/20 text-gray-300 rounded transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        <RefreshCw size={10} />
+                                        Check Updates
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Right Content Area */}

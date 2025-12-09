@@ -78,6 +78,13 @@ declare global {
             licenseValidate: () => Promise<{ success: boolean; data?: { licenseKey: string; instanceId: string; activatedAt: string; customerEmail?: string; customerName?: string; productName?: string }; error?: string }>
             licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
             licenseCheck: () => Promise<{ success: boolean; data?: { hasLicense: boolean } }>
+
+            // Updates
+            checkForUpdate: () => Promise<{ success: boolean; version?: string; error?: string }>
+            installUpdate: () => Promise<void>
+            onUpdateStatus: (callback: (status: { status: string; version?: string; percent?: number; message?: string }) => void) => () => void
+            getAppVersion: () => Promise<string>
+            checkTools: () => Promise<{ git: boolean; gh: boolean; brew: boolean }>
         }
     }
 }

@@ -100,7 +100,18 @@ const api = {
     licenseDeactivate: (): Promise<{ success: boolean; error?: string }> =>
         ipcRenderer.invoke('license-deactivate'),
     licenseCheck: (): Promise<{ success: boolean; data?: { hasLicense: boolean } }> =>
-        ipcRenderer.invoke('license-check')
+        ipcRenderer.invoke('license-check'),
+
+    // Updates
+    checkForUpdate: (): Promise<{ success: boolean; version?: string; error?: string }> =>
+        ipcRenderer.invoke('check-for-update'),
+    installUpdate: (): Promise<void> =>
+        ipcRenderer.invoke('install-update'),
+    onUpdateStatus: (callback: (status: { status: string; version?: string; percent?: number; message?: string }) => void): () => void => {
+        const listener = (_: any, data: any) => callback(data)
+        ipcRenderer.on('update-status', listener)
+        return () => ipcRenderer.removeListener('update-status', listener)
+    }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

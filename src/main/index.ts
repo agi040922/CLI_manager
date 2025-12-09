@@ -1127,37 +1127,54 @@ app.on('window-all-closed', () => {
 // ============================================
 // Auto Updater 이벤트 핸들러
 // ============================================
+
+// Helper to send update status to all windows
+function sendUpdateStatus(status: string, data?: any) {
+    BrowserWindow.getAllWindows().forEach(win => {
+        win.webContents.send('update-status', { status, ...data })
+    })
+}
+
 autoUpdater.on('checking-for-update', () => {
-    console.log('업데이트 확인 중...')
+    console.log('Checking for update...')
+    sendUpdateStatus('checking')
 })
 
 autoUpdater.on('update-available', (info) => {
-    console.log('새 업데이트가 있습니다:', info.version)
+    console.log('Update available:', info.version)
+    sendUpdateStatus('available', { version: info.version })
 })
 
 autoUpdater.on('update-not-available', () => {
-    console.log('현재 최신 버전입니다.')
+    console.log('Already up to date.')
+    sendUpdateStatus('not-available')
 })
 
 autoUpdater.on('download-progress', (progress) => {
-    console.log(`다운로드 진행: ${Math.round(progress.percent)}%`)
+    console.log(`Download progress: ${Math.round(progress.percent)}%`)
+    sendUpdateStatus('downloading', { percent: Math.round(progress.percent) })
 })
 
 autoUpdater.on('update-downloaded', (info) => {
-    console.log('업데이트 다운로드 완료:', info.version)
-    // 사용자에게 알림 (선택사항: 다이얼로그로 재시작 묻기)
-    dialog.showMessageBox({
-        type: 'info',
-        title: '업데이트 준비 완료',
-        message: `새 버전 ${info.version}이 다운로드되었습니다.\n앱을 재시작하면 업데이트가 적용됩니다.`,
-        buttons: ['지금 재시작', '나중에']
-    }).then((result) => {
-        if (result.response === 0) {
-            autoUpdater.quitAndInstall()
-        }
-    })
+    console.log('Update downloaded:', info.version)
+    sendUpdateStatus('ready', { version: info.version })
 })
 
 autoUpdater.on('error', (err) => {
-    console.error('업데이트 오류:', err)
+    console.error('Update error:', err)
+    sendUpdateStatus('error', { message: err.message })
+})
+
+// IPC handlers for manual update control
+ipcMain.handle('check-for-update', async () => {
+    try {
+        const result = await autoUpdater.checkForUpdates()
+        return { success: true, version: result?.updateInfo?.version }
+    } catch (error: any) {
+        return { success: false, error: error.message }
+    }
+})
+
+ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall()
 })
