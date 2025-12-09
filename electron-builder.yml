@@ -1,5 +1,5 @@
-appId: com.climanger.app
-productName: CLImanger
+appId: com.climanager.app
+productName: CLI Manager
 copyright: Copyright © 2024 LightSoft
 
 # GitHub Releases를 통한 자동 업데이트 설정

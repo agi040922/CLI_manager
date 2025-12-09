@@ -1,6 +1,6 @@
 {
-  "name": "climanger",
-  "version": "1.0.0",
+  "name": "cli-manager",
+  "version": "1.0.2",
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {

@@ -9,6 +9,7 @@ import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult
 import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft } from 'lucide-react'
 import { Onboarding } from './components/Onboarding'
+import { LicenseVerification } from './components/LicenseVerification'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -56,6 +57,7 @@ function App() {
 
     // Onboarding state
     const [showOnboarding, setShowOnboarding] = useState(false)
+    const [showLicenseVerification, setShowLicenseVerification] = useState(true)
 
     // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
     const [terminalFontSize, setTerminalFontSize] = useState(14)
@@ -104,6 +106,14 @@ function App() {
     const handleOnboardingComplete = () => {
         setShowOnboarding(false)
         setSettings(prev => ({ ...prev, hasCompletedOnboarding: true }))
+    }
+
+    const handleLicenseVerify = async (key: string): Promise<boolean> => {
+        // Logic will be implemented by user
+        // For now, we simulate a delay and success
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        setShowLicenseVerification(false)
+        return true
     }
 
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
@@ -307,7 +317,8 @@ function App() {
 
     return (
         <div className="flex h-screen w-screen bg-transparent">
-            {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+            {showLicenseVerification && <LicenseVerification onVerify={handleLicenseVerify} />}
+            {!showLicenseVerification && showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
             
             {isSidebarOpen && (
                 <Sidebar

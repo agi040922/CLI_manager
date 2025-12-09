@@ -78,6 +78,12 @@ declare global {
 
             // UI Zoom
             zoomUi: (action: 'in' | 'out' | 'reset') => void
+
+            // License
+            licenseActivate: (licenseKey: string) => Promise<{ success: boolean; data?: { licenseKey: string; instanceId: string; activatedAt: string; customerEmail?: string; customerName?: string; productName?: string }; error?: string }>
+            licenseValidate: () => Promise<{ success: boolean; data?: { licenseKey: string; instanceId: string; activatedAt: string; customerEmail?: string; customerName?: string; productName?: string }; error?: string }>
+            licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
+            licenseCheck: () => Promise<{ success: boolean; data?: { hasLicense: boolean } }>
         }
     }
 }

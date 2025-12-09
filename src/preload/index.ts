@@ -89,7 +89,17 @@ const api = {
     // UI Zoom (전체 UI 줌 조정)
     zoomUi: (action: 'in' | 'out' | 'reset'): void => {
         ipcRenderer.send('zoom-ui', action)
-    }
+    },
+
+    // License
+    licenseActivate: (licenseKey: string): Promise<{ success: boolean; data?: any; error?: string }> =>
+        ipcRenderer.invoke('license-activate', licenseKey),
+    licenseValidate: (): Promise<{ success: boolean; data?: any; error?: string }> =>
+        ipcRenderer.invoke('license-validate'),
+    licenseDeactivate: (): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('license-deactivate'),
+    licenseCheck: (): Promise<{ success: boolean; data?: { hasLicense: boolean } }> =>
+        ipcRenderer.invoke('license-check')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -13,12 +13,26 @@ import { promisify } from 'util'
 
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
+import { net } from 'electron'
+
+// Set app name for development mode
+app.setName('CLI Manager')
 
 // Auto Updater 설정
 autoUpdater.autoDownload = true
 autoUpdater.autoInstallOnAppQuit = true
 
 const execAsync = promisify(exec)
+
+// License storage interface
+interface LicenseData {
+    licenseKey: string
+    instanceId: string
+    activatedAt: string
+    customerEmail?: string
+    customerName?: string
+    productName?: string
+}
 
 const store = new Store<AppConfig>({
     defaults: {
@@ -43,6 +57,14 @@ const store = new Store<AppConfig>({
     }
 }) as any
 
+// Separate store for license data (to keep it secure)
+const licenseStore = new Store({
+    name: 'license',
+    defaults: {
+        license: null as LicenseData | null
+    }
+}) as any
+
 const terminalManager = new TerminalManager()
 const portManager = new PortManager()
 
@@ -57,7 +79,7 @@ function createWindow(): void {
         vibrancy: 'under-window', // Glass effect
         visualEffectState: 'active',
         trafficLightPosition: { x: 15, y: 10 },
-        ...(process.platform === 'linux' ? { icon } : {}),
+        icon,
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
@@ -109,7 +131,17 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
     // Set app user model id for windows
-    electronApp.setAppUserModelId('com.climanger')
+    electronApp.setAppUserModelId('com.climanager.app')
+
+    // Set dock icon for macOS (built app uses icon.icns automatically)
+    if (process.platform === 'darwin' && app.dock) {
+        try {
+            app.dock.setIcon(icon)
+        } catch (e) {
+            // Icon loading may fail in packaged app, but icon.icns is used automatically
+            console.log('Dock icon set via icon.icns')
+        }
+    }
 
     // 자동 업데이트 체크 (프로덕션 환경에서만)
     if (!is.dev) {
@@ -896,6 +928,173 @@ app.whenReady().then(() => {
         } catch (e: any) {
             console.error('Open in editor error:', e)
             return { success: false, error: e.message }
+        }
+    })
+
+    // ============================================
+    // Lemon Squeezy License Handlers
+    // ============================================
+
+    // Get unique instance name for this machine
+    const getInstanceName = (): string => {
+        const hostname = require('os').hostname()
+        const username = require('os').userInfo().username
+        return `${hostname}-${username}-${app.getName()}`
+    }
+
+    // Activate license with Lemon Squeezy
+    ipcMain.handle('license-activate', async (_, licenseKey: string): Promise<IPCResult<LicenseData>> => {
+        try {
+            const instanceName = getInstanceName()
+
+            // Lemon Squeezy License API endpoint
+            const response = await fetch('https://api.lemonsqueezy.com/v1/licenses/activate', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    license_key: licenseKey,
+                    instance_name: instanceName
+                }).toString()
+            })
+
+            const data = await response.json()
+
+            if (data.activated) {
+                // Successfully activated
+                const licenseData: LicenseData = {
+                    licenseKey: licenseKey,
+                    instanceId: data.instance?.id || '',
+                    activatedAt: new Date().toISOString(),
+                    customerEmail: data.meta?.customer_email,
+                    customerName: data.meta?.customer_name,
+                    productName: data.meta?.product_name
+                }
+
+                // Save to license store
+                licenseStore.set('license', licenseData)
+
+                return { success: true, data: licenseData }
+            } else {
+                // Activation failed
+                return {
+                    success: false,
+                    error: data.error || 'License activation failed',
+                    errorType: 'UNKNOWN_ERROR'
+                }
+            }
+        } catch (error: any) {
+            console.error('License activation error:', error)
+            return {
+                success: false,
+                error: error.message || 'Network error during activation',
+                errorType: 'UNKNOWN_ERROR'
+            }
+        }
+    })
+
+    // Validate existing license
+    ipcMain.handle('license-validate', async (): Promise<IPCResult<LicenseData>> => {
+        try {
+            const savedLicense = licenseStore.get('license') as LicenseData | null
+
+            if (!savedLicense) {
+                return {
+                    success: false,
+                    error: 'No license found',
+                    errorType: 'UNKNOWN_ERROR'
+                }
+            }
+
+            // Validate with Lemon Squeezy
+            const response = await fetch('https://api.lemonsqueezy.com/v1/licenses/validate', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    license_key: savedLicense.licenseKey,
+                    instance_id: savedLicense.instanceId
+                }).toString()
+            })
+
+            const data = await response.json()
+
+            if (data.valid) {
+                return { success: true, data: savedLicense }
+            } else {
+                // License is no longer valid, clear it
+                licenseStore.set('license', null)
+                return {
+                    success: false,
+                    error: data.error || 'License is no longer valid',
+                    errorType: 'UNKNOWN_ERROR'
+                }
+            }
+        } catch (error: any) {
+            console.error('License validation error:', error)
+            // On network error, allow cached license (offline mode)
+            const savedLicense = licenseStore.get('license') as LicenseData | null
+            if (savedLicense) {
+                return { success: true, data: savedLicense }
+            }
+            return {
+                success: false,
+                error: error.message || 'Network error during validation',
+                errorType: 'UNKNOWN_ERROR'
+            }
+        }
+    })
+
+    // Deactivate license
+    ipcMain.handle('license-deactivate', async (): Promise<IPCResult<void>> => {
+        try {
+            const savedLicense = licenseStore.get('license') as LicenseData | null
+
+            if (!savedLicense) {
+                return { success: true }
+            }
+
+            // Deactivate with Lemon Squeezy
+            const response = await fetch('https://api.lemonsqueezy.com/v1/licenses/deactivate', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    license_key: savedLicense.licenseKey,
+                    instance_id: savedLicense.instanceId
+                }).toString()
+            })
+
+            const data = await response.json()
+
+            // Clear local license regardless of API response
+            licenseStore.set('license', null)
+
+            if (data.deactivated) {
+                return { success: true }
+            } else {
+                return { success: true } // Still consider it success since we cleared local
+            }
+        } catch (error: any) {
+            console.error('License deactivation error:', error)
+            // Clear local license even on network error
+            licenseStore.set('license', null)
+            return { success: true }
+        }
+    })
+
+    // Check if license exists (without validation)
+    ipcMain.handle('license-check', async (): Promise<IPCResult<{ hasLicense: boolean }>> => {
+        const savedLicense = licenseStore.get('license') as LicenseData | null
+        return {
+            success: true,
+            data: { hasLicense: savedLicense !== null }
         }
     })
 
