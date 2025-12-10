@@ -10,6 +10,7 @@ import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft } from 'lucide-react'
 import { Onboarding } from './components/Onboarding'
 import { LicenseVerification } from './components/LicenseVerification'
+import { UpdateNotification } from './components/UpdateNotification'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -59,6 +60,10 @@ function App() {
     const [showOnboarding, setShowOnboarding] = useState(false)
     const [showLicenseVerification, setShowLicenseVerification] = useState(true)
 
+    // Update notification state
+    const [showUpdateNotification, setShowUpdateNotification] = useState(false)
+    const [updateVersion, setUpdateVersion] = useState<string>('')
+
     // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
     const [terminalFontSize, setTerminalFontSize] = useState(14)
 
@@ -80,6 +85,36 @@ function App() {
         }).catch(err => {
             console.error('Failed to load settings:', err)
         })
+    }, [])
+
+    // Check for updates on app start
+    useEffect(() => {
+        const checkUpdate = async () => {
+            try {
+                const result = await window.api.checkForUpdate() as any
+                if (result.success && result.hasUpdate && result.version) {
+                    setUpdateVersion(result.version)
+                    setShowUpdateNotification(true)
+                }
+            } catch (error) {
+                console.log('Update check failed:', error)
+            }
+        }
+
+        // Check after a short delay to let the app initialize
+        const timer = setTimeout(checkUpdate, 2000)
+        return () => clearTimeout(timer)
+    }, [])
+
+    // Listen for update status changes (download complete, etc.)
+    useEffect(() => {
+        const cleanup = window.api.onUpdateStatus((data) => {
+            if (data.status === 'ready' && data.version) {
+                setUpdateVersion(data.version)
+                setShowUpdateNotification(true)
+            }
+        })
+        return cleanup
     }, [])
 
     // Cmd+/- 터미널 폰트 크기 조정 (Main process에서 IPC로 전달받음)
@@ -460,6 +495,19 @@ function App() {
                     onCancel={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
                     isDangerous={true}
                     confirmText="Delete"
+                />
+            )}
+
+            {/* Update Notification */}
+            {showUpdateNotification && (
+                <UpdateNotification
+                    version={updateVersion}
+                    onInstall={() => {
+                        window.api.installUpdate()
+                    }}
+                    onLater={() => {
+                        setShowUpdateNotification(false)
+                    }}
                 />
             )}
         </div>
