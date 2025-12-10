@@ -91,9 +91,29 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
 
     const handleCheckForUpdate = async () => {
         setUpdateState({ status: 'checking' })
-        const result = await window.api.checkForUpdate()
-        if (!result.success) {
-            setUpdateState({ status: 'error', message: result.error })
+        try {
+            const result = await window.api.checkForUpdate() as any
+
+            if (result.isDev) {
+                // Dev mode - can't check updates
+                setUpdateState({ status: 'error', message: 'Dev mode' })
+                return
+            }
+
+            if (!result.success) {
+                setUpdateState({ status: 'error', message: result.error })
+                return
+            }
+
+            if (result.hasUpdate) {
+                // Update available - autoUpdater events will handle the rest
+                setUpdateState({ status: 'available', version: result.version })
+            } else {
+                // Already up to date
+                setUpdateState({ status: 'not-available' })
+            }
+        } catch (error: any) {
+            setUpdateState({ status: 'error', message: error.message })
         }
     }
 

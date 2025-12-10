@@ -1167,9 +1167,21 @@ autoUpdater.on('error', (err) => {
 
 // IPC handlers for manual update control
 ipcMain.handle('check-for-update', async () => {
+    // In dev mode, auto-updater doesn't work properly
+    if (is.dev) {
+        return { success: false, error: 'dev-mode', isDev: true }
+    }
+
     try {
         const result = await autoUpdater.checkForUpdates()
-        return { success: true, version: result?.updateInfo?.version }
+        const currentVersion = app.getVersion()
+        const latestVersion = result?.updateInfo?.version
+
+        if (latestVersion && latestVersion !== currentVersion) {
+            return { success: true, version: latestVersion, hasUpdate: true }
+        } else {
+            return { success: true, version: currentVersion, hasUpdate: false }
+        }
     } catch (error: any) {
         return { success: false, error: error.message }
     }
