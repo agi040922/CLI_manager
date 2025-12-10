@@ -2,6 +2,9 @@ appId: com.climanager.app
 productName: CLI Manager
 copyright: Copyright © 2024 LightSoft
 
+# 파일 이름에 공백 대신 하이픈 사용 (자동 업데이트 호환성)
+artifactName: "${name}-${version}-${arch}.${ext}"
+
 # GitHub Releases를 통한 자동 업데이트 설정
 publish:
   provider: github
