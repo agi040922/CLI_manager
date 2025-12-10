@@ -1173,9 +1173,15 @@ ipcMain.handle('check-for-update', async () => {
     }
 
     try {
+        console.log('Checking for updates...')
+        console.log('Current version:', app.getVersion())
+
         const result = await autoUpdater.checkForUpdates()
         const currentVersion = app.getVersion()
         const latestVersion = result?.updateInfo?.version
+
+        console.log('Latest version:', latestVersion)
+        console.log('Update info:', JSON.stringify(result?.updateInfo, null, 2))
 
         if (latestVersion && latestVersion !== currentVersion) {
             return { success: true, version: latestVersion, hasUpdate: true }
@@ -1183,6 +1189,8 @@ ipcMain.handle('check-for-update', async () => {
             return { success: true, version: currentVersion, hasUpdate: false }
         }
     } catch (error: any) {
+        console.error('Update check error:', error)
+        console.error('Error stack:', error.stack)
         return { success: false, error: error.message }
     }
 })
