@@ -25,10 +25,11 @@ mac:
       arch:
         - x64
         - arm64
-  hardenedRuntime: true
+  # 코드 서명 비활성화 (Apple Developer 인증서 없이 자동 업데이트 사용)
+  identity: null
+  hardenedRuntime: false
   gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
+  # entitlements 제거 - 서명 없이는 불필요
 
 # Windows 설정
 win:
