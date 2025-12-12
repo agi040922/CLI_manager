@@ -58,6 +58,7 @@ const api = {
 
     // Dialog
     selectDirectory: (): Promise<string | null> => ipcRenderer.invoke('select-directory'),
+    showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons: string[]; icon?: string }): Promise<{ response: number }> => ipcRenderer.invoke('show-message-box', options),
 
     // Terminal
     createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),
@@ -103,8 +104,10 @@ const api = {
         ipcRenderer.invoke('license-check'),
 
     // Updates
-    checkForUpdate: (): Promise<{ success: boolean; version?: string; error?: string }> =>
+    checkForUpdate: (): Promise<{ success: boolean; version?: string; hasUpdate?: boolean; error?: string }> =>
         ipcRenderer.invoke('check-for-update'),
+    downloadUpdate: (): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('download-update'),
     installUpdate: (): Promise<void> =>
         ipcRenderer.invoke('install-update'),
     onUpdateStatus: (callback: (status: { status: string; version?: string; percent?: number; message?: string }) => void): () => void => {

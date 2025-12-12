@@ -210,26 +210,64 @@ export function Sidebar({
             return
         }
 
-        const confirmed = window.confirm(
-            `Merge "${worktreeMenuOpen.workspace.branchName}" into main/master?\n\n` +
-            `This will be performed in the parent workspace (${parentWorkspace.name}).`
-        )
-        if (!confirmed) return
+        console.log('[handleMergeToMain] ========== START ==========')
+        console.log('[handleMergeToMain] Worktree:', worktreeMenuOpen.workspace.name)
+        console.log('[handleMergeToMain] Worktree path:', worktreeMenuOpen.workspace.path)
+        console.log('[handleMergeToMain] Worktree branch:', worktreeMenuOpen.workspace.branchName)
+        console.log('[handleMergeToMain] Parent workspace:', parentWorkspace.name)
+        console.log('[handleMergeToMain] Parent path:', parentWorkspace.path)
+
+        const result = await window.api.showMessageBox({
+            type: 'question',
+            title: 'Merge Worktree',
+            message: `Merge "${worktreeMenuOpen.workspace.branchName}" into main/master?\n\nThis will be performed in the parent workspace (${parentWorkspace.name}).`,
+            buttons: ['Cancel', 'Merge'],
+            icon: 'resources/logo-final.png'
+        })
+
+        // response: 0 = Cancel, 1 = Merge
+        if (result.response !== 1) return
 
         try {
-            const result = await window.api.gitMerge(parentWorkspace.path, worktreeMenuOpen.workspace.branchName!)
-            if (result.success) {
-                alert('Merge completed successfully!')
-            } else {
-                if (result.data?.conflicts && result.data.conflicts.length > 0) {
-                    alert(`Merge conflict occurred:\n${result.data.conflicts.join('\n')}\n\nPlease resolve conflicts and commit.`)
+            console.log('[handleMergeToMain] Calling gitMerge...')
+            console.log('[handleMergeToMain] - path:', parentWorkspace.path)
+            console.log('[handleMergeToMain] - branch:', worktreeMenuOpen.workspace.branchName)
+
+            const mergeResult = await window.api.gitMerge(parentWorkspace.path, worktreeMenuOpen.workspace.branchName!)
+
+            console.log('[handleMergeToMain] gitMerge result:', JSON.stringify(mergeResult, null, 2))
+
+            if (mergeResult.success) {
+                console.log('[handleMergeToMain] Merge SUCCESS')
+                // Check if already up to date (no actual changes)
+                if (mergeResult.data?.alreadyUpToDate) {
+                    alert('Already up to date.\n\nThe branch has no new commits to merge.')
                 } else {
-                    alert(`Merge failed: ${result.error}`)
+                    alert('Merge completed successfully!')
+                }
+            } else {
+                console.log('[handleMergeToMain] Merge FAILED')
+                console.log('[handleMergeToMain] Error:', mergeResult.error)
+                console.log('[handleMergeToMain] Conflicts:', mergeResult.data?.conflicts)
+
+                if (mergeResult.data?.conflicts && mergeResult.data.conflicts.length > 0) {
+                    // Ask user if they want to open editor to resolve conflicts
+                    const openEditor = window.confirm(
+                        `Merge conflict occurred:\n${mergeResult.data.conflicts.join('\n')}\n\n` +
+                        `Would you like to open the editor to resolve conflicts?`
+                    )
+                    if (openEditor) {
+                        onOpenInEditor(parentWorkspace.path)
+                    }
+                } else {
+                    alert(`Merge failed: ${mergeResult.error}`)
                 }
             }
         } catch (err: any) {
+            console.error('[handleMergeToMain] Exception:', err)
             alert(`Merge failed: ${err.message}`)
         }
+        console.log('[handleMergeToMain] ========== END ==========')
     }
 
     const handlePullFromMain = async () => {
@@ -244,25 +282,57 @@ export function Sidebar({
         const parentBranches = workspaceBranches.get(parentWorkspace.id)
         const mainBranch = parentBranches?.current || 'main'
 
+        console.log('[handlePullFromMain] ========== START ==========')
+        console.log('[handlePullFromMain] Worktree:', worktreeMenuOpen.workspace.name)
+        console.log('[handlePullFromMain] Worktree path:', worktreeMenuOpen.workspace.path)
+        console.log('[handlePullFromMain] Worktree branch:', worktreeMenuOpen.workspace.branchName)
+        console.log('[handlePullFromMain] Main branch to pull:', mainBranch)
+
         const confirmed = window.confirm(
             `Pull changes from "${mainBranch}" into "${worktreeMenuOpen.workspace.branchName}"?`
         )
         if (!confirmed) return
 
         try {
-            const result = await window.api.gitMerge(worktreeMenuOpen.workspace.path, mainBranch)
-            if (result.success) {
-                alert('Successfully pulled changes from main!')
-            } else {
-                if (result.data?.conflicts && result.data.conflicts.length > 0) {
-                    alert(`Merge conflict occurred:\n${result.data.conflicts.join('\n')}\n\nPlease resolve conflicts and commit.`)
+            console.log('[handlePullFromMain] Calling gitMerge...')
+            console.log('[handlePullFromMain] - path:', worktreeMenuOpen.workspace.path)
+            console.log('[handlePullFromMain] - branch:', mainBranch)
+
+            const mergeResult = await window.api.gitMerge(worktreeMenuOpen.workspace.path, mainBranch)
+
+            console.log('[handlePullFromMain] gitMerge result:', JSON.stringify(mergeResult, null, 2))
+
+            if (mergeResult.success) {
+                console.log('[handlePullFromMain] Pull SUCCESS')
+                // Check if already up to date (no actual changes)
+                if (mergeResult.data?.alreadyUpToDate) {
+                    alert('Already up to date.\n\nNo new changes from main branch.')
                 } else {
-                    alert(`Merge failed: ${result.error}`)
+                    alert('Successfully pulled changes from main!')
+                }
+            } else {
+                console.log('[handlePullFromMain] Pull FAILED')
+                console.log('[handlePullFromMain] Error:', mergeResult.error)
+                console.log('[handlePullFromMain] Conflicts:', mergeResult.data?.conflicts)
+
+                if (mergeResult.data?.conflicts && mergeResult.data.conflicts.length > 0) {
+                    // Ask user if they want to open editor to resolve conflicts
+                    const openEditor = window.confirm(
+                        `Merge conflict occurred:\n${mergeResult.data.conflicts.join('\n')}\n\n` +
+                        `Would you like to open the editor to resolve conflicts?`
+                    )
+                    if (openEditor) {
+                        onOpenInEditor(worktreeMenuOpen.workspace.path)
+                    }
+                } else {
+                    alert(`Merge failed: ${mergeResult.error}`)
                 }
             }
         } catch (err: any) {
+            console.error('[handlePullFromMain] Exception:', err)
             alert(`Merge failed: ${err.message}`)
         }
+        console.log('[handlePullFromMain] ========== END ==========')
     }
 
     const handleRenameSubmit = (workspaceId: string, sessionId: string, newName: string) => {

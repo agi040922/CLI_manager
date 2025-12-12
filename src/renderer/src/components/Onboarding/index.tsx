@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Check, X, Terminal, Github, Coffee } from 'lucide-react'
+import logo from '../../assets/logo.png'
 
 interface OnboardingProps {
     onComplete: () => void
@@ -89,8 +90,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             <div className="w-full max-w-xl bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
                 {/* Header */}
                 <div className="p-6 text-center border-b border-white/5">
-                    <div className="w-12 h-12 bg-purple-600 rounded-xl mx-auto mb-3 flex items-center justify-center shadow-[0_0_30px_rgba(147,51,234,0.3)]">
-                        <Terminal size={24} className="text-white" />
+                    <div className="w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+                        <img src={logo} alt="CLI Manager Logo" className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(147,51,234,0.3)]" />
                     </div>
                     <h1 className="text-xl font-bold text-white mb-1">Welcome to CLI Manager</h1>
                     <p className="text-sm text-gray-400">Let's make sure you have everything needed to get started.</p>

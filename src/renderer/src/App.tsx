@@ -10,7 +10,7 @@ import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft } from 'lucide-react'
 import { Onboarding } from './components/Onboarding'
 import { LicenseVerification } from './components/LicenseVerification'
-import { UpdateNotification } from './components/UpdateNotification'
+import { UpdateNotification, UpdateStatus } from './components/UpdateNotification'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -63,6 +63,8 @@ function App() {
     // Update notification state
     const [showUpdateNotification, setShowUpdateNotification] = useState(false)
     const [updateVersion, setUpdateVersion] = useState<string>('')
+    const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('available')
+    const [updatePercent, setUpdatePercent] = useState(0)
 
     // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
     const [terminalFontSize, setTerminalFontSize] = useState(14)
@@ -106,11 +108,15 @@ function App() {
         return () => clearTimeout(timer)
     }, [])
 
-    // Listen for update status changes (download complete, etc.)
+    // Listen for update status changes (downloading, ready, etc.)
     useEffect(() => {
         const cleanup = window.api.onUpdateStatus((data) => {
-            if (data.status === 'ready' && data.version) {
+            if (data.status === 'downloading') {
+                setUpdateStatus('downloading')
+                setUpdatePercent(data.percent || 0)
+            } else if (data.status === 'ready' && data.version) {
                 setUpdateVersion(data.version)
+                setUpdateStatus('ready')
                 setShowUpdateNotification(true)
             }
         })
@@ -501,7 +507,13 @@ function App() {
             {/* Update Notification */}
             {showUpdateNotification && (
                 <UpdateNotification
+                    status={updateStatus}
                     version={updateVersion}
+                    percent={updatePercent}
+                    onDownload={() => {
+                        setUpdateStatus('downloading')
+                        window.api.downloadUpdate()
+                    }}
                     onInstall={() => {
                         window.api.installUpdate()
                     }}

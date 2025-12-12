@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Key, Check, Loader2, X, ExternalLink } from "lucide-react";
+import logo from "../../assets/logo.png";
 
 interface LicenseVerificationProps {
   onVerify: (key: string) => Promise<boolean>;
@@ -123,8 +124,8 @@ export const LicenseVerification: React.FC<LicenseVerificationProps> = ({
       <div className="w-full max-w-md bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-8 text-center border-b border-white/5">
-          <div className="w-16 h-16 bg-purple-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-[0_0_30px_rgba(147,51,234,0.3)]">
-            <Key size={32} className="text-white" />
+          <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+            <img src={logo} alt="CLI Manager Logo" className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(147,51,234,0.3)]" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">
             License Verification

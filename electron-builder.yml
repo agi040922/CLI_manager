@@ -25,11 +25,14 @@ mac:
       arch:
         - x64
         - arm64
-  # 코드 서명 비활성화 (Apple Developer 인증서 없이 자동 업데이트 사용)
-  identity: null
-  hardenedRuntime: false
+  # Code signing enabled - requires Apple Developer Certificate
+  # Set CSC_LINK and CSC_KEY_PASSWORD environment variables
+  hardenedRuntime: true
   gatekeeperAssess: false
-  # entitlements 제거 - 서명 없이는 불필요
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarization - requires APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+  notarize: false
 
 # Windows 설정
 win:

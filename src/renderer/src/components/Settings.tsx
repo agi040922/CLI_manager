@@ -117,6 +117,11 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         }
     }
 
+    const handleDownloadUpdate = () => {
+        setUpdateState(prev => ({ ...prev, status: 'downloading', percent: 0 }))
+        window.api.downloadUpdate()
+    }
+
     const handleInstallUpdate = () => {
         window.api.installUpdate()
     }
@@ -251,9 +256,13 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                 )}
 
                                 {updateState.status === 'available' && (
-                                    <div className="text-[10px] text-green-400 text-center">
-                                        v{updateState.version} available
-                                    </div>
+                                    <button
+                                        onClick={handleDownloadUpdate}
+                                        className="w-full px-2 py-1 text-[10px] bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        <Download size={10} />
+                                        Download v{updateState.version}
+                                    </button>
                                 )}
 
                                 {updateState.status === 'downloading' && (

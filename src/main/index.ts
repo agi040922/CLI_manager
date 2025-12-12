@@ -19,10 +19,45 @@ import { net } from 'electron'
 app.setName('CLI Manager')
 
 // Auto Updater 설정
-autoUpdater.autoDownload = true
+// User must click "Download" button to start download (not automatic)
+autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = true
 
 const execAsync = promisify(exec)
+
+// Fix PATH for packaged app on macOS
+// When launched from Finder/Spotlight, the app doesn't inherit shell PATH
+// This ensures git, gh, and other CLI tools are found
+const fixPath = async (): Promise<void> => {
+    if (process.platform !== 'darwin') return
+    if (process.env.PATH?.includes('/usr/local/bin')) return // Already fixed
+
+    try {
+        const shell = process.env.SHELL || '/bin/zsh'
+        const { stdout } = await execAsync(`${shell} -l -c 'echo $PATH'`)
+        const shellPath = stdout.trim()
+        if (shellPath) {
+            process.env.PATH = shellPath
+            console.log('[fixPath] PATH updated from shell:', shellPath.substring(0, 100) + '...')
+        }
+    } catch (e) {
+        console.error('[fixPath] Failed to get shell PATH:', e)
+    }
+}
+
+// Helper function to execute commands with login shell
+// This ensures PATH is properly loaded when app is launched from Finder/Spotlight
+// Without this, commands like 'code', 'gh', 'git' may not be found in release builds
+const execWithShell = async (command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> => {
+    const shell = process.env.SHELL || '/bin/zsh'
+    const escapedCommand = command.replace(/'/g, "'\\''")
+
+    if (options?.cwd) {
+        const escapedCwd = options.cwd.replace(/'/g, "'\\''")
+        return execAsync(`${shell} -l -c 'cd "${escapedCwd}" && ${escapedCommand}'`)
+    }
+    return execAsync(`${shell} -l -c '${escapedCommand}'`)
+}
 
 // License storage interface
 interface LicenseData {
@@ -129,7 +164,10 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    // Fix PATH for packaged app (must be first!)
+    await fixPath()
+
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.climanager.app')
 
@@ -462,7 +500,7 @@ app.whenReady().then(() => {
         try {
             // First, check if git is installed
             try {
-                await execAsync('git --version')
+                await execWithShell('git --version')
             } catch (e) {
                 console.error('Git is not installed:', e)
                 return null
@@ -473,7 +511,7 @@ app.whenReady().then(() => {
 
             // Check username
             try {
-                const result = await execAsync('git config --global user.name')
+                const result = await execWithShell('git config --global user.name')
                 username = result.stdout.trim()
             } catch (e) {
                 // Username not set - this is okay, we'll return empty string
@@ -481,7 +519,7 @@ app.whenReady().then(() => {
 
             // Check email
             try {
-                const result = await execAsync('git config --global user.email')
+                const result = await execWithShell('git config --global user.email')
                 email = result.stdout.trim()
             } catch (e) {
                 // Email not set - this is okay, we'll return empty string
@@ -582,7 +620,23 @@ app.whenReady().then(() => {
     ipcMain.handle('git-push', async (_, workspacePath: string) => {
         try {
             const git = simpleGit(workspacePath)
-            await git.push()
+
+            // Get current branch name
+            const status = await git.status()
+            const currentBranch = status.current
+
+            // Check if upstream is set
+            const tracking = status.tracking
+
+            if (!tracking && currentBranch) {
+                // No upstream set - push with --set-upstream
+                console.log(`[git-push] No upstream for '${currentBranch}', setting upstream to origin/${currentBranch}`)
+                await git.push(['--set-upstream', 'origin', currentBranch])
+            } else {
+                // Upstream exists - normal push
+                await git.push()
+            }
+
             return true
         } catch (e) {
             console.error('Git push error:', e)
@@ -663,30 +717,82 @@ app.whenReady().then(() => {
 
     // Git merge - merge local branches
     ipcMain.handle('git-merge', async (_, workspacePath: string, branchName: string): Promise<IPCResult<{ merged: boolean; conflicts?: string[] }>> => {
+        console.log('[git-merge] ========== START ==========')
+        console.log('[git-merge] workspacePath:', workspacePath)
+        console.log('[git-merge] branchName to merge:', branchName)
+
         try {
             const git = simpleGit(workspacePath)
 
+            // Log current branch info before merge
+            const beforeStatus = await git.status()
+            console.log('[git-merge] Current branch:', beforeStatus.current)
+            console.log('[git-merge] Is clean:', beforeStatus.isClean())
+            console.log('[git-merge] Modified files:', beforeStatus.modified)
+            console.log('[git-merge] Staged files:', beforeStatus.staged)
+
+            // Check for uncommitted changes before merge
+            if (!beforeStatus.isClean()) {
+                const uncommittedFiles = [...beforeStatus.modified, ...beforeStatus.staged, ...beforeStatus.not_added]
+                console.log('[git-merge] Uncommitted changes detected:', uncommittedFiles)
+                return {
+                    success: false,
+                    error: `Cannot merge: You have uncommitted changes.\n\nModified files:\n${uncommittedFiles.join('\n')}\n\nPlease commit or stash your changes first.`,
+                    errorType: 'UNKNOWN_ERROR',
+                    data: { merged: false, uncommittedChanges: uncommittedFiles }
+                }
+            }
+
+            // Check if branch exists
+            const branches = await git.branch()
+            console.log('[git-merge] Available branches:', branches.all)
+            console.log('[git-merge] Branch exists:', branches.all.includes(branchName))
+
             // Execute merge
+            console.log('[git-merge] Executing: git merge', branchName)
             const result = await git.merge([branchName])
+            console.log('[git-merge] Merge result:', JSON.stringify(result, null, 2))
+
+            // Check status after merge
+            const afterStatus = await git.status()
+            console.log('[git-merge] After merge - current branch:', afterStatus.current)
+            console.log('[git-merge] After merge - conflicted:', afterStatus.conflicted)
+            console.log('[git-merge] After merge - modified:', afterStatus.modified)
 
             // Check for conflicts
             if (result.failed) {
-                const status = await git.status()
+                console.log('[git-merge] Merge FAILED - conflicts detected')
                 return {
                     success: false,
                     error: 'Merge conflict occurred',
                     errorType: 'UNKNOWN_ERROR',
-                    data: { merged: false, conflicts: status.conflicted }
+                    data: { merged: false, conflicts: afterStatus.conflicted }
                 }
             }
 
-            return { success: true, data: { merged: true } }
+            // Check if nothing was merged (already up to date)
+            const noChanges = result.summary.changes === 0 && result.summary.insertions === 0 && result.summary.deletions === 0
+            if (noChanges) {
+                console.log('[git-merge] No changes - Already up to date')
+                console.log('[git-merge] ========== END ==========')
+                return {
+                    success: true,
+                    data: { merged: true, alreadyUpToDate: true }
+                }
+            }
+
+            console.log('[git-merge] Merge SUCCESS with changes')
+            console.log('[git-merge] ========== END ==========')
+            return { success: true, data: { merged: true, alreadyUpToDate: false } }
         } catch (e: any) {
-            console.error('Git merge error:', e)
+            console.error('[git-merge] ERROR:', e.message)
+            console.error('[git-merge] Full error:', e)
             // Handle conflict case
             if (e.message?.includes('CONFLICTS') || e.message?.includes('conflict')) {
                 const git = simpleGit(workspacePath)
                 const status = await git.status()
+                console.log('[git-merge] Conflict detected via exception')
+                console.log('[git-merge] Conflicted files:', status.conflicted)
                 return {
                     success: false,
                     error: 'Merge conflict occurred',
@@ -728,7 +834,7 @@ app.whenReady().then(() => {
     ipcMain.handle('gh-check-auth', async () => {
         try {
             // gh auth status 명령어로 인증 상태 확인
-            const { stdout } = await execAsync('gh auth status')
+            const { stdout } = await execWithShell('gh auth status')
             return { authenticated: true, message: stdout }
         } catch (e: any) {
             // 인증되지 않은 경우
@@ -739,7 +845,7 @@ app.whenReady().then(() => {
     ipcMain.handle('gh-auth-login', async () => {
         try {
             // gh auth login --web 으로 브라우저 인증
-            const { stdout, stderr } = await execAsync('gh auth login --web')
+            const { stdout, stderr } = await execWithShell('gh auth login --web')
             return { success: true, message: stdout || stderr }
         } catch (e: any) {
             return { success: false, message: e.message }
@@ -748,8 +854,7 @@ app.whenReady().then(() => {
 
     ipcMain.handle('gh-create-pr', async (_, workspacePath: string, title: string, body: string) => {
         try {
-            const cmd = `cd "${workspacePath}" && gh pr create --title "${title}" --body "${body}"`
-            const { stdout } = await execAsync(cmd)
+            const { stdout } = await execWithShell(`gh pr create --title "${title}" --body "${body}"`, { cwd: workspacePath })
             return { success: true, url: stdout.trim() }
         } catch (e: any) {
             console.error('GitHub PR creation error:', e)
@@ -759,8 +864,7 @@ app.whenReady().then(() => {
 
     ipcMain.handle('gh-list-prs', async (_, workspacePath: string) => {
         try {
-            const cmd = `cd "${workspacePath}" && gh pr list --json number,title,state,author,url`
-            const { stdout } = await execAsync(cmd)
+            const { stdout } = await execWithShell('gh pr list --json number,title,state,author,url', { cwd: workspacePath })
             return JSON.parse(stdout)
         } catch (e: any) {
             console.error('GitHub PR list error:', e)
@@ -770,8 +874,7 @@ app.whenReady().then(() => {
 
     ipcMain.handle('gh-repo-view', async (_, workspacePath: string) => {
         try {
-            const cmd = `cd "${workspacePath}" && gh repo view --json name,owner,url,description,defaultBranchRef`
-            const { stdout } = await execAsync(cmd)
+            const { stdout } = await execWithShell('gh repo view --json name,owner,url,description,defaultBranchRef', { cwd: workspacePath })
             return JSON.parse(stdout)
         } catch (e: any) {
             console.error('GitHub repo view error:', e)
@@ -781,8 +884,7 @@ app.whenReady().then(() => {
 
     ipcMain.handle('gh-workflow-status', async (_, workspacePath: string) => {
         try {
-            const cmd = `cd "${workspacePath}" && gh run list --json status,conclusion,name,headBranch,createdAt,url --limit 10`
-            const { stdout } = await execAsync(cmd)
+            const { stdout } = await execWithShell('gh run list --json status,conclusion,name,headBranch,createdAt,url --limit 10', { cwd: workspacePath })
             return { success: true, data: JSON.parse(stdout) }
         } catch (e: any) {
             console.error('GitHub workflow status error:', e)
@@ -795,14 +897,14 @@ app.whenReady().then(() => {
         try {
             // Check if gh is installed
             try {
-                await execAsync('gh --version')
+                await execWithShell('gh --version')
             } catch {
                 return { success: false, error: 'GitHub CLI not found', errorType: 'GH_CLI_NOT_FOUND' }
             }
 
             // Check auth status
             try {
-                await execAsync('gh auth status')
+                await execWithShell('gh auth status')
             } catch {
                 return { success: false, error: 'Not authenticated with GitHub', errorType: 'GH_NOT_AUTHENTICATED' }
             }
@@ -819,8 +921,7 @@ app.whenReady().then(() => {
 
     ipcMain.handle('gh-merge-pr', async (_, workspacePath: string, prNumber: number) => {
         try {
-            const cmd = `cd "${workspacePath}" && gh pr merge ${prNumber} --merge`
-            const { stdout } = await execAsync(cmd)
+            const { stdout } = await execWithShell(`gh pr merge ${prNumber} --merge`, { cwd: workspacePath })
             return { success: true, message: stdout }
         } catch (e: any) {
             console.error('GitHub PR merge error:', e)
@@ -832,14 +933,14 @@ app.whenReady().then(() => {
         try {
             // Check if gh is installed
             try {
-                await execAsync('gh --version')
+                await execWithShell('gh --version')
             } catch {
                 return { success: false, error: 'GitHub CLI not found', errorType: 'GH_CLI_NOT_FOUND' }
             }
 
             // Check auth status
             try {
-                await execAsync('gh auth status')
+                await execWithShell('gh auth status')
             } catch {
                 return { success: false, error: 'Not authenticated with GitHub', errorType: 'GH_NOT_AUTHENTICATED' }
             }
@@ -854,8 +955,7 @@ app.whenReady().then(() => {
             }
 
             // Create PR
-            const cmd = `cd "${workspacePath}" && gh pr create --title "${title}" --body "${body}" --head "${branchName}"`
-            const { stdout } = await execAsync(cmd)
+            const { stdout } = await execWithShell(`gh pr create --title "${title}" --body "${body}" --head "${branchName}"`, { cwd: workspacePath })
             return { success: true, data: { url: stdout.trim() } }
         } catch (e: any) {
             console.error('GitHub PR creation error:', e)
@@ -876,6 +976,19 @@ app.whenReady().then(() => {
         return result.filePaths[0]
     })
 
+    // Show native message box with custom icon
+    ipcMain.handle('show-message-box', async (_, options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons: string[]; icon?: string }) => {
+        const iconPath = options.icon ? path.resolve(options.icon) : undefined
+        const result = await dialog.showMessageBox({
+            type: options.type,
+            title: options.title,
+            message: options.message,
+            buttons: options.buttons,
+            icon: iconPath
+        })
+        return result
+    })
+
     ipcMain.handle('check-tools', async () => {
         const tools = {
             git: false,
@@ -884,21 +997,21 @@ app.whenReady().then(() => {
         }
 
         try {
-            await execAsync('git --version')
+            await execWithShell('git --version')
             tools.git = true
         } catch (e) {
             console.log('Git not found')
         }
 
         try {
-            await execAsync('gh --version')
+            await execWithShell('gh --version')
             tools.gh = true
         } catch (e) {
             console.log('GitHub CLI not found')
         }
 
         try {
-            await execAsync('brew --version')
+            await execWithShell('brew --version')
             tools.brew = true
         } catch (e) {
             console.log('Homebrew not found')
@@ -925,9 +1038,8 @@ app.whenReady().then(() => {
                 throw new Error(`Unknown editor type: ${editor}`)
             }
 
-            // Execute editor command in the workspace directory
-            const cmd = `cd "${workspacePath}" && ${command} .`
-            await execAsync(cmd)
+            // Execute editor command using login shell (via execWithShell helper)
+            await execWithShell(`${command} .`, { cwd: workspacePath })
 
             return { success: true, editor }
         } catch (e: any) {
@@ -1191,6 +1303,17 @@ ipcMain.handle('check-for-update', async () => {
     } catch (error: any) {
         console.error('Update check error:', error)
         console.error('Error stack:', error.stack)
+        return { success: false, error: error.message }
+    }
+})
+
+// Download update manually (user clicks "Download" button)
+ipcMain.handle('download-update', async () => {
+    try {
+        await autoUpdater.downloadUpdate()
+        return { success: true }
+    } catch (error: any) {
+        console.error('Download update error:', error)
         return { success: false, error: error.message }
     }
 })
