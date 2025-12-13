@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import os from 'os'
+import { execSync } from 'child_process'
 const pty = require('node-pty')
 
 const shell = os.platform() === 'win32' ? 'powershell.exe' : 'zsh'
@@ -36,6 +37,23 @@ export class TerminalManager {
             if (ptyProcess) {
                 ptyProcess.kill()
                 this.terminals.delete(id)
+            }
+        })
+
+        // Check if terminal has running child processes
+        ipcMain.handle('terminal-has-running-process', (_, id: string): boolean => {
+            const ptyProcess = this.terminals.get(id)
+            if (!ptyProcess) return false
+
+            try {
+                const pid = ptyProcess.pid
+                // Use pgrep to check for child processes (macOS/Linux)
+                // Returns non-empty if there are child processes
+                const result = execSync(`pgrep -P ${pid}`, { encoding: 'utf-8' }).trim()
+                return result.length > 0
+            } catch {
+                // pgrep returns exit code 1 if no processes found
+                return false
             }
         })
     }

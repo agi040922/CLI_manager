@@ -355,8 +355,9 @@ export function Sidebar({
         setRenamingSessionId(null)
     }
 
-    // 일반 워크스페이스와 Playground 분리
-    const regularWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId)
+    // 홈, 일반 워크스페이스, Playground 분리
+    const homeWorkspace = workspaces.find(w => w.isHome)
+    const regularWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome)
     const playgroundWorkspaces = workspaces.filter(w => w.isPlayground)
 
     return (
@@ -460,6 +461,34 @@ export function Sidebar({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                    {/* Home workspace first */}
+                    {homeWorkspace && (
+                        <WorkspaceItem
+                            key={homeWorkspace.id}
+                            workspace={homeWorkspace}
+                            childWorktrees={[]}
+                            expanded={expanded.has(homeWorkspace.id)}
+                            expandedSet={expanded}
+                            branchInfo={workspaceBranches.get(homeWorkspace.id)}
+                            activeSessionId={activeSessionId}
+                            sessionNotifications={sessionNotifications}
+                            renamingSessionId={renamingSessionId}
+                            fontSize={fontSize}
+                            onToggleExpand={toggleExpand}
+                            onContextMenu={handleContextMenu}
+                            onSessionContextMenu={handleSessionContextMenu}
+                            onBranchClick={handleBranchClick}
+                            onSelect={onSelect}
+                            onRemoveSession={onRemoveSession}
+                            onRemoveWorkspace={onRemoveWorkspace}
+                            onOpenInEditor={onOpenInEditor}
+                            onRenameSession={handleRenameSubmit}
+                            onRenameCancel={() => setRenamingSessionId(null)}
+                            onReorderSessions={onReorderSessions}
+                        />
+                    )}
+
+                    {/* Regular workspaces */}
                     {regularWorkspaces.map(workspace => {
                         const childWorktrees = workspaces.filter(w => w.parentWorkspaceId === workspace.id)
                         return (

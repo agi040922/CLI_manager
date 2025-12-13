@@ -45,6 +45,7 @@ export interface Workspace {
     sessions: TerminalSession[]
     createdAt: number
     isPlayground?: boolean
+    isHome?: boolean  // Home directory workspace (cannot be deleted)
     parentWorkspaceId?: string  // Worktree인 경우 부모 workspace ID
     branchName?: string  // Worktree의 브랜치명
 }

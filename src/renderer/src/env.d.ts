@@ -67,6 +67,7 @@ declare global {
             createTerminal: (id: string, cwd: string, cols: number, rows: number) => Promise<boolean>
             resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
             killTerminal: (id: string) => Promise<void>
+            hasRunningProcess: (id: string) => Promise<boolean>
             writeTerminal: (id: string, data: string) => void
             onTerminalData: (id: string, callback: (data: string) => void) => () => void
 

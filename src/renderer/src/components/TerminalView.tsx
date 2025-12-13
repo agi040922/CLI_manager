@@ -49,6 +49,8 @@ export function TerminalView({
     const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
     // 초기화 직후 불필요한 resize를 방지하기 위한 플래그
     const isInitializedRef = useRef<boolean>(false)
+    // initialCommand가 이미 실행되었는지 추적 (StrictMode에서 2번 실행 방지)
+    const initialCommandExecutedRef = useRef<boolean>(false)
 
     // Detection patterns - DISABLED: Will be enabled in a future update
     const detectOutput = (_text: string) => {
@@ -197,8 +199,9 @@ export function TerminalView({
                 }
             })
 
-            // Execute initial command if provided
-            if (initialCommand) {
+            // Execute initial command if provided (only once)
+            if (initialCommand && !initialCommandExecutedRef.current) {
+                initialCommandExecutedRef.current = true
                 // Wait a bit for the terminal to be ready
                 setTimeout(() => {
                     window.api.writeTerminal(id, initialCommand + '\n')

@@ -81,7 +81,7 @@ export function SessionItem({
             value={session}
             dragListener={false}
             dragControls={dragControls}
-            layout="position"
+            transition={{ layout: { duration: 0 } }}
             className={clsx(
                 "flex items-center gap-1 py-1 px-1.5 rounded transition-colors text-sm group",
                 isActive

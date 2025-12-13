@@ -191,6 +191,21 @@ User Action (Renderer)
 - **Vibrancy Effect**: macOS 전용 투명 유리 효과 UI 사용
 - **Default Shell**: macOS는 `zsh`, Windows는 `powershell.exe` 사용
 
+### External Command Execution (PATH Issue)
+
+Finder/Spotlight에서 앱 실행 시 터미널 PATH를 상속받지 못하는 문제가 있습니다.
+`code`, `gh`, `git` 등 외부 명령어 실행 시 반드시 **로그인 쉘**을 통해 실행해야 합니다.
+
+```typescript
+// ❌ 잘못된 방법 - Finder에서 실행 시 PATH 못 찾음
+exec('code .')
+
+// ✅ 올바른 방법 - 로그인 쉘로 ~/.zshrc 로드 후 실행
+exec('/bin/zsh -l -c "code ."')
+```
+
+`execWithShell()` 헬퍼 함수가 이를 자동으로 처리합니다 (`src/main/index.ts`).
+
 ### Terminal Management
 
 - 모든 터미널 세션은 React 컴포넌트가 unmount되어도 node-pty 프로세스는 유지됩니다

@@ -11,6 +11,7 @@ import simpleGit from 'simple-git'
 import { existsSync, mkdirSync } from 'fs'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import os from 'os'
 
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
@@ -104,6 +105,46 @@ const licenseStore = new Store({
 const terminalManager = new TerminalManager()
 const portManager = new PortManager()
 
+// Create or get home workspace
+// Home workspace is a special workspace that always exists and cannot be deleted
+function ensureHomeWorkspace(): Workspace {
+    const workspaces = store.get('workspaces') as Workspace[]
+    const existingHome = workspaces.find((w: Workspace) => w.isHome)
+
+    if (existingHome) {
+        return existingHome
+    }
+
+    // Create home workspace with terminal-style name
+    const homePath = os.homedir()
+    const username = os.userInfo().username
+    const hostname = os.hostname()
+    // Format: username@hostname (like terminal prompt)
+    const homeName = `${username}@${hostname}`
+
+    const homeWorkspace: Workspace = {
+        id: uuidv4(),
+        name: homeName,
+        path: homePath,
+        sessions: [
+            {
+                id: uuidv4(),
+                name: 'Main',
+                cwd: homePath,
+                type: 'regular'
+            }
+        ],
+        createdAt: Date.now(),
+        isHome: true
+    }
+
+    // Add home workspace at the beginning
+    store.set('workspaces', [homeWorkspace, ...workspaces])
+    console.log('[Home Workspace] Created:', homeName)
+
+    return homeWorkspace
+}
+
 function createWindow(): void {
     // Create the browser window.
     const mainWindow = new BrowserWindow({
@@ -196,7 +237,16 @@ app.whenReady().then(async () => {
 
     // IPC Handlers
     ipcMain.handle('get-workspaces', () => {
-        return store.get('workspaces')
+        // Ensure home workspace exists and is first
+        ensureHomeWorkspace()
+        const workspaces = store.get('workspaces') as Workspace[]
+
+        // Sort: home first, then regular workspaces by createdAt
+        return workspaces.sort((a, b) => {
+            if (a.isHome) return -1
+            if (b.isHome) return 1
+            return a.createdAt - b.createdAt
+        })
     })
 
     ipcMain.handle('add-workspace', async () => {
@@ -346,6 +396,12 @@ app.whenReady().then(async () => {
         const workspace = workspaces.find((w: Workspace) => w.id === id)
 
         if (!workspace) return false
+
+        // Prevent deletion of home workspace
+        if (workspace.isHome) {
+            console.log('[remove-workspace] Cannot delete home workspace')
+            return false
+        }
 
         // Worktree workspace인 경우 git worktree remove 실행
         if (workspace.parentWorkspaceId && workspace.branchName) {

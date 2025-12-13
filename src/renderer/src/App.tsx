@@ -262,6 +262,22 @@ function App() {
     }
 
     const handleRemoveSession = async (workspaceId: string, sessionId: string) => {
+        // Check if there are running processes
+        const hasRunning = await window.api.hasRunningProcess(sessionId)
+
+        if (hasRunning) {
+            // Ask for confirmation only if processes are running
+            const { response } = await window.api.showMessageBox({
+                type: 'warning',
+                title: 'Terminate Session',
+                message: 'Do you want to terminate running processes?',
+                buttons: ['Cancel', 'Terminate']
+            })
+
+            // Cancel clicked
+            if (response === 0) return
+        }
+
         // Kill the terminal process
         await window.api.killTerminal(sessionId)
 

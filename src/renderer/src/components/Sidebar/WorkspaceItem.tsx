@@ -1,5 +1,5 @@
 import React from 'react'
-import { Folder, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown, GitBranch } from 'lucide-react'
+import { Folder, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown, GitBranch, Home } from 'lucide-react'
 import clsx from 'clsx'
 import { Reorder } from 'framer-motion'
 import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
@@ -69,7 +69,9 @@ export function WorkspaceItem({
                         ) : (
                             <ChevronRight size={14} className="text-gray-400 shrink-0" />
                         )}
-                        {workspace.isPlayground ? (
+                        {workspace.isHome ? (
+                            <Home size={16} className="text-emerald-400 shrink-0" />
+                        ) : workspace.isPlayground ? (
                             <Folder size={16} className="text-yellow-400 shrink-0" />
                         ) : (
                             <Folder size={16} className="text-blue-400 shrink-0" />
@@ -77,6 +79,7 @@ export function WorkspaceItem({
                         <span
                             className={clsx(
                                 "font-medium truncate",
+                                workspace.isHome ? "text-emerald-100" :
                                 workspace.isPlayground ? "text-yellow-100" : ""
                             )}
                             style={{ fontSize: `${fontSize}px` }}
@@ -94,35 +97,45 @@ export function WorkspaceItem({
                         </div>
                     )}
                 </div>
-                <div className="absolute right-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#0f0f12] shadow-[-10px_0_10px_#0f0f12]">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            onOpenInEditor(workspace.path)
-                        }}
-                        className="p-1 hover:bg-blue-500/20 rounded mr-1"
-                        title="Open in editor"
-                    >
-                        <FolderOpen size={12} className="text-gray-400 hover:text-blue-400" />
-                    </button>
+                <div className={clsx(
+                    "absolute right-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#0f0f12]",
+                    // Home workspace has fewer buttons, so smaller shadow
+                    workspace.isHome ? "shadow-[-4px_0_6px_#0f0f12]" : "shadow-[-10px_0_10px_#0f0f12]"
+                )}>
+                    {/* Hide "Open in editor" for home workspace */}
+                    {!workspace.isHome && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onOpenInEditor(workspace.path)
+                            }}
+                            className="p-1 hover:bg-blue-500/20 rounded mr-1"
+                            title="Open in editor"
+                        >
+                            <FolderOpen size={12} className="text-gray-400 hover:text-blue-400" />
+                        </button>
+                    )}
                     <button
                         onClick={(e) => {
                             e.stopPropagation()
                             onContextMenu(e, workspace.id)
                         }}
-                        className="p-1 hover:bg-white/10 rounded mr-1"
+                        className={clsx("p-1 hover:bg-white/10 rounded", !workspace.isHome && "mr-1")}
                     >
                         <Plus size={12} className="text-gray-400" />
                     </button>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            onRemoveWorkspace(workspace.id)
-                        }}
-                        className="p-1 hover:bg-red-500/20 rounded"
-                    >
-                        <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
-                    </button>
+                    {/* Hide delete button for home workspace */}
+                    {!workspace.isHome && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onRemoveWorkspace(workspace.id)
+                            }}
+                            className="p-1 hover:bg-red-500/20 rounded"
+                        >
+                            <Trash2 size={12} className="text-gray-400 hover:text-red-400" />
+                        </button>
+                    )}
                 </div>
             </div>
 

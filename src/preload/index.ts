@@ -64,6 +64,7 @@ const api = {
     createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),
     resizeTerminal: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('terminal-resize', id, cols, rows),
     killTerminal: (id: string): Promise<void> => ipcRenderer.invoke('terminal-kill', id),
+    hasRunningProcess: (id: string): Promise<boolean> => ipcRenderer.invoke('terminal-has-running-process', id),
     writeTerminal: (id: string, data: string): void => ipcRenderer.send('terminal-input', id, data),
     onTerminalData: (id: string, callback: (data: string) => void): () => void => {
         const channel = `terminal-output-${id}`
