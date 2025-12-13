@@ -243,6 +243,7 @@ interface BranchMenuProps {
     y: number
     branches: string[]
     currentBranch: string
+    worktreeBranches?: string[]  // Branches checked out in worktrees (disabled)
     onCheckout: (branchName: string) => void
     onClose: () => void
 }
@@ -250,12 +251,14 @@ interface BranchMenuProps {
 /**
  * 브랜치 선택 메뉴
  * Git 브랜치 전환 기능 제공
+ * Worktree로 체크아웃된 브랜치는 비활성화 + "(worktree)" 표시
  */
 export function BranchMenu({
     x,
     y,
     branches,
     currentBranch,
+    worktreeBranches = [],
     onCheckout,
     onClose
 }: BranchMenuProps) {
@@ -271,24 +274,31 @@ export function BranchMenu({
 
             {branches.map(branch => {
                 const isCurrentBranch = branch === currentBranch
+                // Check if this branch is used in a worktree (excluding current branch)
+                const isWorktreeBranch = !isCurrentBranch && worktreeBranches.includes(branch)
+                const isDisabled = isCurrentBranch || isWorktreeBranch
+
                 return (
                     <button
                         key={branch}
                         className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center gap-2 ${isCurrentBranch
                             ? "bg-blue-500/20 text-blue-300 font-medium"
-                            : "text-gray-300 hover:bg-white/10 hover:text-white"
+                            : isWorktreeBranch
+                                ? "text-gray-500 cursor-not-allowed"
+                                : "text-gray-300 hover:bg-white/10 hover:text-white"
                             }`}
                         onClick={() => {
-                            if (!isCurrentBranch) {
+                            if (!isDisabled) {
                                 onCheckout(branch)
                             }
                             onClose()
                         }}
-                        disabled={isCurrentBranch}
+                        disabled={isDisabled}
                     >
-                        <GitBranch size={12} className={isCurrentBranch ? "text-blue-400" : "text-gray-400"} />
+                        <GitBranch size={12} className={isCurrentBranch ? "text-blue-400" : isWorktreeBranch ? "text-gray-600" : "text-gray-400"} />
                         <span className="truncate">{branch}</span>
                         {isCurrentBranch && <span className="ml-auto text-[9px] text-blue-400">✓</span>}
+                        {isWorktreeBranch && <span className="ml-auto text-[9px] text-amber-500/70">(worktree)</span>}
                     </button>
                 )
             })}

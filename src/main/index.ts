@@ -1,8 +1,9 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
 import path, { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
+import logoIcon from '../../resources/logo-final.png?asset'
 import Store from 'electron-store'
 import { AppConfig, Workspace, TerminalSession, UserSettings, IPCResult } from '../shared/types'
 import { v4 as uuidv4 } from 'uuid'
@@ -548,13 +549,22 @@ app.whenReady().then(async () => {
             if (!isRepo) return null
 
             const status = await git.status()
+
+            // Check if MERGE_HEAD exists (merge in progress)
+            // This is more reliable than checking conflicted files
+            // because conflicts can be resolved but merge not yet committed
+            const mergeHeadPath = path.join(workspacePath, '.git', 'MERGE_HEAD')
+            const isMerging = existsSync(mergeHeadPath)
+
             return {
                 branch: status.current || 'unknown',
                 modified: status.modified,
                 staged: status.staged,
                 untracked: status.not_added,
+                conflicted: status.conflicted,  // Merge conflict files
                 ahead: status.ahead,
-                behind: status.behind
+                behind: status.behind,
+                isMerging  // True if MERGE_HEAD exists (merge in progress)
             }
         } catch (e) {
             console.error('Git status error:', e)
@@ -693,10 +703,30 @@ app.whenReady().then(async () => {
             if (!isRepo) return null
 
             const branchSummary = await git.branch()
+
+            // Get worktree branches to mark them as unavailable for checkout
+            let worktreeBranches: string[] = []
+            try {
+                const worktreeOutput = await git.raw(['worktree', 'list', '--porcelain'])
+                // Parse worktree output to extract branch names
+                // Format: worktree /path\nHEAD abc123\nbranch refs/heads/branch-name\n\n
+                const lines = worktreeOutput.split('\n')
+                for (const line of lines) {
+                    if (line.startsWith('branch refs/heads/')) {
+                        const branchName = line.replace('branch refs/heads/', '')
+                        worktreeBranches.push(branchName)
+                    }
+                }
+            } catch (worktreeErr) {
+                // Worktree command might fail if not supported, ignore
+                console.log('Could not get worktree list:', worktreeErr)
+            }
+
             return {
                 current: branchSummary.current,
                 all: branchSummary.all,
-                branches: branchSummary.branches
+                branches: branchSummary.branches,
+                worktreeBranches // Branches that are checked out in worktrees
             }
         } catch (e) {
             console.error('Git list branches error:', e)
@@ -976,15 +1006,20 @@ app.whenReady().then(async () => {
         return result.filePaths[0]
     })
 
-    // Show native message box with custom icon
+    // Show native message box with custom icon (defaults to app logo)
     ipcMain.handle('show-message-box', async (_, options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons: string[]; icon?: string }) => {
-        const iconPath = options.icon ? path.resolve(options.icon) : undefined
+        // Use provided icon or default to app logo
+        const iconPath = options.icon ? path.resolve(options.icon) : logoIcon
+        console.log('[showMessageBox] Icon path:', iconPath)
+        console.log('[showMessageBox] File exists:', existsSync(iconPath))
+        const dialogIcon = nativeImage.createFromPath(iconPath)
+        console.log('[showMessageBox] Icon isEmpty:', dialogIcon.isEmpty())
         const result = await dialog.showMessageBox({
             type: options.type,
             title: options.title,
             message: options.message,
             buttons: options.buttons,
-            icon: iconPath
+            icon: dialogIcon.isEmpty() ? undefined : dialogIcon
         })
         return result
     })

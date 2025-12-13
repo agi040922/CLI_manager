@@ -39,7 +39,7 @@ declare global {
             gitPull: (workspacePath: string) => Promise<boolean>
             gitLog: (workspacePath: string, limit?: number) => Promise<any[]>
             gitReset: (workspacePath: string, commitHash: string, hard?: boolean) => Promise<boolean>
-            gitListBranches: (workspacePath: string) => Promise<{ current: string; all: string[]; branches: any } | null>
+            gitListBranches: (workspacePath: string) => Promise<{ current: string; all: string[]; branches: any; worktreeBranches: string[] } | null>
             gitCheckout: (workspacePath: string, branchName: string) => Promise<boolean>
             gitMerge: (workspacePath: string, branchName: string) => Promise<{ success: boolean; data?: { merged: boolean; conflicts?: string[] }; error?: string }>
             gitMergeAbort: (workspacePath: string) => Promise<{ success: boolean; error?: string }>

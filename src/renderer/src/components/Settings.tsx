@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate } from '../../../shared/types'
-import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Download, RefreshCw, Loader2 } from 'lucide-react'
+import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
@@ -354,9 +354,9 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                         <h3 className="text-sm font-semibold text-white mb-3">Onboarding</h3>
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="text-sm text-gray-300">Reset Onboarding Status</p>
+                                                <p className="text-sm text-gray-300">Show Welcome Screen</p>
                                                 <p className="text-xs text-gray-500 mt-1">
-                                                    Show the welcome screen again on next launch
+                                                    Display the setup guide on next launch
                                                 </p>
                                             </div>
                                             <button
@@ -369,7 +369,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                 }}
                                                 className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 text-white rounded transition-colors"
                                             >
-                                                Reset Status
+                                                Show Again
                                             </button>
                                         </div>
                                     </div>
@@ -529,6 +529,73 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             <p className="text-xs text-gray-500">
                                                 Common dev ports: 3000 (React), 5173 (Vite), 8080 (Server)
                                             </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Ignored Items Section */}
+                                    <div className="mt-8 pt-8 border-t border-white/10">
+                                        <h3 className="text-sm font-semibold text-white mb-3">Ignored Items</h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Ports and processes that are hidden from monitoring
+                                        </p>
+
+                                        {/* Ignored Ports */}
+                                        <div className="mb-4">
+                                            <label className="block text-xs text-gray-400 mb-2">Ignored Ports</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {settings.ignoredPorts && settings.ignoredPorts.length > 0 ? (
+                                                    settings.ignoredPorts.map(port => (
+                                                        <div
+                                                            key={port}
+                                                            className="flex items-center gap-1.5 px-2 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs"
+                                                        >
+                                                            <span className="text-yellow-300 font-mono">{port}</span>
+                                                            <button
+                                                                onClick={() => setSettings(prev => ({
+                                                                    ...prev,
+                                                                    ignoredPorts: prev.ignoredPorts?.filter(p => p !== port)
+                                                                }))}
+                                                                className="p-0.5 hover:bg-white/10 rounded transition-colors"
+                                                                title="Remove from ignored"
+                                                            >
+                                                                <X size={12} className="text-yellow-400 hover:text-white" />
+                                                            </button>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-gray-600 italic">No ignored ports</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Ignored Processes */}
+                                        <div>
+                                            <label className="block text-xs text-gray-400 mb-2">Ignored Processes (Folders)</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {settings.ignoredProcesses && settings.ignoredProcesses.length > 0 ? (
+                                                    settings.ignoredProcesses.map(process => (
+                                                        <div
+                                                            key={process}
+                                                            className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-xs"
+                                                        >
+                                                            <Folder size={12} className="text-blue-400" />
+                                                            <span className="text-blue-300">{process}</span>
+                                                            <button
+                                                                onClick={() => setSettings(prev => ({
+                                                                    ...prev,
+                                                                    ignoredProcesses: prev.ignoredProcesses?.filter(p => p !== process)
+                                                                }))}
+                                                                className="p-0.5 hover:bg-white/10 rounded transition-colors"
+                                                                title="Remove from ignored"
+                                                            >
+                                                                <X size={12} className="text-blue-400 hover:text-white" />
+                                                            </button>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-gray-600 italic">No ignored processes</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink, Play, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink, Play, CheckCircle2, XCircle, Clock, AlertTriangle, GitMerge } from 'lucide-react'
 
 interface GitStatus {
     branch: string
     modified: string[]
     staged: string[]
     untracked: string[]
+    conflicted: string[]  // Merge conflict files
     ahead: number
     behind: number
+    isMerging: boolean    // Merge in progress
 }
 
 interface GitCommit {
@@ -77,7 +79,13 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
             ? 'Reset to this commit. All changes will be deleted. Continue?'
             : 'Reset to this commit (keep changes). Continue?'
 
-        if (!confirm(confirmMessage)) return
+        const result = await window.api.showMessageBox({
+            type: hard ? 'warning' : 'question',
+            title: 'Git Reset',
+            message: confirmMessage,
+            buttons: ['Cancel', 'Reset']
+        })
+        if (result.response !== 1) return
 
         setLoading(true)
         try {
@@ -542,9 +550,17 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                 <GitBranch size={14} className="text-blue-400" />
                                 <span className="text-sm text-white font-medium">{status.branch}</span>
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-gray-400">
-                                {status.ahead > 0 && <span>↑{status.ahead}</span>}
-                                {status.behind > 0 && <span>↓{status.behind}</span>}
+                            <div className="flex items-center gap-2 text-xs">
+                                {status.ahead > 0 && (
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded font-medium">
+                                        ↑ {status.ahead} to push
+                                    </span>
+                                )}
+                                {status.behind > 0 && (
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">
+                                        ↓ {status.behind} to pull
+                                    </span>
+                                )}
                             </div>
                         </div>
 
@@ -554,14 +570,18 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                 disabled={loading}
                                 className="flex-1 px-3 py-1.5 text-xs bg-black/30 hover:bg-white/5 text-gray-300 rounded transition-colors disabled:opacity-50"
                             >
-                                Pull
+                                Pull {status.behind > 0 && `(${status.behind})`}
                             </button>
                             <button
                                 onClick={handlePush}
                                 disabled={loading || status.ahead === 0}
-                                className="flex-1 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors disabled:opacity-50"
+                                className={`flex-1 px-3 py-1.5 text-xs rounded transition-colors disabled:opacity-50 ${
+                                    status.ahead > 0
+                                        ? 'bg-orange-600 hover:bg-orange-500 text-white'
+                                        : 'bg-blue-600 hover:bg-blue-500 text-white'
+                                }`}
                             >
-                                Push
+                                Push {status.ahead > 0 && `(${status.ahead})`}
                             </button>
                         </div>
                     </div>
@@ -618,6 +638,62 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                     </button>
                                 </div>
                             )}
+                            {/* Merge in Progress Banner */}
+                            {status.isMerging && (
+                                <div className="mx-4 mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                                    <div className="flex items-center gap-2 text-amber-400">
+                                        <GitMerge size={16} />
+                                        <span className="text-sm font-medium">Merge in Progress</span>
+                                    </div>
+                                    <p className="text-xs text-amber-300/70 mt-1">
+                                        {status.conflicted && status.conflicted.length > 0
+                                            ? 'Resolve conflicts, stage files, then commit to complete the merge.'
+                                            : 'All conflicts resolved! Stage changes and commit to complete the merge.'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Conflicted Files */}
+                            {status.conflicted && status.conflicted.length > 0 && (
+                                <div className="p-4 border-b border-white/10">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider flex items-center gap-1">
+                                            <AlertTriangle size={12} />
+                                            Conflicts ({status.conflicted.length})
+                                        </h3>
+                                        <button
+                                            onClick={() => handleStageAll(status.conflicted)}
+                                            className="text-xs text-blue-400 hover:text-blue-300"
+                                        >
+                                            Stage All (Resolved)
+                                        </button>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {status.conflicted.map(file => (
+                                            <div
+                                                key={file}
+                                                className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors bg-red-500/5 border border-red-500/20"
+                                            >
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    <AlertTriangle size={14} className="text-red-400 shrink-0" />
+                                                    <span className="text-sm text-gray-300 truncate">{file}</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleStage(file)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
+                                                    title="Mark as resolved"
+                                                >
+                                                    <Check size={12} className="text-green-400" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        Edit files to resolve conflicts, then click ✓ to mark as resolved.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Staged Changes */}
                             {status.staged.length > 0 && (
                                 <div className="p-4 border-b border-white/10">
@@ -788,7 +864,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                 </div>
                             )}
 
-                            {status.modified.length === 0 && status.staged.length === 0 && status.untracked.length === 0 && (
+                            {status.modified.length === 0 && status.staged.length === 0 && status.untracked.length === 0 && (!status.conflicted || status.conflicted.length === 0) && (
                                 <div className="p-8 text-center text-gray-500">
                                     <Check size={32} className="mx-auto mb-2 text-gray-600" />
                                     <p className="text-sm">No changes</p>

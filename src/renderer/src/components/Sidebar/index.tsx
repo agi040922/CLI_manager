@@ -109,6 +109,20 @@ export function Sidebar({
         }
     }, [resize, stopResizing])
 
+    // Helper functions for native dialogs with app logo
+    const showAlert = useCallback(async (title: string, message: string, type: 'info' | 'warning' | 'error' = 'info') => {
+        await window.api.showMessageBox({ type, title, message, buttons: ['OK'] })
+    }, [])
+
+    const showConfirm = useCallback(async (title: string, message: string): Promise<boolean> => {
+        const result = await window.api.showMessageBox({
+            type: 'question',
+            title,
+            message,
+            buttons: ['Cancel', 'OK']
+        })
+        return result.response === 1
+    }, [])
 
     // 워크스페이스 자동 펼치기
     useEffect(() => {
@@ -183,20 +197,21 @@ export function Sidebar({
             await window.api.gitCheckout(branchMenuOpen.workspacePath, branchName)
 
             // 브랜치 정보 재로드
-            const branches = await window.api.gitListBranches(branchMenuOpen.workspacePath)
+            const branches = await window.api.gitListBranches(branchMenuOpen.workspacePath) as { current: string; all: string[]; branches: any; worktreeBranches?: string[] } | null
             if (branches) {
                 setWorkspaceBranches(prev => {
                     const next = new Map(prev)
                     next.set(branchMenuOpen.workspaceId, {
                         current: branches.current,
-                        all: branches.all.filter((b: string) => !b.startsWith('remotes/'))
+                        all: branches.all.filter((b: string) => !b.startsWith('remotes/')),
+                        worktreeBranches: branches.worktreeBranches ?? []
                     })
                     return next
                 })
             }
         } catch (err) {
             console.error('Failed to checkout branch:', err)
-            alert('Failed to checkout branch. Make sure you have no uncommitted changes.')
+            await showAlert('Checkout Failed', 'Failed to checkout branch. Make sure you have no uncommitted changes.', 'error')
         }
     }
 
@@ -206,7 +221,7 @@ export function Sidebar({
 
         const parentWorkspace = workspaces.find(w => w.id === worktreeMenuOpen.workspace.parentWorkspaceId)
         if (!parentWorkspace) {
-            alert('Parent workspace not found.')
+            await showAlert('Error', 'Parent workspace not found.', 'error')
             return
         }
 
@@ -221,8 +236,7 @@ export function Sidebar({
             type: 'question',
             title: 'Merge Worktree',
             message: `Merge "${worktreeMenuOpen.workspace.branchName}" into main/master?\n\nThis will be performed in the parent workspace (${parentWorkspace.name}).`,
-            buttons: ['Cancel', 'Merge'],
-            icon: 'resources/logo-final.png'
+            buttons: ['Cancel', 'Merge']
         })
 
         // response: 0 = Cancel, 1 = Merge
@@ -241,9 +255,9 @@ export function Sidebar({
                 console.log('[handleMergeToMain] Merge SUCCESS')
                 // Check if already up to date (no actual changes)
                 if (mergeResult.data?.alreadyUpToDate) {
-                    alert('Already up to date.\n\nThe branch has no new commits to merge.')
+                    await showAlert('Already Up to Date', 'The branch has no new commits to merge.')
                 } else {
-                    alert('Merge completed successfully!')
+                    await showAlert('Merge Completed', 'Merge completed successfully!')
                 }
             } else {
                 console.log('[handleMergeToMain] Merge FAILED')
@@ -252,20 +266,20 @@ export function Sidebar({
 
                 if (mergeResult.data?.conflicts && mergeResult.data.conflicts.length > 0) {
                     // Ask user if they want to open editor to resolve conflicts
-                    const openEditor = window.confirm(
-                        `Merge conflict occurred:\n${mergeResult.data.conflicts.join('\n')}\n\n` +
-                        `Would you like to open the editor to resolve conflicts?`
+                    const openEditor = await showConfirm(
+                        'Merge Conflict',
+                        `Merge conflict occurred:\n${mergeResult.data.conflicts.join('\n')}\n\nWould you like to open the editor to resolve conflicts?`
                     )
                     if (openEditor) {
                         onOpenInEditor(parentWorkspace.path)
                     }
                 } else {
-                    alert(`Merge failed: ${mergeResult.error}`)
+                    await showAlert('Merge Failed', `Merge failed: ${mergeResult.error}`, 'error')
                 }
             }
         } catch (err: any) {
             console.error('[handleMergeToMain] Exception:', err)
-            alert(`Merge failed: ${err.message}`)
+            await showAlert('Merge Failed', `Merge failed: ${err.message}`, 'error')
         }
         console.log('[handleMergeToMain] ========== END ==========')
     }
@@ -275,7 +289,7 @@ export function Sidebar({
 
         const parentWorkspace = workspaces.find(w => w.id === worktreeMenuOpen.workspace.parentWorkspaceId)
         if (!parentWorkspace) {
-            alert('Parent workspace not found.')
+            await showAlert('Error', 'Parent workspace not found.', 'error')
             return
         }
 
@@ -288,7 +302,8 @@ export function Sidebar({
         console.log('[handlePullFromMain] Worktree branch:', worktreeMenuOpen.workspace.branchName)
         console.log('[handlePullFromMain] Main branch to pull:', mainBranch)
 
-        const confirmed = window.confirm(
+        const confirmed = await showConfirm(
+            'Pull from Main',
             `Pull changes from "${mainBranch}" into "${worktreeMenuOpen.workspace.branchName}"?`
         )
         if (!confirmed) return
@@ -306,9 +321,9 @@ export function Sidebar({
                 console.log('[handlePullFromMain] Pull SUCCESS')
                 // Check if already up to date (no actual changes)
                 if (mergeResult.data?.alreadyUpToDate) {
-                    alert('Already up to date.\n\nNo new changes from main branch.')
+                    await showAlert('Already Up to Date', 'No new changes from main branch.')
                 } else {
-                    alert('Successfully pulled changes from main!')
+                    await showAlert('Pull Completed', 'Successfully pulled changes from main!')
                 }
             } else {
                 console.log('[handlePullFromMain] Pull FAILED')
@@ -317,20 +332,20 @@ export function Sidebar({
 
                 if (mergeResult.data?.conflicts && mergeResult.data.conflicts.length > 0) {
                     // Ask user if they want to open editor to resolve conflicts
-                    const openEditor = window.confirm(
-                        `Merge conflict occurred:\n${mergeResult.data.conflicts.join('\n')}\n\n` +
-                        `Would you like to open the editor to resolve conflicts?`
+                    const openEditor = await showConfirm(
+                        'Merge Conflict',
+                        `Merge conflict occurred:\n${mergeResult.data.conflicts.join('\n')}\n\nWould you like to open the editor to resolve conflicts?`
                     )
                     if (openEditor) {
                         onOpenInEditor(worktreeMenuOpen.workspace.path)
                     }
                 } else {
-                    alert(`Merge failed: ${mergeResult.error}`)
+                    await showAlert('Merge Failed', `Merge failed: ${mergeResult.error}`, 'error')
                 }
             }
         } catch (err: any) {
             console.error('[handlePullFromMain] Exception:', err)
-            alert(`Merge failed: ${err.message}`)
+            await showAlert('Merge Failed', `Merge failed: ${err.message}`, 'error')
         }
         console.log('[handlePullFromMain] ========== END ==========')
     }
@@ -385,6 +400,7 @@ export function Sidebar({
                     y={branchMenuOpen.y}
                     branches={workspaceBranches.get(branchMenuOpen.workspaceId)?.all || []}
                     currentBranch={workspaceBranches.get(branchMenuOpen.workspaceId)?.current || ''}
+                    worktreeBranches={workspaceBranches.get(branchMenuOpen.workspaceId)?.worktreeBranches || []}
                     onCheckout={handleBranchCheckout}
                     onClose={() => setBranchMenuOpen(null)}
                 />

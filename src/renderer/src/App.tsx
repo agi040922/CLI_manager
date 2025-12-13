@@ -252,7 +252,12 @@ function App() {
         if (result.success && result.data) {
             setWorkspaces(prev => [...prev, result.data!])
         } else {
-            alert(getErrorMessage(result.errorType, result.error))
+            await window.api.showMessageBox({
+                type: 'error',
+                title: 'Worktree Creation Failed',
+                message: getErrorMessage(result.errorType, result.error),
+                buttons: ['OK']
+            })
         }
     }
 
