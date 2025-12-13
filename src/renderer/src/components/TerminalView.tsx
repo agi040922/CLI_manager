@@ -113,6 +113,8 @@ export function TerminalView({
                     fitAddonRef.current?.fit()
                     const { cols, rows } = xtermRef.current!
                     window.api.resizeTerminal(id, cols, rows)
+                    // Auto-focus terminal when it becomes visible
+                    xtermRef.current?.focus()
                 } catch (e) {
                     console.error('Failed to resize terminal:', e)
                 }
