@@ -1,15 +1,15 @@
 /// <reference types="vite/client" />
 
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings, IPCResult, PortInfo } from '../../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, PortInfo, LicenseData, LicenseInfo } from '../../shared/types'
 
 declare global {
     interface Window {
         electron: ElectronAPI
         api: {
             getWorkspaces: () => Promise<Workspace[]>
-            addWorkspace: () => Promise<Workspace | null>
-            addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => Promise<TerminalSession | null>
+            addWorkspace: () => Promise<IPCResult<Workspace> | null>
+            addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => Promise<IPCResult<TerminalSession> | null>
             addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => Promise<IPCResult<Workspace>>
             removeWorkspace: (id: string, deleteBranch?: boolean) => Promise<boolean>
             removeSession: (workspaceId: string, sessionId: string) => Promise<boolean>
@@ -45,7 +45,7 @@ declare global {
             gitReset: (workspacePath: string, commitHash: string, hard?: boolean) => Promise<boolean>
             gitListBranches: (workspacePath: string) => Promise<{ current: string; all: string[]; branches: any } | null>
             gitCheckout: (workspacePath: string, branchName: string) => Promise<boolean>
-            gitMerge: (workspacePath: string, branchName: string) => Promise<{ success: boolean; data?: { merged: boolean; conflicts?: string[] }; error?: string }>
+            gitMerge: (workspacePath: string, branchName: string) => Promise<{ success: boolean; data?: { merged: boolean; conflicts?: string[]; alreadyUpToDate?: boolean; uncommittedChanges?: boolean }; error?: string }>
             gitMergeAbort: (workspacePath: string) => Promise<{ success: boolean; error?: string }>
             gitDeleteBranch: (workspacePath: string, branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string }>
 
@@ -83,13 +83,15 @@ declare global {
             zoomUi: (action: 'in' | 'out' | 'reset') => void
 
             // License
-            licenseActivate: (licenseKey: string) => Promise<{ success: boolean; data?: { licenseKey: string; instanceId: string; activatedAt: string; customerEmail?: string; customerName?: string; productName?: string }; error?: string }>
-            licenseValidate: () => Promise<{ success: boolean; data?: { licenseKey: string; instanceId: string; activatedAt: string; customerEmail?: string; customerName?: string; productName?: string }; error?: string }>
-            licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
-            licenseCheck: () => Promise<{ success: boolean; data?: { hasLicense: boolean } }>
+            licenseActivate: (licenseKey: string) => Promise<IPCResult<LicenseData>>
+            licenseValidate: () => Promise<IPCResult<LicenseData>>
+            licenseDeactivate: () => Promise<IPCResult<void>>
+            licenseCheck: () => Promise<IPCResult<{ hasLicense: boolean }>>
+            licenseGetInfo: () => Promise<IPCResult<LicenseInfo>>
 
             // Updates
-            checkForUpdate: () => Promise<{ success: boolean; version?: string; error?: string }>
+            checkForUpdate: () => Promise<{ success: boolean; version?: string; hasUpdate?: boolean; error?: string }>
+            downloadUpdate: () => Promise<{ success: boolean; error?: string }>
             installUpdate: () => Promise<void>
             onUpdateStatus: (callback: (status: { status: string; version?: string; percent?: number; message?: string }) => void) => () => void
         }

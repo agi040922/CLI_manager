@@ -5,7 +5,7 @@ import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
 import logoIcon from '../../resources/logo-final.png?asset'
 import Store from 'electron-store'
-import { AppConfig, Workspace, TerminalSession, UserSettings, IPCResult } from '../shared/types'
+import { AppConfig, Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo } from '../shared/types'
 import { v4 as uuidv4 } from 'uuid'
 import simpleGit from 'simple-git'
 import { existsSync, mkdirSync } from 'fs'
@@ -15,6 +15,7 @@ import os from 'os'
 
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
+import { LicenseManager } from './LicenseManager'
 import { net } from 'electron'
 
 // Set app name for development mode
@@ -61,16 +62,6 @@ const execWithShell = async (command: string, options?: { cwd?: string }): Promi
     return execAsync(`${shell} -l -c '${escapedCommand}'`)
 }
 
-// License storage interface
-interface LicenseData {
-    licenseKey: string
-    instanceId: string
-    activatedAt: string
-    customerEmail?: string
-    customerName?: string
-    productName?: string
-}
-
 const store = new Store<AppConfig>({
     defaults: {
         workspaces: [],
@@ -104,45 +95,121 @@ const licenseStore = new Store({
 
 const terminalManager = new TerminalManager()
 const portManager = new PortManager()
+const licenseManager = new LicenseManager(licenseStore)
 
-// Create or get home workspace
-// Home workspace is a special workspace that always exists and cannot be deleted
-function ensureHomeWorkspace(): Workspace {
-    const workspaces = store.get('workspaces') as Workspace[]
-    const existingHome = workspaces.find((w: Workspace) => w.isHome)
-
-    if (existingHome) {
-        return existingHome
+// Validate if a path exists and is accessible
+function isValidPath(dirPath: string): boolean {
+    try {
+        return existsSync(dirPath)
+    } catch {
+        return false
     }
+}
 
-    // Create home workspace with terminal-style name
-    const homePath = os.homedir()
-    const username = os.userInfo().username
-    const hostname = os.hostname()
-    // Format: username@hostname (like terminal prompt)
-    const homeName = `${username}@${hostname}`
+// Create or get home workspace (with defensive programming)
+// Returns null if home workspace is disabled or path is invalid
+function ensureHomeWorkspace(): Workspace | null {
+    try {
+        const settings = store.get('settings') as UserSettings | undefined
+        const workspaces = store.get('workspaces') as Workspace[]
+        const existingHome = workspaces.find((w: Workspace) => w.isHome)
 
-    const homeWorkspace: Workspace = {
-        id: uuidv4(),
-        name: homeName,
-        path: homePath,
-        sessions: [
-            {
-                id: uuidv4(),
-                name: 'Main',
-                cwd: homePath,
-                type: 'regular'
+        // Check if home workspace is disabled in settings (default: true)
+        const showHomeWorkspace = settings?.showHomeWorkspace ?? true
+        console.log('[Home Workspace] showHomeWorkspace setting:', showHomeWorkspace, 'existingHome:', !!existingHome)
+
+        if (!showHomeWorkspace) {
+            // Remove existing home workspace if disabled
+            if (existingHome) {
+                const filtered = workspaces.filter(w => !w.isHome)
+                store.set('workspaces', filtered)
+                console.log('[Home Workspace] Removed (disabled in settings)')
             }
-        ],
-        createdAt: Date.now(),
-        isHome: true
+            return null
+        }
+
+        // Determine home path (custom or system default)
+        const customPath = settings?.homeWorkspacePath
+        let homePath: string
+
+        if (customPath && customPath.trim()) {
+            // Use custom path if valid
+            if (isValidPath(customPath)) {
+                homePath = customPath
+            } else {
+                console.warn('[Home Workspace] Custom path invalid, falling back to system home:', customPath)
+                homePath = os.homedir()
+            }
+        } else {
+            homePath = os.homedir()
+        }
+
+        // Validate home path exists
+        if (!isValidPath(homePath)) {
+            console.error('[Home Workspace] Home path does not exist:', homePath)
+            return null
+        }
+
+        // Update existing home workspace path if changed
+        if (existingHome) {
+            if (existingHome.path !== homePath) {
+                // Path changed, update it
+                existingHome.path = homePath
+                // Update session cwd as well
+                existingHome.sessions = existingHome.sessions.map(s => ({
+                    ...s,
+                    cwd: homePath
+                }))
+                store.set('workspaces', workspaces)
+                console.log('[Home Workspace] Path updated:', homePath)
+            }
+            return existingHome
+        }
+
+        // Create home workspace with terminal-style name
+        let username = 'user'
+        let hostname = 'local'
+
+        try {
+            username = os.userInfo().username || 'user'
+        } catch {
+            console.warn('[Home Workspace] Could not get username')
+        }
+
+        try {
+            hostname = os.hostname() || 'local'
+        } catch {
+            console.warn('[Home Workspace] Could not get hostname')
+        }
+
+        // Format: username@hostname (like terminal prompt)
+        const homeName = `${username}@${hostname}`
+
+        const homeWorkspace: Workspace = {
+            id: uuidv4(),
+            name: homeName,
+            path: homePath,
+            sessions: [
+                {
+                    id: uuidv4(),
+                    name: 'Main',
+                    cwd: homePath,
+                    type: 'regular'
+                }
+            ],
+            createdAt: Date.now(),
+            isHome: true
+        }
+
+        // Add home workspace at the beginning
+        store.set('workspaces', [homeWorkspace, ...workspaces])
+        console.log('[Home Workspace] Created:', homeName, 'at', homePath)
+
+        return homeWorkspace
+    } catch (error) {
+        console.error('[Home Workspace] Unexpected error:', error)
+        return null
     }
-
-    // Add home workspace at the beginning
-    store.set('workspaces', [homeWorkspace, ...workspaces])
-    console.log('[Home Workspace] Created:', homeName)
-
-    return homeWorkspace
 }
 
 function createWindow(): void {
@@ -249,7 +316,16 @@ app.whenReady().then(async () => {
         })
     })
 
-    ipcMain.handle('add-workspace', async () => {
+    ipcMain.handle('add-workspace', async (): Promise<IPCResult<Workspace> | null> => {
+        // Check workspace limit (exclude Home and Playground from count)
+        const workspaces = store.get('workspaces') as Workspace[]
+        const userWorkspaceCount = workspaces.filter(w => !w.isHome && !w.isPlayground && !w.parentWorkspaceId).length
+        const canAdd = licenseManager.canAddWorkspace(userWorkspaceCount)
+
+        if (!canAdd.allowed) {
+            return { success: false, error: canAdd.reason, errorType: 'UPGRADE_REQUIRED' }
+        }
+
         const result = await dialog.showOpenDialog({
             properties: ['openDirectory']
         })
@@ -258,34 +334,39 @@ app.whenReady().then(async () => {
             return null
         }
 
-        const path = result.filePaths[0]
-        const name = path.split('/').pop() || 'Untitled'
+        const dirPath = result.filePaths[0]
+        const name = dirPath.split('/').pop() || 'Untitled'
 
         const newWorkspace: Workspace = {
             id: uuidv4(),
             name,
-            path,
+            path: dirPath,
             sessions: [
                 {
                     id: uuidv4(),
                     name: 'Main',
-                    cwd: path,
+                    cwd: dirPath,
                     type: 'regular'
                 }
             ],
             createdAt: Date.now()
         }
 
-        const workspaces = store.get('workspaces')
         store.set('workspaces', [...workspaces, newWorkspace])
-        return newWorkspace
+        return { success: true, data: newWorkspace }
     })
 
-    ipcMain.handle('add-session', async (_, workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => {
-        const workspaces = store.get('workspaces')
-        const workspace = workspaces.find((w: any) => w.id === workspaceId)
+    ipcMain.handle('add-session', async (_, workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<IPCResult<TerminalSession> | null> => {
+        const workspaces = store.get('workspaces') as Workspace[]
+        const workspace = workspaces.find((w: Workspace) => w.id === workspaceId)
 
         if (!workspace) return null
+
+        // Check session limit
+        const canAdd = licenseManager.canAddSession(workspace.sessions.length)
+        if (!canAdd.allowed) {
+            return { success: false, error: canAdd.reason, errorType: 'UPGRADE_REQUIRED' }
+        }
 
         // Worktree is now created as a separate workspace, not a session
         if (type === 'worktree') {
@@ -293,7 +374,7 @@ app.whenReady().then(async () => {
             return null
         }
 
-        let newSession: TerminalSession = {
+        const newSession: TerminalSession = {
             id: uuidv4(),
             name: 'Main',
             cwd: workspace.path,
@@ -306,11 +387,17 @@ app.whenReady().then(async () => {
         // Update workspace in store
         store.set('workspaces', workspaces)
 
-        return newSession
+        return { success: true, data: newSession }
     })
 
     // Create worktree as a separate workspace
     ipcMain.handle('add-worktree-workspace', async (_, parentWorkspaceId: string, branchName: string): Promise<IPCResult<Workspace>> => {
+        // Check if worktree feature is available
+        const canUseWorktree = licenseManager.canUseWorktree()
+        if (!canUseWorktree.allowed) {
+            return { success: false, error: canUseWorktree.reason, errorType: 'UPGRADE_REQUIRED' }
+        }
+
         const workspaces = store.get('workspaces') as Workspace[]
         const parentWorkspace = workspaces.find((w: Workspace) => w.id === parentWorkspaceId)
 
@@ -802,7 +889,7 @@ app.whenReady().then(async () => {
     })
 
     // Git merge - merge local branches
-    ipcMain.handle('git-merge', async (_, workspacePath: string, branchName: string): Promise<IPCResult<{ merged: boolean; conflicts?: string[] }>> => {
+    ipcMain.handle('git-merge', async (_, workspacePath: string, branchName: string): Promise<IPCResult<{ merged: boolean; conflicts?: string[]; alreadyUpToDate?: boolean; uncommittedChanges?: string[] }>> => {
         console.log('[git-merge] ========== START ==========')
         console.log('[git-merge] workspacePath:', workspacePath)
         console.log('[git-merge] branchName to merge:', branchName)
@@ -1140,171 +1227,40 @@ app.whenReady().then(async () => {
     })
 
     // ============================================
-    // Lemon Squeezy License Handlers
+    // Lemon Squeezy License Handlers (using LicenseManager)
     // ============================================
-
-    // Get unique instance name for this machine
-    const getInstanceName = (): string => {
-        const hostname = require('os').hostname()
-        const username = require('os').userInfo().username
-        return `${hostname}-${username}-${app.getName()}`
-    }
 
     // Activate license with Lemon Squeezy
     ipcMain.handle('license-activate', async (_, licenseKey: string): Promise<IPCResult<LicenseData>> => {
-        try {
-            const instanceName = getInstanceName()
-
-            // Lemon Squeezy License API endpoint
-            const response = await fetch('https://api.lemonsqueezy.com/v1/licenses/activate', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({
-                    license_key: licenseKey,
-                    instance_name: instanceName
-                }).toString()
-            })
-
-            const data = await response.json()
-
-            if (data.activated) {
-                // Successfully activated
-                const licenseData: LicenseData = {
-                    licenseKey: licenseKey,
-                    instanceId: data.instance?.id || '',
-                    activatedAt: new Date().toISOString(),
-                    customerEmail: data.meta?.customer_email,
-                    customerName: data.meta?.customer_name,
-                    productName: data.meta?.product_name
-                }
-
-                // Save to license store
-                licenseStore.set('license', licenseData)
-
-                return { success: true, data: licenseData }
-            } else {
-                // Activation failed
-                return {
-                    success: false,
-                    error: data.error || 'License activation failed',
-                    errorType: 'UNKNOWN_ERROR'
-                }
-            }
-        } catch (error: any) {
-            console.error('License activation error:', error)
-            return {
-                success: false,
-                error: error.message || 'Network error during activation',
-                errorType: 'UNKNOWN_ERROR'
-            }
-        }
+        return licenseManager.activate(licenseKey)
     })
 
     // Validate existing license
     ipcMain.handle('license-validate', async (): Promise<IPCResult<LicenseData>> => {
-        try {
-            const savedLicense = licenseStore.get('license') as LicenseData | null
-
-            if (!savedLicense) {
-                return {
-                    success: false,
-                    error: 'No license found',
-                    errorType: 'UNKNOWN_ERROR'
-                }
-            }
-
-            // Validate with Lemon Squeezy
-            const response = await fetch('https://api.lemonsqueezy.com/v1/licenses/validate', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({
-                    license_key: savedLicense.licenseKey,
-                    instance_id: savedLicense.instanceId
-                }).toString()
-            })
-
-            const data = await response.json()
-
-            if (data.valid) {
-                return { success: true, data: savedLicense }
-            } else {
-                // License is no longer valid, clear it
-                licenseStore.set('license', null)
-                return {
-                    success: false,
-                    error: data.error || 'License is no longer valid',
-                    errorType: 'UNKNOWN_ERROR'
-                }
-            }
-        } catch (error: any) {
-            console.error('License validation error:', error)
-            // On network error, allow cached license (offline mode)
-            const savedLicense = licenseStore.get('license') as LicenseData | null
-            if (savedLicense) {
-                return { success: true, data: savedLicense }
-            }
-            return {
-                success: false,
-                error: error.message || 'Network error during validation',
-                errorType: 'UNKNOWN_ERROR'
-            }
-        }
+        return licenseManager.validate()
     })
 
     // Deactivate license
     ipcMain.handle('license-deactivate', async (): Promise<IPCResult<void>> => {
-        try {
-            const savedLicense = licenseStore.get('license') as LicenseData | null
-
-            if (!savedLicense) {
-                return { success: true }
-            }
-
-            // Deactivate with Lemon Squeezy
-            const response = await fetch('https://api.lemonsqueezy.com/v1/licenses/deactivate', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({
-                    license_key: savedLicense.licenseKey,
-                    instance_id: savedLicense.instanceId
-                }).toString()
-            })
-
-            const data = await response.json()
-
-            // Clear local license regardless of API response
-            licenseStore.set('license', null)
-
-            if (data.deactivated) {
-                return { success: true }
-            } else {
-                return { success: true } // Still consider it success since we cleared local
-            }
-        } catch (error: any) {
-            console.error('License deactivation error:', error)
-            // Clear local license even on network error
-            licenseStore.set('license', null)
-            return { success: true }
-        }
+        return licenseManager.deactivate()
     })
 
     // Check if license exists (without validation)
     ipcMain.handle('license-check', async (): Promise<IPCResult<{ hasLicense: boolean }>> => {
-        const savedLicense = licenseStore.get('license') as LicenseData | null
         return {
             success: true,
-            data: { hasLicense: savedLicense !== null }
+            data: { hasLicense: licenseManager.hasLicense() }
         }
     })
+
+    // Get full license info including plan type and limits
+    ipcMain.handle('license-get-info', async (): Promise<IPCResult<LicenseInfo>> => {
+        const info = licenseManager.getLicenseInfo()
+        return { success: true, data: info }
+    })
+
+    // Migrate legacy licenses (called on app start)
+    licenseManager.migrateLegacyLicense()
 
     createWindow()
 

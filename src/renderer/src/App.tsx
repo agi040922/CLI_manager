@@ -5,7 +5,7 @@ import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
 import { ConfirmationModal } from './components/Sidebar/Modals'
-import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog } from '../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft } from 'lucide-react'
 import { Onboarding } from './components/Onboarding'
@@ -58,13 +58,21 @@ function App() {
 
     // Onboarding state
     const [showOnboarding, setShowOnboarding] = useState(false)
-    const [showLicenseVerification, setShowLicenseVerification] = useState(true)
+    const [showLicenseVerification, setShowLicenseVerification] = useState(false)
 
     // Update notification state
     const [showUpdateNotification, setShowUpdateNotification] = useState(false)
     const [updateVersion, setUpdateVersion] = useState<string>('')
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('available')
     const [updatePercent, setUpdatePercent] = useState(0)
+
+    // License state
+    const [licenseInfo, setLicenseInfo] = useState<LicenseInfo>({
+        planType: 'free',
+        license: null,
+        limits: PLAN_LIMITS.free,
+        isExpired: false
+    })
 
     // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
     const [terminalFontSize, setTerminalFontSize] = useState(14)
@@ -74,7 +82,7 @@ function App() {
     const MAX_FONT_SIZE = 32
     const FONT_SIZE_STEP = 1
 
-    // Load workspaces and settings on mount
+    // Load workspaces, settings, and license info on mount
     useEffect(() => {
         window.api.getWorkspaces().then(setWorkspaces)
         window.api.getSettings().then(loadedSettings => {
@@ -83,10 +91,22 @@ function App() {
                 if (!loadedSettings.hasCompletedOnboarding) {
                     setShowOnboarding(true)
                 }
+                // Show license screen only if not completed before
+                if (!loadedSettings.licenseScreenCompleted) {
+                    setShowLicenseVerification(true)
+                }
+            } else {
+                // No settings = first run, show license screen
+                setShowLicenseVerification(true)
             }
         }).catch(err => {
             console.error('Failed to load settings:', err)
+            // On error, show license screen
+            setShowLicenseVerification(true)
         })
+
+        // Load license info
+        loadLicenseInfo()
     }, [])
 
     // Check for updates on app start
@@ -149,12 +169,49 @@ function App() {
         setSettings(prev => ({ ...prev, hasCompletedOnboarding: true }))
     }
 
-    const handleLicenseVerify = async (key: string): Promise<boolean> => {
-        // Logic will be implemented by user
-        // For now, we simulate a delay and success
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        setShowLicenseVerification(false)
-        return true
+    const handleLicenseVerify = async (key: string, isFreeMode?: boolean): Promise<boolean> => {
+        // Mark license screen as completed (won't show again)
+        const markCompleted = async () => {
+            const currentSettings = await window.api.getSettings()
+            await window.api.saveSettings({
+                ...currentSettings,
+                licenseScreenCompleted: true
+            })
+            setSettings(prev => ({ ...prev, licenseScreenCompleted: true }))
+        }
+
+        if (isFreeMode) {
+            // Continue with free plan
+            const infoResult = await window.api.licenseGetInfo()
+            if (infoResult.success && infoResult.data) {
+                setLicenseInfo(infoResult.data)
+            }
+            await markCompleted()
+            setShowLicenseVerification(false)
+            return true
+        }
+
+        // Activate license with key
+        const result = await window.api.licenseActivate(key)
+        if (result.success) {
+            // Refresh license info
+            const infoResult = await window.api.licenseGetInfo()
+            if (infoResult.success && infoResult.data) {
+                setLicenseInfo(infoResult.data)
+            }
+            await markCompleted()
+            setShowLicenseVerification(false)
+            return true
+        }
+        return false
+    }
+
+    // Load license info on mount
+    const loadLicenseInfo = async () => {
+        const result = await window.api.licenseGetInfo()
+        if (result.success && result.data) {
+            setLicenseInfo(result.data)
+        }
     }
 
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
@@ -180,9 +237,18 @@ function App() {
     }
 
     const handleAddWorkspace = async () => {
-        const newWorkspace = await window.api.addWorkspace()
-        if (newWorkspace) {
-            setWorkspaces(prev => [...prev, newWorkspace])
+        const result = await window.api.addWorkspace()
+        if (!result) return // User cancelled dialog
+
+        if (result.success && result.data) {
+            setWorkspaces(prev => [...prev, result.data!])
+        } else if (result.errorType === 'UPGRADE_REQUIRED') {
+            await window.api.showMessageBox({
+                type: 'info',
+                title: 'Upgrade Required',
+                message: result.error || 'Please upgrade to Pro to add more workspaces.',
+                buttons: ['OK']
+            })
         }
     }
 
@@ -235,14 +301,23 @@ function App() {
     }
 
     const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string, initialCommand?: string) => {
-        const newSession = await window.api.addSession(workspaceId, type, branchName, initialCommand)
-        if (newSession) {
+        const result = await window.api.addSession(workspaceId, type, branchName, initialCommand)
+        if (!result) return
+
+        if (result.success && result.data) {
             setWorkspaces(prev => prev.map(w => {
                 if (w.id === workspaceId) {
-                    return { ...w, sessions: [...w.sessions, newSession] }
+                    return { ...w, sessions: [...w.sessions, result.data!] }
                 }
                 return w
             }))
+        } else if (result.errorType === 'UPGRADE_REQUIRED') {
+            await window.api.showMessageBox({
+                type: 'info',
+                title: 'Upgrade Required',
+                message: result.error || 'Please upgrade to Pro to add more sessions.',
+                buttons: ['OK']
+            })
         }
     }
 
@@ -251,6 +326,13 @@ function App() {
 
         if (result.success && result.data) {
             setWorkspaces(prev => [...prev, result.data!])
+        } else if (result.errorType === 'UPGRADE_REQUIRED') {
+            await window.api.showMessageBox({
+                type: 'info',
+                title: 'Pro Feature',
+                message: result.error || 'Git Worktree is a Pro feature. Upgrade to unlock.',
+                buttons: ['OK']
+            })
         } else {
             await window.api.showMessageBox({
                 type: 'error',
@@ -368,8 +450,23 @@ function App() {
     }
 
     const handleSaveSettings = async (newSettings: UserSettings) => {
+        // Compare using default values for proper comparison
+        const oldShowHome = settings.showHomeWorkspace ?? true
+        const newShowHome = newSettings.showHomeWorkspace ?? true
+        const oldHomePath = settings.homeWorkspacePath ?? ''
+        const newHomePath = newSettings.homeWorkspacePath ?? ''
+
+        const homeSettingsChanged = oldShowHome !== newShowHome || oldHomePath !== newHomePath
+
         setSettings(newSettings)
         await window.api.saveSettings(newSettings)
+
+        // Reload workspaces if home workspace settings changed
+        if (homeSettingsChanged) {
+            console.log('[Settings] Home workspace settings changed, reloading workspaces...')
+            const updatedWorkspaces = await window.api.getWorkspaces()
+            setWorkspaces(updatedWorkspaces)
+        }
     }
 
     const handleOpenSettings = (category: 'general' | 'port-monitoring') => {
@@ -476,7 +573,7 @@ function App() {
 
                     {!activeSession && (
                         <div className="h-full flex items-center justify-center text-gray-500">
-                            No active terminal
+                            please select a terminal
                         </div>
                     )}
                 </div>
@@ -501,6 +598,8 @@ function App() {
                     setShowOnboarding(true)
                     setSettings(prev => ({ ...prev, hasCompletedOnboarding: false }))
                 }}
+                licenseInfo={licenseInfo}
+                onLicenseChange={setLicenseInfo}
             />
 
             {/* Git Panel */}

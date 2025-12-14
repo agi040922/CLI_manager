@@ -12,6 +12,84 @@ export type ErrorType =
     | 'GH_NOT_AUTHENTICATED'
     | 'NETWORK_ERROR'
     | 'UNKNOWN_ERROR'
+    | 'UPGRADE_REQUIRED'
+    | 'LICENSE_EXPIRED'
+
+// ============================================
+// License & Pricing Types
+// ============================================
+
+export type PlanType = 'free' | 'monthly' | 'annual' | 'lifetime'
+
+export type LicenseStatus = 'active' | 'expired' | 'disabled' | 'inactive'
+
+export interface LicenseData {
+    licenseKey: string
+    instanceId: string
+    activatedAt: string
+    customerEmail?: string
+    customerName?: string
+    productName?: string
+    // Plan information from Lemon Squeezy
+    variantId?: number
+    variantName?: string
+    expiresAt?: string | null  // null for lifetime
+    status?: LicenseStatus
+    productId?: number
+}
+
+export interface FeatureLimits {
+    maxWorkspaces: number        // -1 means unlimited
+    maxSessionsPerWorkspace: number
+    maxTemplates: number
+    worktreeEnabled: boolean
+    githubIntegrationEnabled: boolean
+    portMonitoringEnabled: boolean
+}
+
+// Plan limits configuration
+export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
+    free: {
+        maxWorkspaces: 2,
+        maxSessionsPerWorkspace: 3,
+        maxTemplates: 3,
+        worktreeEnabled: false,
+        githubIntegrationEnabled: true,  // GitHub is available for free
+        portMonitoringEnabled: true,
+    },
+    monthly: {
+        maxWorkspaces: -1,
+        maxSessionsPerWorkspace: -1,
+        maxTemplates: -1,
+        worktreeEnabled: true,
+        githubIntegrationEnabled: true,
+        portMonitoringEnabled: true,
+    },
+    annual: {
+        maxWorkspaces: -1,
+        maxSessionsPerWorkspace: -1,
+        maxTemplates: -1,
+        worktreeEnabled: true,
+        githubIntegrationEnabled: true,
+        portMonitoringEnabled: true,
+    },
+    lifetime: {
+        maxWorkspaces: -1,
+        maxSessionsPerWorkspace: -1,
+        maxTemplates: -1,
+        worktreeEnabled: true,
+        githubIntegrationEnabled: true,
+        portMonitoringEnabled: true,
+    },
+}
+
+export interface LicenseInfo {
+    planType: PlanType
+    license: LicenseData | null
+    limits: FeatureLimits
+    isExpired: boolean
+    daysUntilExpiry?: number
+}
 
 export interface IPCResult<T> {
     success: boolean
@@ -88,6 +166,11 @@ export interface UserSettings {
     // Git Worktree 설정
     worktreePath?: string  // 커스텀 worktree 저장 경로 (없으면 기본 경로 사용)
     hasCompletedOnboarding?: boolean
+    // Home Workspace 설정
+    showHomeWorkspace?: boolean  // 홈 워크스페이스 표시 여부 (기본값: true)
+    homeWorkspacePath?: string   // 커스텀 홈 워크스페이스 경로 (없으면 시스템 홈 디렉토리)
+    // License 설정
+    licenseScreenCompleted?: boolean  // 라이선스 화면 완료 여부 (true면 다시 안 보임)
 }
 
 export interface PortActionLog {

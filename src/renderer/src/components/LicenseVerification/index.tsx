@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Key, Check, Loader2, X, ExternalLink } from "lucide-react";
+import { Check, Loader2, X, ExternalLink, Sparkles } from "lucide-react";
 import logo from "../../assets/logo.png";
 
 interface LicenseVerificationProps {
-  onVerify: (key: string) => Promise<boolean>;
+  onVerify: (key: string, isFreeMode?: boolean) => Promise<boolean>;
 }
 
 // License purchase URL
@@ -188,6 +188,15 @@ export const LicenseVerification: React.FC<LicenseVerificationProps> = ({
             )}
           </button>
 
+          {/* Continue with Free button */}
+          <button
+            onClick={() => onVerify("", true)}
+            disabled={loading}
+            className="w-full mt-3 text-xs text-gray-500 hover:text-gray-300 disabled:opacity-50 transition-colors"
+          >
+            Continue with Free Plan →
+          </button>
+
           <p className="mt-4 text-center text-xs text-gray-500">
             Don't have a license key?{" "}
             <button
@@ -197,6 +206,17 @@ export const LicenseVerification: React.FC<LicenseVerificationProps> = ({
               Get one here
               <ExternalLink size={10} />
             </button>
+          </p>
+
+          {/* Free plan features */}
+          <div className="mt-3 px-2 py-1.5 bg-white/5 rounded border border-white/5">
+            <p className="text-[10px] text-gray-500">
+              Free: 2 workspaces, 3 sessions, 3 templates, GitHub, Port monitoring
+            </p>
+          </div>
+
+          <p className="mt-4 text-center text-xs text-gray-600">
+            Having trouble? Contact <span className="text-gray-500">solhun.jeong@gmail.com</span>
           </p>
         </div>
       </div>

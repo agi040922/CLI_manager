@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings } from '../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo } from '../shared/types'
 
 // Custom APIs for renderer
 const api = {
     getWorkspaces: (): Promise<Workspace[]> => ipcRenderer.invoke('get-workspaces'),
-    addWorkspace: (): Promise<Workspace | null> => ipcRenderer.invoke('add-workspace'),
-    addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<TerminalSession | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand),
-    addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string): Promise<Workspace | null> => ipcRenderer.invoke('add-worktree-workspace', parentWorkspaceId, branchName),
+    addWorkspace: (): Promise<IPCResult<Workspace> | null> => ipcRenderer.invoke('add-workspace'),
+    addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<IPCResult<TerminalSession> | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand),
+    addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string): Promise<IPCResult<Workspace>> => ipcRenderer.invoke('add-worktree-workspace', parentWorkspaceId, branchName),
     removeWorkspace: (id: string, deleteBranch?: boolean): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id, deleteBranch ?? true),
     removeSession: (workspaceId: string, sessionId: string): Promise<boolean> => ipcRenderer.invoke('remove-session', workspaceId, sessionId),
     renameSession: (workspaceId: string, sessionId: string, newName: string): Promise<boolean> => ipcRenderer.invoke('rename-session', workspaceId, sessionId, newName),
@@ -95,14 +95,16 @@ const api = {
     },
 
     // License
-    licenseActivate: (licenseKey: string): Promise<{ success: boolean; data?: any; error?: string }> =>
+    licenseActivate: (licenseKey: string): Promise<IPCResult<LicenseData>> =>
         ipcRenderer.invoke('license-activate', licenseKey),
-    licenseValidate: (): Promise<{ success: boolean; data?: any; error?: string }> =>
+    licenseValidate: (): Promise<IPCResult<LicenseData>> =>
         ipcRenderer.invoke('license-validate'),
-    licenseDeactivate: (): Promise<{ success: boolean; error?: string }> =>
+    licenseDeactivate: (): Promise<IPCResult<void>> =>
         ipcRenderer.invoke('license-deactivate'),
-    licenseCheck: (): Promise<{ success: boolean; data?: { hasLicense: boolean } }> =>
+    licenseCheck: (): Promise<IPCResult<{ hasLicense: boolean }>> =>
         ipcRenderer.invoke('license-check'),
+    licenseGetInfo: (): Promise<IPCResult<LicenseInfo>> =>
+        ipcRenderer.invoke('license-get-info'),
 
     // Updates
     checkForUpdate: (): Promise<{ success: boolean; version?: string; hasUpdate?: boolean; error?: string }> =>

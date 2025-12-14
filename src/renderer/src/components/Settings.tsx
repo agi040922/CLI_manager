@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { UserSettings, EditorType, TerminalTemplate } from '../../../shared/types'
-import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2 } from 'lucide-react'
+import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS } from '../../../shared/types'
+import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
@@ -18,11 +18,13 @@ interface SettingsProps {
     onSave?: (settings: UserSettings) => void
     initialCategory?: SettingsCategory
     onResetOnboarding?: () => void
+    licenseInfo?: LicenseInfo
+    onLicenseChange?: (info: LicenseInfo) => void
 }
 
-type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github'
+type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license'
 
-export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding }: SettingsProps) {
+export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding, licenseInfo, onLicenseChange }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
         theme: 'dark',
         fontSize: 14,
@@ -133,7 +135,19 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         onClose()
     }
 
-    const handleAddTemplate = () => {
+    const handleAddTemplate = async () => {
+        // Check template limit (Free: 3, Pro: unlimited)
+        const limit = licenseInfo?.limits.maxTemplates ?? 3
+        if (limit !== -1 && templates.length >= limit) {
+            await window.api.showMessageBox({
+                type: 'warning',
+                title: 'Template Limit Reached',
+                message: `Free plan allows up to ${limit} templates. Upgrade to Pro for unlimited templates.`,
+                buttons: ['OK']
+            })
+            return
+        }
+
         const newTemplate: TerminalTemplate = {
             id: uuidv4(),
             name: 'New Template',
@@ -203,6 +217,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         { id: 'templates' as const, label: 'Templates', icon: <Play size={16} /> },
         { id: 'git' as const, label: 'Git (Local)', icon: <GitBranch size={16} /> },
         { id: 'github' as const, label: 'GitHub', icon: <Github size={16} /> },
+        { id: 'license' as const, label: 'License', icon: <Crown size={16} /> },
     ]
 
     return (
@@ -371,6 +386,88 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             >
                                                 Show Again
                                             </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Home Workspace Settings */}
+                                    <div className="mt-6 pt-6 border-t border-white/10">
+                                        <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+                                            <Home size={14} className="text-emerald-400" />
+                                            Home Workspace
+                                        </h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Configure the home workspace that appears at the top of the sidebar
+                                        </p>
+
+                                        <div className="space-y-4">
+                                            {/* Toggle */}
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-300">Show Home Workspace</p>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Display home directory as a workspace in the sidebar
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSettings(prev => ({
+                                                        ...prev,
+                                                        showHomeWorkspace: !(prev.showHomeWorkspace ?? true)
+                                                    }))}
+                                                    className={`relative w-11 h-6 rounded-full transition-colors ${
+                                                        (settings.showHomeWorkspace ?? true)
+                                                            ? 'bg-emerald-600'
+                                                            : 'bg-white/20'
+                                                    }`}
+                                                >
+                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                        (settings.showHomeWorkspace ?? true)
+                                                            ? 'translate-x-6'
+                                                            : 'translate-x-1'
+                                                    }`} />
+                                                </button>
+                                            </div>
+
+                                            {/* Custom Path */}
+                                            {(settings.showHomeWorkspace ?? true) && (
+                                                <div>
+                                                    <label className="block text-xs text-gray-400 mb-1">Custom Home Path (Optional)</label>
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={settings.homeWorkspacePath || ''}
+                                                            onChange={e => setSettings(prev => ({
+                                                                ...prev,
+                                                                homeWorkspacePath: e.target.value || undefined
+                                                            }))}
+                                                            placeholder="Leave empty for system home directory"
+                                                            className="flex-1 bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                        />
+                                                        <button
+                                                            onClick={async () => {
+                                                                const result = await window.api.selectDirectory?.()
+                                                                if (result) {
+                                                                    setSettings(prev => ({ ...prev, homeWorkspacePath: result }))
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded transition-colors flex items-center gap-1"
+                                                            title="Browse folder"
+                                                        >
+                                                            <FolderOpen size={14} />
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mt-2">
+                                                        Set a custom directory to use as your home workspace instead of the system home
+                                                    </p>
+                                                    {settings.homeWorkspacePath && (
+                                                        <button
+                                                            onClick={() => setSettings(prev => ({ ...prev, homeWorkspacePath: undefined }))}
+                                                            className="mt-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+                                                        >
+                                                            Reset to system home
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </>
@@ -853,6 +950,120 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                 </div>
                                             </div>
                                         )}
+                                    </div>
+                                </>
+                            )}
+
+                            {activeCategory === 'license' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">License & Plan</h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Manage your CLI Manager license and subscription
+                                        </p>
+
+                                        {/* Current Plan Card */}
+                                        <div className={`p-4 rounded-lg border ${licenseInfo?.planType === 'free'
+                                            ? 'bg-gray-500/10 border-gray-500/20'
+                                            : 'bg-purple-500/10 border-purple-500/20'}`}>
+                                            <div className="flex items-center gap-3 mb-3">
+                                                {licenseInfo?.planType !== 'free' && (
+                                                    <Crown size={24} className="text-purple-400" />
+                                                )}
+                                                <div>
+                                                    <h4 className="text-lg font-semibold text-white capitalize">
+                                                        {licenseInfo?.planType || 'Free'} Plan
+                                                    </h4>
+                                                    {licenseInfo?.license?.customerEmail && (
+                                                        <p className="text-xs text-gray-400">
+                                                            {licenseInfo.license.customerEmail}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Plan Summary */}
+                                            <p className="text-xs text-gray-400 mt-2">
+                                                {licenseInfo?.planType === 'free' ? (
+                                                    <>
+                                                        {licenseInfo?.limits.maxWorkspaces} workspaces, {licenseInfo?.limits.maxSessionsPerWorkspace} sessions, {licenseInfo?.limits.maxTemplates} templates
+                                                    </>
+                                                ) : (
+                                                    <>Unlimited workspaces, sessions, templates & Git Worktree</>
+                                                )}
+                                            </p>
+
+                                            {/* Expiry Info */}
+                                            {licenseInfo?.license?.expiresAt && (
+                                                <div className="mt-3 pt-3 border-t border-white/10">
+                                                    <p className="text-xs text-gray-400">
+                                                        {licenseInfo.isExpired ? (
+                                                            <span className="text-red-400">License expired</span>
+                                                        ) : licenseInfo.daysUntilExpiry !== undefined ? (
+                                                            <>Renews in <span className="text-white">{licenseInfo.daysUntilExpiry} days</span></>
+                                                        ) : null}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Upgrade Button for Free Users */}
+                                        {licenseInfo?.planType === 'free' && (
+                                            <div className="mt-4">
+                                                <button
+                                                    onClick={() => window.open('https://solhun.com', '_blank')}
+                                                    className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <Crown size={16} />
+                                                    Upgrade to Pro
+                                                </button>
+                                                <p className="text-xs text-gray-500 text-center mt-2">
+                                                    Unlock unlimited workspaces, sessions, and Git Worktree
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* License Key Input */}
+                                        <div className="mt-6 pt-4 border-t border-white/10">
+                                            <h4 className="text-sm font-medium text-white mb-2">Enter License Key</h4>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+                                                    className="flex-1 bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                                                    id="license-key-input"
+                                                />
+                                                <button
+                                                    onClick={async () => {
+                                                        const input = document.getElementById('license-key-input') as HTMLInputElement
+                                                        if (input?.value) {
+                                                            const result = await window.api.licenseActivate(input.value)
+                                                            if (result.success) {
+                                                                const info = await window.api.licenseGetInfo()
+                                                                if (info.success && info.data && onLicenseChange) {
+                                                                    onLicenseChange(info.data)
+                                                                }
+                                                                input.value = ''
+                                                            } else {
+                                                                await window.api.showMessageBox({
+                                                                    type: 'error',
+                                                                    title: 'Activation Failed',
+                                                                    message: result.error || 'Invalid license key',
+                                                                    buttons: ['OK']
+                                                                })
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
+                                                >
+                                                    Activate
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-2">
+                                                Having trouble? Contact <span className="text-gray-400">solhun.jeong@gmail.com</span>
+                                            </p>
+                                        </div>
+
                                     </div>
                                 </>
                             )}
