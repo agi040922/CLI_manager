@@ -60,9 +60,10 @@ declare global {
             openInEditor: (workspacePath: string, editorType?: string) => Promise<{ success: boolean; editor?: string; error?: string }>
 
             // Terminal
-            createTerminal: (id: string, cwd: string, cols: number, rows: number) => Promise<boolean>
+            createTerminal: (id: string, cwd: string, cols: number, rows: number, shell?: string) => Promise<boolean>
             resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
             killTerminal: (id: string) => Promise<void>
+            hasRunningProcess: (id: string) => Promise<boolean>
             writeTerminal: (id: string, data: string) => void
             onTerminalData: (id: string, callback: (data: string) => void) => () => void
 
@@ -73,6 +74,12 @@ declare global {
 
             // Terminal Zoom
             onTerminalZoom: (callback: (key: string) => void) => () => void
+
+            // UI Zoom
+            zoomUi: (action: 'in' | 'out' | 'reset') => void
+
+            // Shell Validation
+            validateShellPath: (shellPath: string) => Promise<{ valid: boolean; resolvedPath?: string; error?: string }>
 
             // License
             licenseActivate: (licenseKey: string) => Promise<IPCResult<LicenseData>>

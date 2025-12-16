@@ -65,7 +65,7 @@ export function Sidebar({
 
     // UI 상태
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
-    const [menuOpen, setMenuOpen] = useState<{ x: number, y: number, workspaceId: string } | null>(null)
+    const [menuOpen, setMenuOpen] = useState<{ x: number, y: number, workspaceId: string, workspacePath: string } | null>(null)
     const [worktreeMenuOpen, setWorktreeMenuOpen] = useState<{ x: number, y: number, workspace: Workspace } | null>(null)
     const [branchMenuOpen, setBranchMenuOpen] = useState<{ x: number, y: number, workspaceId: string, workspacePath: string } | null>(null)
     const [sessionMenuOpen, setSessionMenuOpen] = useState<{ x: number, y: number, workspaceId: string, sessionId: string } | null>(null)
@@ -160,12 +160,13 @@ export function Sidebar({
         e.stopPropagation()
 
         const workspace = workspaces.find(w => w.id === workspaceId)
+        if (!workspace) return
 
         // Worktree workspace인 경우 별도 메뉴
-        if (workspace?.parentWorkspaceId) {
+        if (workspace.parentWorkspaceId) {
             setWorktreeMenuOpen({ x: e.clientX, y: e.clientY, workspace })
         } else {
-            setMenuOpen({ x: e.clientX, y: e.clientY, workspaceId })
+            setMenuOpen({ x: e.clientX, y: e.clientY, workspaceId, workspacePath: workspace.path })
         }
     }
 
@@ -367,6 +368,7 @@ export function Sidebar({
                 <WorkspaceContextMenu
                     x={menuOpen.x}
                     y={menuOpen.y}
+                    workspacePath={menuOpen.workspacePath}
                     templates={customTemplates}
                     onAddSession={(type, template) => {
                         if (type === 'worktree') {

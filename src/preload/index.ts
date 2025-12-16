@@ -61,7 +61,7 @@ const api = {
     showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons: string[]; icon?: string }): Promise<{ response: number }> => ipcRenderer.invoke('show-message-box', options),
 
     // Terminal
-    createTerminal: (id: string, cwd: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows),
+    createTerminal: (id: string, cwd: string, cols: number, rows: number, shell?: string): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows, shell),
     resizeTerminal: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('terminal-resize', id, cols, rows),
     killTerminal: (id: string): Promise<void> => ipcRenderer.invoke('terminal-kill', id),
     hasRunningProcess: (id: string): Promise<boolean> => ipcRenderer.invoke('terminal-has-running-process', id),
@@ -105,6 +105,10 @@ const api = {
         ipcRenderer.invoke('license-check'),
     licenseGetInfo: (): Promise<IPCResult<LicenseInfo>> =>
         ipcRenderer.invoke('license-get-info'),
+
+    // Shell Validation
+    validateShellPath: (shellPath: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }> =>
+        ipcRenderer.invoke('validate-shell-path', shellPath),
 
     // Updates
     checkForUpdate: (): Promise<{ success: boolean; version?: string; hasUpdate?: boolean; error?: string }> =>

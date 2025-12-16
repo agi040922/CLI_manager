@@ -565,7 +565,9 @@ function App() {
                                     onNotification={(type) => handleNotification(session.id, type)}
                                     fontSize={terminalFontSize}
                                     initialCommand={session.initialCommand}
+                                    shell={settings.defaultShell}
                                     notificationSettings={settings.notifications}
+                                    keyboardSettings={settings.keyboard}
                                 />
                             </div>
                         ))

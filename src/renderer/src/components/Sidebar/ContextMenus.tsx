@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive } from 'lucide-react'
+import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy } from 'lucide-react'
 import { Workspace, TerminalTemplate } from '../../../../shared/types'
 import { getTemplateIcon } from '../../constants/icons'
 import { MENU_Z_INDEX } from '../../constants/styles'
@@ -8,6 +8,7 @@ import { MENU_Z_INDEX } from '../../constants/styles'
 interface WorkspaceContextMenuProps {
     x: number
     y: number
+    workspacePath: string
     templates: TerminalTemplate[]
     onAddSession: (type: 'regular' | 'worktree', template?: TerminalTemplate) => void
     onOpenSettings: () => void
@@ -21,17 +22,39 @@ interface WorkspaceContextMenuProps {
 export function WorkspaceContextMenu({
     x,
     y,
+    workspacePath,
     templates,
     onAddSession,
     onOpenSettings,
     onClose
 }: WorkspaceContextMenuProps) {
+    const handleCopyPath = async () => {
+        try {
+            await navigator.clipboard.writeText(workspacePath)
+        } catch (err) {
+            console.error('Failed to copy path:', err)
+        }
+        onClose()
+    }
+
     return createPortal(
         <div
             className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-44 backdrop-blur-md`}
             style={{ top: y, left: x }}
             onClick={e => e.stopPropagation()}
         >
+            {/* Copy Path */}
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={handleCopyPath}
+                title={workspacePath}
+            >
+                <Copy size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Copy Path</span>
+            </button>
+
+            <div className="border-t border-white/10 my-0.5"></div>
+
             <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
                 New Terminal
             </div>
@@ -132,6 +155,17 @@ export function WorktreeContextMenu({
     onAddSession,
     onClose
 }: WorktreeContextMenuProps) {
+    const handleCopyPath = async (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        try {
+            await navigator.clipboard.writeText(workspace.path)
+        } catch (err) {
+            console.error('Failed to copy path:', err)
+        }
+        onClose()
+    }
+
     const handleMergeToMainClick = (e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
@@ -170,6 +204,20 @@ export function WorktreeContextMenu({
             }}
             onClick={e => e.stopPropagation()}
         >
+            {/* Copy Path */}
+            <button
+                className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                onClick={handleCopyPath}
+                onMouseDown={(e) => e.stopPropagation()}
+                title={workspace.path}
+                type="button"
+            >
+                <Copy size={13} className="text-gray-400 shrink-0" />
+                <span className="truncate">Copy Path</span>
+            </button>
+
+            <div className="border-t border-white/10 my-1"></div>
+
             {/* Local Git Section - 로컬 작업 */}
             <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                 <HardDrive size={10} />

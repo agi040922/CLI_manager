@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { AlertCircle, CheckCircle, Bell, AlertTriangle } from 'lucide-react'
+import { AlertCircle, CheckCircle, Bell, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-react'
 import { TerminalPatternMatcher, ToolType, NotificationType } from '../utils/terminalPatterns'
 
 interface TerminalViewProps {
@@ -12,6 +12,7 @@ interface TerminalViewProps {
     onNotification?: (type: NotificationType) => void
     fontSize?: number
     initialCommand?: string
+    shell?: string  // User's preferred shell from settings
     notificationSettings?: {
         enabled: boolean
         tools: {
@@ -20,6 +21,10 @@ interface TerminalViewProps {
             gemini: boolean
             generic: boolean
         }
+    }
+    keyboardSettings?: {
+        scrollShortcuts: boolean
+        showScrollButtons: boolean
     }
 }
 
@@ -39,7 +44,9 @@ export function TerminalView({
     onNotification,
     fontSize = 14,
     initialCommand,
-    notificationSettings
+    shell,
+    notificationSettings,
+    keyboardSettings
 }: TerminalViewProps) {
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
@@ -51,6 +58,13 @@ export function TerminalView({
     const isInitializedRef = useRef<boolean>(false)
     // initialCommand가 이미 실행되었는지 추적 (StrictMode에서 2번 실행 방지)
     const initialCommandExecutedRef = useRef<boolean>(false)
+    // keyboardSettings를 ref로 저장하여 실시간 적용 지원
+    const keyboardSettingsRef = useRef(keyboardSettings)
+
+    // keyboardSettings가 변경될 때 ref 업데이트 (실시간 적용)
+    useEffect(() => {
+        keyboardSettingsRef.current = keyboardSettings
+    }, [keyboardSettings])
 
     // Detection patterns - DISABLED: Will be enabled in a future update
     const detectOutput = (_text: string) => {
@@ -182,7 +196,23 @@ export function TerminalView({
             }
         }
 
-        window.api.createTerminal(id, cwd, initialCols, initialRows).then(() => {
+        window.api.createTerminal(id, cwd, initialCols, initialRows, shell).then(() => {
+            // Handle scroll shortcuts (⌘↑/⌘↓)
+            term.attachCustomKeyEventHandler((event) => {
+                const scrollShortcutsEnabled = keyboardSettingsRef.current?.scrollShortcuts ?? true
+                if (scrollShortcutsEnabled) {
+                    if (event.metaKey && event.key === 'ArrowUp') {
+                        term.scrollToTop()
+                        return false  // Prevent default
+                    }
+                    if (event.metaKey && event.key === 'ArrowDown') {
+                        term.scrollToBottom()
+                        return false  // Prevent default
+                    }
+                }
+                return true  // Allow other keys
+            })
+
             // Handle input
             term.onData((data) => {
                 window.api.writeTerminal(id, data)
@@ -346,6 +376,26 @@ export function TerminalView({
                     </div>
                 ))}
             </div>
+
+            {/* Floating Scroll Buttons */}
+            {(keyboardSettings?.showScrollButtons ?? true) && (
+                <div className="absolute right-2 bottom-20 flex flex-col gap-2 z-40 opacity-40 hover:opacity-100 transition-opacity duration-200">
+                    <button
+                        onClick={() => xtermRef.current?.scrollToTop()}
+                        className="w-8 h-8 bg-blue-600/80 hover:bg-blue-500 backdrop-blur-sm rounded-lg flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-110"
+                        title="Scroll to top (⌘↑)"
+                    >
+                        <ChevronUp size={18} className="text-white" />
+                    </button>
+                    <button
+                        onClick={() => xtermRef.current?.scrollToBottom()}
+                        className="w-8 h-8 bg-blue-600/80 hover:bg-blue-500 backdrop-blur-sm rounded-lg flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-110"
+                        title="Scroll to bottom (⌘↓)"
+                    >
+                        <ChevronDown size={18} className="text-white" />
+                    </button>
+                </div>
+            )}
         </div>
     )
 }

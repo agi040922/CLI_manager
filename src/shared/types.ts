@@ -50,7 +50,7 @@ export interface FeatureLimits {
 // Plan limits configuration
 export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
     free: {
-        maxWorkspaces: 2,
+        maxWorkspaces: 3,
         maxSessionsPerWorkspace: 3,
         maxTemplates: 3,
         worktreeEnabled: false,
@@ -171,6 +171,11 @@ export interface UserSettings {
     homeWorkspacePath?: string   // 커스텀 홈 워크스페이스 경로 (없으면 시스템 홈 디렉토리)
     // License 설정
     licenseScreenCompleted?: boolean  // 라이선스 화면 완료 여부 (true면 다시 안 보임)
+    // Keyboard 설정
+    keyboard?: {
+        scrollShortcuts: boolean    // ⌘↑/⌘↓ 스크롤 단축키 활성화 (기본값: true)
+        showScrollButtons: boolean  // 플로팅 스크롤 버튼 표시 (기본값: true)
+    }
 }
 
 export interface PortActionLog {

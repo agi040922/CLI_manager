@@ -625,6 +625,31 @@ app.whenReady().then(async () => {
         return true
     })
 
+    // Shell Path Validation
+    ipcMain.handle('validate-shell-path', async (_, shellPath: string) => {
+        try {
+            // If it's an absolute path, check if file exists
+            if (shellPath.startsWith('/')) {
+                if (existsSync(shellPath)) {
+                    return { valid: true, resolvedPath: shellPath }
+                } else {
+                    return { valid: false, error: `Shell not found at path: ${shellPath}` }
+                }
+            }
+            // Otherwise, use 'which' to find the shell in PATH
+            const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/zsh'
+            const { stdout } = await execAsync(`${shell} -l -c "which ${shellPath}"`)
+            const resolvedPath = stdout.trim()
+            if (resolvedPath) {
+                return { valid: true, resolvedPath }
+            } else {
+                return { valid: false, error: `Shell '${shellPath}' not found in PATH` }
+            }
+        } catch {
+            return { valid: false, error: `Shell '${shellPath}' not found or not accessible` }
+        }
+    })
+
     // App Version
     ipcMain.handle('get-app-version', () => {
         return app.getVersion()

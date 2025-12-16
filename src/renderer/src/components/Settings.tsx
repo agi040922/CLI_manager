@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS } from '../../../shared/types'
-import { X, Check, AlertCircle, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home } from 'lucide-react'
+import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
@@ -22,7 +22,7 @@ interface SettingsProps {
     onLicenseChange?: (info: LicenseInfo) => void
 }
 
-type SettingsCategory = 'general' | 'editor' | 'terminal' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license'
+type SettingsCategory = 'general' | 'editor' | 'terminal' | 'keyboard' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license'
 
 export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding, licenseInfo, onLicenseChange }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
@@ -53,6 +53,10 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
     const [activeCategory, setActiveCategory] = useState<SettingsCategory>(initialCategory)
     const [appVersion, setAppVersion] = useState<string>('')
     const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
+    // Shell configuration states
+    const [isCustomShell, setIsCustomShell] = useState(false)
+    const [shellValidation, setShellValidation] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid', message?: string }>({ status: 'idle' })
+    const standardShells = ['zsh', 'bash', 'fish', 'sh', '/bin/zsh', '/bin/bash']
 
     useEffect(() => {
         if (isOpen) {
@@ -61,6 +65,8 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
             window.api.getSettings().then((loadedSettings: UserSettings) => {
                 if (loadedSettings) {
                     setSettings(loadedSettings)
+                    // Check if current shell is a custom path
+                    setIsCustomShell(!standardShells.includes(loadedSettings.defaultShell))
                 }
             }).catch(() => {
                 // If getSettings is not available, use defaults
@@ -212,6 +218,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         { id: 'general' as const, label: 'General', icon: <SettingsIcon size={16} /> },
         { id: 'editor' as const, label: 'Editor', icon: <Code2 size={16} /> },
         { id: 'terminal' as const, label: 'Terminal', icon: <Terminal size={16} /> },
+        { id: 'keyboard' as const, label: 'Keyboard', icon: <Keyboard size={16} /> },
         { id: 'notifications' as const, label: 'Notifications', icon: <Bell size={16} /> },
         { id: 'port-monitoring' as const, label: 'Port Monitoring', icon: <Monitor size={16} /> },
         { id: 'templates' as const, label: 'Templates', icon: <Play size={16} /> },
@@ -504,16 +511,86 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-xs text-gray-400 mb-1">Default Shell</label>
-                                                <select
-                                                    value={settings.defaultShell}
-                                                    onChange={e => setSettings(prev => ({ ...prev, defaultShell: e.target.value }))}
-                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                                >
-                                                    <option value="zsh">zsh</option>
-                                                    <option value="bash">bash</option>
-                                                    <option value="fish">fish</option>
-                                                    <option value="sh">sh</option>
-                                                </select>
+                                                {!isCustomShell ? (
+                                                    <select
+                                                        value={settings.defaultShell}
+                                                        onChange={e => {
+                                                            if (e.target.value === 'custom') {
+                                                                setIsCustomShell(true)
+                                                                setShellValidation({ status: 'idle' })
+                                                            } else {
+                                                                setSettings(prev => ({ ...prev, defaultShell: e.target.value }))
+                                                                setShellValidation({ status: 'idle' })
+                                                            }
+                                                        }}
+                                                        className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                    >
+                                                        <option value="zsh">zsh</option>
+                                                        <option value="bash">bash</option>
+                                                        <option value="fish">fish</option>
+                                                        <option value="sh">sh</option>
+                                                        <option value="/bin/zsh">/bin/zsh</option>
+                                                        <option value="/bin/bash">/bin/bash</option>
+                                                        <option value="custom">Custom path...</option>
+                                                    </select>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={settings.defaultShell}
+                                                                onChange={e => {
+                                                                    setSettings(prev => ({ ...prev, defaultShell: e.target.value }))
+                                                                    setShellValidation({ status: 'idle' })
+                                                                }}
+                                                                placeholder="/usr/local/bin/fish"
+                                                                className="flex-1 bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                            />
+                                                            <button
+                                                                onClick={async () => {
+                                                                    setShellValidation({ status: 'checking' })
+                                                                    try {
+                                                                        const result = await window.api.validateShellPath(settings.defaultShell)
+                                                                        if (result.valid) {
+                                                                            setShellValidation({ status: 'valid', message: `Found: ${result.resolvedPath}` })
+                                                                        } else {
+                                                                            setShellValidation({ status: 'invalid', message: result.error || 'Invalid path' })
+                                                                        }
+                                                                    } catch {
+                                                                        setShellValidation({ status: 'invalid', message: 'Failed to validate' })
+                                                                    }
+                                                                }}
+                                                                disabled={shellValidation.status === 'checking'}
+                                                                className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 rounded text-sm text-white transition-colors"
+                                                            >
+                                                                {shellValidation.status === 'checking' ? 'Checking...' : 'Verify'}
+                                                            </button>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsCustomShell(false)
+                                                                setSettings(prev => ({ ...prev, defaultShell: 'zsh' }))
+                                                                setShellValidation({ status: 'idle' })
+                                                            }}
+                                                            className="text-xs text-blue-400 hover:text-blue-300"
+                                                        >
+                                                            ← Back to preset options
+                                                        </button>
+                                                        {shellValidation.status === 'valid' && (
+                                                            <p className="text-xs text-green-400 flex items-center gap-1">
+                                                                <Check size={12} /> {shellValidation.message}
+                                                            </p>
+                                                        )}
+                                                        {shellValidation.status === 'invalid' && (
+                                                            <p className="text-xs text-red-400 flex items-center gap-1">
+                                                                <CircleAlert size={12} /> {shellValidation.message}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Shell used for new terminal sessions. Changes apply to new terminals only.
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -522,6 +599,99 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                         <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
                                             <p className="text-xs text-blue-200">
                                                 <strong>Tip:</strong> Use <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘+</kbd> / <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘-</kbd> to adjust terminal font size, <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘0</kbd> to reset
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4">
+                                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded flex items-center gap-2">
+                                            <span>💡</span>
+                                            <p className="text-xs text-blue-200">
+                                                If the screen freezes, please press Enter
+                                            </p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Keyboard Settings */}
+                            {activeCategory === 'keyboard' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">Keyboard Shortcuts</h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Configure keyboard shortcuts for terminal control
+                                        </p>
+
+                                        <div className="space-y-4">
+                                            {/* Scroll Shortcuts */}
+                                            <div className="p-4 bg-black/20 border border-white/10 rounded-lg">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-sm text-white">Scroll Shortcuts</p>
+                                                                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[10px] text-gray-400">⌘↑</kbd>
+                                                                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[10px] text-gray-400">⌘↓</kbd>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSettings(prev => ({
+                                                            ...prev,
+                                                            keyboard: {
+                                                                scrollShortcuts: !(prev.keyboard?.scrollShortcuts ?? true),
+                                                                showScrollButtons: prev.keyboard?.showScrollButtons ?? true
+                                                            }
+                                                        }))}
+                                                        className={`relative w-11 h-6 rounded-full transition-colors ${
+                                                            (settings.keyboard?.scrollShortcuts ?? true)
+                                                                ? 'bg-blue-600'
+                                                                : 'bg-white/20'
+                                                        }`}
+                                                    >
+                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                            (settings.keyboard?.scrollShortcuts ?? true)
+                                                                ? 'translate-x-6'
+                                                                : 'translate-x-1'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Floating Scroll Buttons */}
+                                            <div className="p-4 bg-black/20 border border-white/10 rounded-lg">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-1">
+                                                        <p className="text-sm text-white">Floating Scroll Buttons</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSettings(prev => ({
+                                                            ...prev,
+                                                            keyboard: {
+                                                                scrollShortcuts: prev.keyboard?.scrollShortcuts ?? true,
+                                                                showScrollButtons: !(prev.keyboard?.showScrollButtons ?? true)
+                                                            }
+                                                        }))}
+                                                        className={`relative w-11 h-6 rounded-full transition-colors ${
+                                                            (settings.keyboard?.showScrollButtons ?? true)
+                                                                ? 'bg-blue-600'
+                                                                : 'bg-white/20'
+                                                        }`}
+                                                    >
+                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                            (settings.keyboard?.showScrollButtons ?? true)
+                                                                ? 'translate-x-6'
+                                                                : 'translate-x-1'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-6 pt-4 border-t border-white/10">
+                                            <p className="text-xs text-gray-500">
+                                                <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘+/-/0</kbd> Font size · <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘↑/↓</kbd> Scroll
                                             </p>
                                         </div>
                                     </div>
