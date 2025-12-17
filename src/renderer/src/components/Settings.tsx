@@ -604,10 +604,9 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                     </div>
 
                                     <div className="mt-4">
-                                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded flex items-center gap-2">
-                                            <span>💡</span>
+                                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
                                             <p className="text-xs text-blue-200">
-                                                If the screen freezes, please press Enter
+                                                <strong>Tip:</strong> If the screen freezes, please press Enter
                                             </p>
                                         </div>
                                     </div>

@@ -51,7 +51,7 @@ export interface FeatureLimits {
 export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
     free: {
         maxWorkspaces: 3,
-        maxSessionsPerWorkspace: 3,
+        maxSessionsPerWorkspace: 5,
         maxTemplates: 3,
         worktreeEnabled: false,
         githubIntegrationEnabled: true,  // GitHub is available for free
@@ -126,6 +126,7 @@ export interface Workspace {
     isHome?: boolean  // Home directory workspace (cannot be deleted)
     parentWorkspaceId?: string  // Worktree인 경우 부모 workspace ID
     branchName?: string  // Worktree의 브랜치명
+    baseBranch?: string  // Worktree 생성 시 분기한 브랜치 (merge 대상)
 }
 
 export interface AppConfig {

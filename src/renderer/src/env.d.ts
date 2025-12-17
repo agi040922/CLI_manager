@@ -9,7 +9,7 @@ declare global {
         api: {
             getWorkspaces: () => Promise<Workspace[]>
             addWorkspace: () => Promise<IPCResult<Workspace> | null>
-            addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => Promise<IPCResult<TerminalSession> | null>
+            addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string, sessionName?: string) => Promise<IPCResult<TerminalSession> | null>
             addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => Promise<IPCResult<Workspace>>
             removeWorkspace: (id: string, deleteBranch?: boolean) => Promise<boolean>
             removeSession: (workspaceId: string, sessionId: string) => Promise<boolean>
@@ -35,6 +35,7 @@ declare global {
             // Git
             getGitStatus: (workspacePath: string) => Promise<any>
             gitStage: (workspacePath: string, file: string) => Promise<boolean>
+            gitStageFiles: (workspacePath: string, files: string[]) => Promise<boolean>
             gitStageAll: (workspacePath: string) => Promise<boolean>
             gitUnstage: (workspacePath: string, file: string) => Promise<boolean>
             gitUnstageAll: (workspacePath: string) => Promise<boolean>

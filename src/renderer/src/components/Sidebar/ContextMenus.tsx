@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy } from 'lucide-react'
+import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy, RefreshCw } from 'lucide-react'
 import { Workspace, TerminalTemplate } from '../../../../shared/types'
 import { getTemplateIcon } from '../../constants/icons'
 import { MENU_Z_INDEX } from '../../constants/styles'
@@ -292,7 +292,9 @@ interface BranchMenuProps {
     branches: string[]
     currentBranch: string
     worktreeBranches?: string[]  // Branches checked out in worktrees (disabled)
+    loading?: boolean  // Loading state for refresh
     onCheckout: (branchName: string) => void
+    onRefresh: () => void  // Refresh branch list
     onClose: () => void
 }
 
@@ -307,17 +309,32 @@ export function BranchMenu({
     branches,
     currentBranch,
     worktreeBranches = [],
+    loading = false,
     onCheckout,
+    onRefresh,
     onClose
 }: BranchMenuProps) {
+    const handleRefresh = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        onRefresh()
+    }
+
     return createPortal(
         <div
             className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-52 backdrop-blur-md max-h-64 overflow-y-auto`}
             style={{ top: y, left: x }}
             onClick={e => e.stopPropagation()}
         >
-            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                Switch Branch
+            <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
+                <span>Switch Branch</span>
+                <button
+                    onClick={handleRefresh}
+                    disabled={loading}
+                    className="p-0.5 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                    title="Refresh branches"
+                >
+                    <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
+                </button>
             </div>
 
             {branches.map(branch => {

@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink, Play, CheckCircle2, XCircle, Clock, AlertTriangle, GitMerge } from 'lucide-react'
+import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink, Play, CheckCircle2, XCircle, Clock, AlertTriangle, GitMerge, Trash2, FilePlus, ArrowRightLeft, FileEdit } from 'lucide-react'
+
+interface RenamedFile {
+    from: string
+    to: string
+}
 
 interface GitStatus {
     branch: string
@@ -7,6 +12,9 @@ interface GitStatus {
     staged: string[]
     untracked: string[]
     conflicted: string[]  // Merge conflict files
+    deleted: string[]     // Deleted files
+    renamed: RenamedFile[] // Renamed/moved files
+    created: string[]     // Newly created files
     ahead: number
     behind: number
     isMerging: boolean    // Merge in progress
@@ -224,8 +232,8 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
 
         setLoading(true)
         try {
-            // 병렬로 처리하여 속도 향상
-            await Promise.all(files.map(file => window.api.gitStage(workspacePath, file)))
+            // Use gitStageFiles to stage multiple files at once (single git add command)
+            await window.api.gitStageFiles(workspacePath, files)
             await loadStatus()
         } catch (err: any) {
             setError(err.message || 'Failed to stage all files')
@@ -626,18 +634,27 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                     {status && (
                         <>
                             {/* Stage All Button */}
-                            {(status.modified.length > 0 || status.untracked.length > 0) && (
-                                <div className="p-4 pb-0">
-                                    <button
-                                        onClick={handleStageAllChanges}
-                                        disabled={loading}
-                                        className="w-full px-3 py-2 text-sm bg-white/5 hover:bg-white/10 text-blue-400 border border-blue-500/30 rounded transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <CheckCircle2 size={16} />
-                                        Stage All Changes ({status.modified.length + status.untracked.length})
-                                    </button>
-                                </div>
-                            )}
+                            {(() => {
+                                // Calculate unstaged changes only
+                                // Note: renamed files are already staged by git mv, so excluded from count
+                                const unstagedModified = status.modified.filter(f => !status.staged.includes(f))
+                                const unstagedDeleted = status.deleted?.filter(f => !status.staged.includes(f)) || []
+                                const unstagedCreated = status.created?.filter(f => !status.staged.includes(f)) || []
+                                const totalUnstaged = unstagedModified.length + status.untracked.length + unstagedDeleted.length + unstagedCreated.length
+
+                                return totalUnstaged > 0 && (
+                                    <div className="p-4 pb-0">
+                                        <button
+                                            onClick={handleStageAllChanges}
+                                            disabled={loading}
+                                            className="w-full px-3 py-2 text-sm bg-white/5 hover:bg-white/10 text-blue-400 border border-blue-500/30 rounded transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <CheckCircle2 size={16} />
+                                            Stage All Changes ({totalUnstaged})
+                                        </button>
+                                    </div>
+                                )
+                            })()}
                             {/* Merge in Progress Banner */}
                             {status.isMerging && (
                                 <div className="mx-4 mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
@@ -709,23 +726,50 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                         </button>
                                     </div>
                                     <div className="space-y-1">
-                                        {status.staged.map(file => (
-                                            <div
-                                                key={file}
-                                                className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
-                                            >
-                                                <div className="flex items-center gap-2 overflow-hidden">
-                                                    <FileText size={14} className="text-green-400 shrink-0" />
-                                                    <span className="text-sm text-gray-300 truncate">{file}</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleUnstage(file)}
-                                                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
+                                        {status.staged.map(file => {
+                                            // Determine file type for styling
+                                            const isDeleted = status.deleted?.includes(file)
+                                            const isCreated = status.created?.includes(file)
+                                            const isRenamed = status.renamed?.some(r => r.to === file)
+                                            const renamedFrom = status.renamed?.find(r => r.to === file)?.from
+
+                                            // Icon and color based on type
+                                            let Icon = FileEdit  // Modified (default)
+                                            let iconColor = 'text-yellow-400'
+                                            let textStyle = ''
+
+                                            if (isDeleted) {
+                                                Icon = Trash2
+                                                iconColor = 'text-red-400'
+                                                textStyle = 'line-through opacity-70'
+                                            } else if (isCreated) {
+                                                Icon = FilePlus
+                                                iconColor = 'text-green-400'
+                                            } else if (isRenamed) {
+                                                Icon = ArrowRightLeft
+                                                iconColor = 'text-purple-400'
+                                            }
+
+                                            return (
+                                                <div
+                                                    key={file}
+                                                    className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
                                                 >
-                                                    <X size={12} className="text-gray-400" />
-                                                </button>
-                                            </div>
-                                        ))}
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <Icon size={14} className={`${iconColor} shrink-0`} />
+                                                        <span className={`text-sm text-gray-300 truncate ${textStyle}`}>
+                                                            {isRenamed && renamedFrom ? `${renamedFrom} → ${file}` : file}
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleUnstage(file)}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
+                                                    >
+                                                        <X size={12} className="text-gray-400" />
+                                                    </button>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -765,6 +809,88 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Deleted Files - exclude already staged */}
+                            {(() => {
+                                const unstagedDeleted = status.deleted?.filter(f => !status.staged.includes(f)) || []
+                                return unstagedDeleted.length > 0 && (
+                                    <div className="p-4 border-b border-white/10">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider flex items-center gap-1">
+                                                <Trash2 size={12} />
+                                                Deleted ({unstagedDeleted.length})
+                                            </h3>
+                                            <button
+                                                onClick={() => handleStageAll(unstagedDeleted)}
+                                                className="text-xs text-blue-400 hover:text-blue-300"
+                                            >
+                                                Stage All
+                                            </button>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {unstagedDeleted.map(file => (
+                                                <div
+                                                    key={file}
+                                                    className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <Trash2 size={14} className="text-red-400 shrink-0" />
+                                                        <span className="text-sm text-gray-300 truncate line-through opacity-70">{file}</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleStage(file)}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
+                                                    >
+                                                        <Check size={12} className="text-gray-400" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )
+                            })()}
+
+                            {/* Note: Renamed files are already staged by git mv, so they appear in Staged Changes */}
+
+                            {/* Created Files - exclude already staged */}
+                            {(() => {
+                                const unstagedCreated = status.created?.filter(f => !status.staged.includes(f)) || []
+                                return unstagedCreated.length > 0 && (
+                                    <div className="p-4 border-b border-white/10">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider flex items-center gap-1">
+                                                <FilePlus size={12} />
+                                                Created ({unstagedCreated.length})
+                                            </h3>
+                                            <button
+                                                onClick={() => handleStageAll(unstagedCreated)}
+                                                className="text-xs text-blue-400 hover:text-blue-300"
+                                            >
+                                                Stage All
+                                            </button>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {unstagedCreated.map(file => (
+                                                <div
+                                                    key={file}
+                                                    className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <FilePlus size={14} className="text-green-400 shrink-0" />
+                                                        <span className="text-sm text-gray-300 truncate">{file}</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleStage(file)}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
+                                                    >
+                                                        <Check size={12} className="text-gray-400" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )
+                            })()}
 
                             {/* Untracked Files */}
                             {status.untracked.length > 0 && (
@@ -864,7 +990,12 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                 </div>
                             )}
 
-                            {status.modified.length === 0 && status.staged.length === 0 && status.untracked.length === 0 && (!status.conflicted || status.conflicted.length === 0) && (
+                            {status.modified.length === 0 &&
+                             status.staged.length === 0 &&
+                             status.untracked.length === 0 &&
+                             (!status.conflicted || status.conflicted.length === 0) &&
+                             (!status.deleted || status.deleted.length === 0) &&
+                             (!status.created || status.created.length === 0) && (
                                 <div className="p-8 text-center text-gray-500">
                                     <Check size={32} className="mx-auto mb-2 text-gray-600" />
                                     <p className="text-sm">No changes</p>

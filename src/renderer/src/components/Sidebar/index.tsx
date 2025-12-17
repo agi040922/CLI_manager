@@ -12,7 +12,7 @@ interface SidebarProps {
     onSelect: (workspace: Workspace, session: TerminalSession) => void
     onAddWorkspace: () => void
     onRemoveWorkspace: (id: string) => void
-    onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string) => void
+    onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string, sessionName?: string) => void
     onAddWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => void
     onRemoveSession: (workspaceId: string, sessionId: string) => void
     onCreatePlayground: () => void
@@ -71,10 +71,20 @@ export function Sidebar({
     const [sessionMenuOpen, setSessionMenuOpen] = useState<{ x: number, y: number, workspaceId: string, sessionId: string } | null>(null)
     const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null)
     const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
+    const [branchLoading, setBranchLoading] = useState(false)
 
-    // Resizing logic
+    // Resizing logic (horizontal - sidebar width)
     const isResizing = useRef(false)
     const sidebarRef = useRef<HTMLDivElement>(null)
+
+    // Vertical resizing logic (Playground section height)
+    const [playgroundHeight, setPlaygroundHeight] = useState(() => {
+        // Load saved height from localStorage, default to 200px
+        const saved = localStorage.getItem('sidebar-playground-height')
+        return saved ? parseInt(saved, 10) : 200
+    })
+    const isResizingVertical = useRef(false)
+    const sidebarContainerRef = useRef<HTMLDivElement>(null)
 
     const startResizing = useCallback(() => {
         isResizing.current = true
@@ -100,6 +110,39 @@ export function Sidebar({
         [setWidth]
     )
 
+    // Vertical resize functions for Playground section
+    const startResizingVertical = useCallback(() => {
+        isResizingVertical.current = true
+        document.body.style.cursor = 'row-resize'
+        document.body.style.userSelect = 'none'
+    }, [])
+
+    const stopResizingVertical = useCallback(() => {
+        if (isResizingVertical.current) {
+            isResizingVertical.current = false
+            document.body.style.cursor = ''
+            document.body.style.userSelect = ''
+            // Save to localStorage when resize ends
+            localStorage.setItem('sidebar-playground-height', playgroundHeight.toString())
+        }
+    }, [playgroundHeight])
+
+    const resizeVertical = useCallback(
+        (mouseMoveEvent: MouseEvent) => {
+            if (isResizingVertical.current && sidebarContainerRef.current) {
+                const containerRect = sidebarContainerRef.current.getBoundingClientRect()
+                // Calculate height from bottom of container to mouse position
+                const newHeight = containerRect.bottom - mouseMoveEvent.clientY
+                // Min 100px, Max 60% of container height
+                const maxHeight = containerRect.height * 0.6
+                if (newHeight >= 100 && newHeight <= maxHeight) {
+                    setPlaygroundHeight(newHeight)
+                }
+            }
+        },
+        []
+    )
+
     useEffect(() => {
         window.addEventListener('mousemove', resize)
         window.addEventListener('mouseup', stopResizing)
@@ -108,6 +151,15 @@ export function Sidebar({
             window.removeEventListener('mouseup', stopResizing)
         }
     }, [resize, stopResizing])
+
+    useEffect(() => {
+        window.addEventListener('mousemove', resizeVertical)
+        window.addEventListener('mouseup', stopResizingVertical)
+        return () => {
+            window.removeEventListener('mousemove', resizeVertical)
+            window.removeEventListener('mouseup', stopResizingVertical)
+        }
+    }, [resizeVertical, stopResizingVertical])
 
     // Helper functions for native dialogs with app logo
     const showAlert = useCallback(async (title: string, message: string, type: 'info' | 'warning' | 'error' = 'info') => {
@@ -216,6 +268,31 @@ export function Sidebar({
         }
     }
 
+    // Refresh branch list for current workspace
+    const handleBranchRefresh = async () => {
+        if (!branchMenuOpen) return
+
+        setBranchLoading(true)
+        try {
+            const branches = await window.api.gitListBranches(branchMenuOpen.workspacePath) as { current: string; all: string[]; branches: any; worktreeBranches?: string[] } | null
+            if (branches) {
+                setWorkspaceBranches(prev => {
+                    const next = new Map(prev)
+                    next.set(branchMenuOpen.workspaceId, {
+                        current: branches.current,
+                        all: branches.all.filter((b: string) => !b.startsWith('remotes/')),
+                        worktreeBranches: branches.worktreeBranches ?? []
+                    })
+                    return next
+                })
+            }
+        } catch (err) {
+            console.error('Failed to refresh branches:', err)
+        } finally {
+            setBranchLoading(false)
+        }
+    }
+
     // Local Git handlers
     const handleMergeToMain = async () => {
         if (!worktreeMenuOpen) return
@@ -226,17 +303,21 @@ export function Sidebar({
             return
         }
 
+        // Get the base branch (the branch we branched from), fallback to 'main'
+        const baseBranch = worktreeMenuOpen.workspace.baseBranch || 'main'
+
         console.log('[handleMergeToMain] ========== START ==========')
         console.log('[handleMergeToMain] Worktree:', worktreeMenuOpen.workspace.name)
         console.log('[handleMergeToMain] Worktree path:', worktreeMenuOpen.workspace.path)
         console.log('[handleMergeToMain] Worktree branch:', worktreeMenuOpen.workspace.branchName)
+        console.log('[handleMergeToMain] Base branch:', baseBranch)
         console.log('[handleMergeToMain] Parent workspace:', parentWorkspace.name)
         console.log('[handleMergeToMain] Parent path:', parentWorkspace.path)
 
         const result = await window.api.showMessageBox({
             type: 'question',
             title: 'Merge Worktree',
-            message: `Merge "${worktreeMenuOpen.workspace.branchName}" into main/master?\n\nThis will be performed in the parent workspace (${parentWorkspace.name}).`,
+            message: `Merge "${worktreeMenuOpen.workspace.branchName}" into "${baseBranch}"?\n\nThis will checkout "${baseBranch}" in the parent workspace and merge your changes.`,
             buttons: ['Cancel', 'Merge']
         })
 
@@ -244,6 +325,10 @@ export function Sidebar({
         if (result.response !== 1) return
 
         try {
+            // First, checkout the base branch in parent workspace
+            console.log('[handleMergeToMain] Checking out base branch:', baseBranch)
+            await window.api.gitCheckout(parentWorkspace.path, baseBranch)
+
             console.log('[handleMergeToMain] Calling gitMerge...')
             console.log('[handleMergeToMain] - path:', parentWorkspace.path)
             console.log('[handleMergeToMain] - branch:', worktreeMenuOpen.workspace.branchName)
@@ -374,7 +459,7 @@ export function Sidebar({
                         if (type === 'worktree') {
                             setShowPrompt({ workspaceId: menuOpen.workspaceId })
                         } else {
-                            onAddSession(menuOpen.workspaceId, 'regular', undefined, template?.command)
+                            onAddSession(menuOpen.workspaceId, 'regular', undefined, template?.command, template?.name)
                         }
                     }}
                     onOpenSettings={onOpenSettings}
@@ -391,7 +476,7 @@ export function Sidebar({
                     onMergeToMain={handleMergeToMain}
                     onPullFromMain={handlePullFromMain}
                     onAddSession={(workspaceId, template) => {
-                        onAddSession(workspaceId, 'regular', undefined, template?.command)
+                        onAddSession(workspaceId, 'regular', undefined, template?.command, template?.name)
                     }}
                     onClose={() => setWorktreeMenuOpen(null)}
                 />
@@ -404,7 +489,9 @@ export function Sidebar({
                     branches={workspaceBranches.get(branchMenuOpen.workspaceId)?.all || []}
                     currentBranch={workspaceBranches.get(branchMenuOpen.workspaceId)?.current || ''}
                     worktreeBranches={workspaceBranches.get(branchMenuOpen.workspaceId)?.worktreeBranches || []}
+                    loading={branchLoading}
                     onCheckout={handleBranchCheckout}
+                    onRefresh={handleBranchRefresh}
                     onClose={() => setBranchMenuOpen(null)}
                 />
             )}
@@ -438,7 +525,10 @@ export function Sidebar({
 
             {/* Sidebar Content */}
             <div
-                ref={sidebarRef}
+                ref={(el) => {
+                    sidebarRef.current = el
+                    sidebarContainerRef.current = el
+                }}
                 className="glass-panel mx-2 mb-2 mt-1 rounded-lg flex flex-col overflow-hidden relative"
                 style={{ width: width, minWidth: 50, maxWidth: 480 }}
             >
@@ -521,12 +611,22 @@ export function Sidebar({
                     })}
                 </div>
 
-                <div className="border-t border-white/10">
-                    <div className="p-4">
+                {/* Playground Section with Resizable Height */}
+                <div
+                    className="border-t border-white/10 relative flex flex-col flex-shrink-0"
+                    style={{ height: playgroundHeight, minHeight: 100 }}
+                >
+                    {/* Vertical Resize Handle */}
+                    <div
+                        className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-blue-500/50 transition-colors z-50"
+                        onMouseDown={startResizingVertical}
+                    />
+
+                    <div className="p-4 flex-1 overflow-hidden flex flex-col">
                         <div className="text-xs font-semibold text-gray-500 mb-2">PLAYGROUND</div>
 
                         {/* Playground list */}
-                        <div className="space-y-0.5 mb-3">
+                        <div className="space-y-0.5 mb-3 flex-1 overflow-y-auto">
                             {playgroundWorkspaces.map(workspace => (
                                 <WorkspaceItem
                                     key={workspace.id}
@@ -556,7 +656,7 @@ export function Sidebar({
 
                         <button
                             onClick={onCreatePlayground}
-                            className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/5 text-sm transition-colors"
+                            className="w-full flex items-center gap-2 p-2 rounded hover:bg-white/5 text-sm transition-colors flex-shrink-0"
                         >
                             <Plus size={16} />
                             <span>New Playground</span>

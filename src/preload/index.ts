@@ -6,7 +6,7 @@ import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, Licen
 const api = {
     getWorkspaces: (): Promise<Workspace[]> => ipcRenderer.invoke('get-workspaces'),
     addWorkspace: (): Promise<IPCResult<Workspace> | null> => ipcRenderer.invoke('add-workspace'),
-    addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<IPCResult<TerminalSession> | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand),
+    addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string, sessionName?: string): Promise<IPCResult<TerminalSession> | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand, sessionName),
     addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string): Promise<IPCResult<Workspace>> => ipcRenderer.invoke('add-worktree-workspace', parentWorkspaceId, branchName),
     removeWorkspace: (id: string, deleteBranch?: boolean): Promise<boolean> => ipcRenderer.invoke('remove-workspace', id, deleteBranch ?? true),
     removeSession: (workspaceId: string, sessionId: string): Promise<boolean> => ipcRenderer.invoke('remove-session', workspaceId, sessionId),
@@ -28,6 +28,7 @@ const api = {
     // Git
     getGitStatus: (workspacePath: string): Promise<any> => ipcRenderer.invoke('get-git-status', workspacePath),
     gitStage: (workspacePath: string, file: string): Promise<boolean> => ipcRenderer.invoke('git-stage', workspacePath, file),
+    gitStageFiles: (workspacePath: string, files: string[]): Promise<boolean> => ipcRenderer.invoke('git-stage-files', workspacePath, files),
     gitStageAll: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-stage-all', workspacePath),
     gitUnstage: (workspacePath: string, file: string): Promise<boolean> => ipcRenderer.invoke('git-unstage', workspacePath, file),
     gitUnstageAll: (workspacePath: string): Promise<boolean> => ipcRenderer.invoke('git-unstage-all', workspacePath),

@@ -356,7 +356,7 @@ app.whenReady().then(async () => {
         return { success: true, data: newWorkspace }
     })
 
-    ipcMain.handle('add-session', async (_, workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string): Promise<IPCResult<TerminalSession> | null> => {
+    ipcMain.handle('add-session', async (_, workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string, sessionName?: string): Promise<IPCResult<TerminalSession> | null> => {
         const workspaces = store.get('workspaces') as Workspace[]
         const workspace = workspaces.find((w: Workspace) => w.id === workspaceId)
 
@@ -376,7 +376,7 @@ app.whenReady().then(async () => {
 
         const newSession: TerminalSession = {
             id: uuidv4(),
-            name: 'Main',
+            name: sessionName || 'Terminal',
             cwd: workspace.path,
             type,
             initialCommand
@@ -453,6 +453,7 @@ app.whenReady().then(async () => {
             await git.raw(['worktree', 'add', '-b', branchName, worktreePath])
 
             // Create new worktree workspace
+            // Save the current branch as baseBranch (the branch we branched from)
             const newWorktreeWorkspace: Workspace = {
                 id: uuidv4(),
                 name: branchName,
@@ -467,7 +468,8 @@ app.whenReady().then(async () => {
                 ],
                 createdAt: Date.now(),
                 parentWorkspaceId: parentWorkspaceId,
-                branchName: branchName
+                branchName: branchName,
+                baseBranch: branches.current || 'main'  // The branch we branched from
             }
 
             store.set('workspaces', [...workspaces, newWorktreeWorkspace])
@@ -724,12 +726,19 @@ app.whenReady().then(async () => {
             const mergeHeadPath = path.join(workspacePath, '.git', 'MERGE_HEAD')
             const isMerging = existsSync(mergeHeadPath)
 
+            // Combine staged files with renamed files (git mv creates renamed but not in staged array)
+            const renamedFiles = status.renamed.map(r => r.to)
+            const allStaged = [...new Set([...status.staged, ...renamedFiles])]
+
             return {
                 branch: status.current || 'unknown',
                 modified: status.modified,
-                staged: status.staged,
+                staged: allStaged,  // Include renamed files in staged
                 untracked: status.not_added,
                 conflicted: status.conflicted,  // Merge conflict files
+                deleted: status.deleted,        // Deleted files
+                renamed: status.renamed.map(r => ({ from: r.from, to: r.to })),  // Renamed/moved files
+                created: status.created,        // Newly created files
                 ahead: status.ahead,
                 behind: status.behind,
                 isMerging  // True if MERGE_HEAD exists (merge in progress)
@@ -758,6 +767,18 @@ app.whenReady().then(async () => {
             return true
         } catch (e) {
             console.error('Git stage all error:', e)
+            throw e
+        }
+    })
+
+    // Stage multiple files at once (avoids index.lock conflicts)
+    ipcMain.handle('git-stage-files', async (_, workspacePath: string, files: string[]) => {
+        try {
+            const git = simpleGit(workspacePath)
+            await git.add(files)
+            return true
+        } catch (e) {
+            console.error('Git stage files error:', e)
             throw e
         }
     })

@@ -218,3 +218,10 @@ body {
 .git-panel-button * {
   pointer-events: none !important;
 }
+
+/* xterm.js background - remove black gap below terminal */
+.xterm,
+.xterm-viewport,
+.xterm-screen {
+  background-color: transparent !important;
+}

@@ -300,8 +300,8 @@ function App() {
         await window.api.reorderSessions(workspaceId, sessionIds)
     }
 
-    const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string, initialCommand?: string) => {
-        const result = await window.api.addSession(workspaceId, type, branchName, initialCommand)
+    const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string, initialCommand?: string, sessionName?: string) => {
+        const result = await window.api.addSession(workspaceId, type, branchName, initialCommand, sessionName)
         if (!result) return
 
         if (result.success && result.data) {
@@ -546,7 +546,7 @@ function App() {
                         </button>
                     </div>
                 </div>
-                <div className="flex-1 p-4 relative overflow-hidden min-h-0">
+                <div className="flex-1 pt-4 px-4 pb-0 relative overflow-hidden min-h-0">
                     {/* Render ALL sessions but hide inactive ones to keep them alive */}
                     {workspaces.map(workspace => (
                         workspace.sessions?.map(session => (
@@ -574,7 +574,12 @@ function App() {
                     ))}
 
                     {!activeSession && (
-                        <div className="h-full flex items-center justify-center text-gray-500">
+                        <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded mb-4">
+                                <p className="text-xs text-blue-200">
+                                    <strong>Tip:</strong> If the terminal seems frozen, try pressing Enter
+                                </p>
+                            </div>
                             please select a terminal
                         </div>
                     )}
