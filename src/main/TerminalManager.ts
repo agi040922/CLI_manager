@@ -136,11 +136,15 @@ export class TerminalManager {
             cols,
             rows,
             cwd,
+            encoding: 'utf8',  // Enable UTF-8 for Korean/CJK input
             env: {
                 ...process.env,
                 TERM_PROGRAM: 'CLImanger',
                 // Disable zsh's partial line indicator (the % that appears when no newline at end)
-                PROMPT_EOL_MARK: ''
+                PROMPT_EOL_MARK: '',
+                // Ensure UTF-8 locale for proper Korean input
+                LANG: process.env.LANG || 'en_US.UTF-8',
+                LC_ALL: process.env.LC_ALL || 'en_US.UTF-8'
             } as any
         })
 
