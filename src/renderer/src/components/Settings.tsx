@@ -264,8 +264,18 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                             {/* Version and Update Section */}
                             <div className="p-3 border-t border-white/5 space-y-2">
                                 {appVersion && (
-                                    <div className="text-[10px] text-gray-500 text-center">
-                                        v{appVersion}
+                                    <div className="text-center leading-tight">
+                                        <div className="text-[10px] text-gray-500">
+                                            v{appVersion}
+                                        </div>
+                                        <a
+                                            href="https://www.solhun.com/changelog"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[9px] text-blue-500 hover:text-blue-400"
+                                        >
+                                            view changelog
+                                        </a>
                                     </div>
                                 )}
 
