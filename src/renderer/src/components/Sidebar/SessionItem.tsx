@@ -91,8 +91,8 @@ export function SessionItem({
             onContextMenu={(e) => onContextMenu(e, workspace.id, session.id)}
             whileDrag={{
                 scale: 1.02,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                backgroundColor: "rgba(59, 130, 246, 0.1)"
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+                // Note: backgroundColor 제거 - 드래그 종료 후에도 색상이 유지되는 버그 방지
             }}
         >
             {/* 드래그 핸들 */}

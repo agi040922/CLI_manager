@@ -288,15 +288,23 @@ function App() {
     // 세션 순서 변경 핸들러
     const handleReorderSessions = async (workspaceId: string, sessions: TerminalSession[]) => {
         // 1. UI 즉시 업데이트 (반응성 향상)
+        // Note: Reorder.Group에서 전달받은 sessions 배열을 그대로 사용하면
+        // 객체 참조가 달라져서 TerminalView가 재마운트될 수 있음
+        // 따라서 sessionIds만 추출해서 원본 세션 객체를 재정렬
+        const sessionIds = sessions.map(s => s.id)
+
         setWorkspaces(prev => prev.map(w => {
             if (w.id === workspaceId) {
-                return { ...w, sessions }
+                // 원본 세션 객체를 새 순서대로 재정렬
+                const reorderedSessions = sessionIds
+                    .map(id => w.sessions.find(s => s.id === id))
+                    .filter((s): s is TerminalSession => s !== undefined)
+                return { ...w, sessions: reorderedSessions }
             }
             return w
         }))
 
         // 2. 서버에 순서 저장
-        const sessionIds = sessions.map(s => s.id)
         await window.api.reorderSessions(workspaceId, sessionIds)
     }
 
