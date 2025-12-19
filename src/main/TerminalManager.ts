@@ -104,20 +104,74 @@ export class TerminalManager {
 
         // Check if terminal has running child processes
         ipcMain.handle('terminal-has-running-process', (_, id: string): boolean => {
-            const ptyProcess = this.terminals.get(id)
-            if (!ptyProcess) return false
-
-            try {
-                const pid = ptyProcess.pid
-                // Use pgrep to check for child processes (macOS/Linux)
-                // Returns non-empty if there are child processes
-                const result = execSync(`pgrep -P ${pid}`, { encoding: 'utf-8' }).trim()
-                return result.length > 0
-            } catch {
-                // pgrep returns exit code 1 if no processes found
-                return false
-            }
+            return this.hasRunningProcess(id)
         })
+    }
+
+    /**
+     * Check if a specific terminal has running child processes
+     */
+    private hasRunningProcess(id: string): boolean {
+        const ptyProcess = this.terminals.get(id)
+        if (!ptyProcess) return false
+
+        try {
+            const pid = ptyProcess.pid
+            // Use pgrep to check for child processes (macOS/Linux)
+            // Returns non-empty if there are child processes
+            const result = execSync(`pgrep -P ${pid}`, { encoding: 'utf-8' }).trim()
+            return result.length > 0
+        } catch {
+            // pgrep returns exit code 1 if no processes found
+            return false
+        }
+    }
+
+    /**
+     * Check if any terminal has running child processes
+     */
+    hasAnyRunningProcesses(): boolean {
+        for (const [id] of this.terminals) {
+            if (this.hasRunningProcess(id)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Get count of terminals with running child processes
+     */
+    getRunningProcessCount(): number {
+        let count = 0
+        for (const [id] of this.terminals) {
+            if (this.hasRunningProcess(id)) {
+                count++
+            }
+        }
+        return count
+    }
+
+    /**
+     * Get count of active terminals
+     */
+    getTerminalCount(): number {
+        return this.terminals.size
+    }
+
+    /**
+     * Kill all terminal processes
+     */
+    killAll(): void {
+        for (const [id, ptyProcess] of this.terminals) {
+            try {
+                ptyProcess.kill()
+                console.log(`Killed terminal: ${id}`)
+            } catch (e) {
+                console.error(`Failed to kill terminal ${id}:`, e)
+            }
+        }
+        this.terminals.clear()
     }
 
     private createTerminal(id: string, cwd: string, cols: number = 80, rows: number = 30, requestedShell?: string) {

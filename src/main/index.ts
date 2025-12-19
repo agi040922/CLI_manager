@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu } from 'electron'
 import path, { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
@@ -96,6 +96,11 @@ const licenseStore = new Store({
 const terminalManager = new TerminalManager()
 const portManager = new PortManager()
 const licenseManager = new LicenseManager(licenseStore)
+
+// Background mode state
+let tray: Tray | null = null
+let isQuitting = false  // True when user confirms to quit completely
+let isBackgroundMode = false  // True when running in background (window hidden)
 
 // Validate if a path exists and is accessible
 function isValidPath(dirPath: string): boolean {
@@ -1313,7 +1318,12 @@ app.whenReady().then(async () => {
     app.on('activate', function () {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (BrowserWindow.getAllWindows().length === 0) createWindow()
+        if (isBackgroundMode) {
+            // Exit background mode when dock icon is clicked
+            showFromBackground()
+        } else if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow()
+        }
     })
 })
 
@@ -1321,10 +1331,164 @@ app.whenReady().then(async () => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+    // In background mode, don't quit
+    if (isBackgroundMode) {
+        return
+    }
     if (process.platform !== 'darwin') {
         app.quit()
     }
 })
+
+// Handle app quit request (Cmd+Q or close button)
+app.on('before-quit', async (event) => {
+    // If already confirmed to quit, proceed
+    if (isQuitting) {
+        return
+    }
+
+    // Check if there are active terminals
+    const terminalCount = terminalManager.getTerminalCount()
+    if (terminalCount === 0) {
+        // No terminals, just quit
+        return
+    }
+
+    // Get count of terminals with running processes
+    const runningCount = terminalManager.getRunningProcessCount()
+
+    // Prevent quit to show dialog
+    event.preventDefault()
+
+    const dialogIcon = nativeImage.createFromPath(logoIcon)
+    let message: string
+    if (runningCount > 0) {
+        message = `${runningCount} of ${terminalCount} terminal(s) have running processes.`
+    } else {
+        message = `There are ${terminalCount} active terminal(s).`
+    }
+
+    const { response } = await dialog.showMessageBox({
+        type: 'question',
+        title: 'Quit CLI Manager',
+        message: message,
+        detail: 'What would you like to do?',
+        buttons: ['Keep Running in Background', 'Terminate All & Quit', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        icon: dialogIcon.isEmpty() ? undefined : dialogIcon
+    })
+
+    if (response === 0) {
+        // Keep running in background
+        enterBackgroundMode()
+    } else if (response === 1) {
+        // Terminate all and quit
+        isQuitting = true
+        terminalManager.killAll()
+        // Force quit after a short delay to ensure cleanup
+        setTimeout(() => {
+            app.exit(0)
+        }, 100)
+    }
+    // Cancel (2) - do nothing, stay open
+})
+
+/**
+ * Create system tray icon with context menu
+ */
+function createTray(): void {
+    if (tray) return  // Already exists
+
+    const trayIcon = nativeImage.createFromPath(icon)
+    // Resize for tray (16x16 is standard for macOS menu bar)
+    const resizedIcon = trayIcon.resize({ width: 16, height: 16 })
+    resizedIcon.setTemplateImage(true)  // Makes it adapt to dark/light menu bar
+
+    tray = new Tray(resizedIcon)
+    tray.setToolTip('CLI Manager - Running in background')
+
+    const contextMenu = Menu.buildFromTemplate([
+        {
+            label: 'Show CLI Manager',
+            click: () => {
+                showFromBackground()
+            }
+        },
+        { type: 'separator' },
+        {
+            label: `${terminalManager.getTerminalCount()} Terminal(s) Active`,
+            enabled: false
+        },
+        { type: 'separator' },
+        {
+            label: 'Quit',
+            click: () => {
+                isQuitting = true
+                terminalManager.killAll()
+                app.quit()
+            }
+        }
+    ])
+
+    tray.setContextMenu(contextMenu)
+
+    // Click on tray icon shows the app
+    tray.on('click', () => {
+        showFromBackground()
+    })
+}
+
+/**
+ * Enter background mode - hide window and show tray
+ */
+function enterBackgroundMode(): void {
+    isBackgroundMode = true
+    createTray()
+
+    // Hide all windows
+    BrowserWindow.getAllWindows().forEach(win => {
+        win.hide()
+    })
+
+    // On macOS, hide dock icon when in background
+    if (process.platform === 'darwin' && app.dock) {
+        app.dock.hide()
+    }
+
+    console.log('[Background Mode] Entered - terminals still running')
+}
+
+/**
+ * Exit background mode - show window and remove tray
+ */
+function showFromBackground(): void {
+    isBackgroundMode = false
+
+    // Show dock icon on macOS
+    if (process.platform === 'darwin' && app.dock) {
+        app.dock.show()
+    }
+
+    // Show windows
+    const windows = BrowserWindow.getAllWindows()
+    if (windows.length === 0) {
+        createWindow()
+    } else {
+        windows.forEach(win => {
+            win.show()
+            win.focus()
+        })
+    }
+
+    // Remove tray
+    if (tray) {
+        tray.destroy()
+        tray = null
+    }
+
+    console.log('[Background Mode] Exited - window restored')
+}
 
 // In this file you can include the rest of your app"s specific main process
 // code. You can also put them in separate files and require them here.
