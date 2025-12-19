@@ -657,6 +657,32 @@ app.whenReady().then(async () => {
         }
     })
 
+    // Validate editor path/command by actually opening it
+    ipcMain.handle('validate-editor-path', async (_, editorPath: string, testDir?: string) => {
+        try {
+            // If no testDir provided, ask user to select one
+            let targetDir = testDir
+            if (!targetDir) {
+                const result = await dialog.showOpenDialog({
+                    properties: ['openDirectory'],
+                    title: 'Select a folder to test the editor',
+                    buttonLabel: 'Test with this folder'
+                })
+                if (result.canceled || result.filePaths.length === 0) {
+                    return { valid: false, error: 'Test cancelled' }
+                }
+                targetDir = result.filePaths[0]
+            }
+
+            // Test by actually opening the selected directory
+            const escapedCommand = editorPath.includes(' ') ? `${editorPath}` : editorPath
+            await execWithShell(`${escapedCommand} "${targetDir}"`)
+            return { valid: true, resolvedPath: editorPath }
+        } catch (e: any) {
+            return { valid: false, error: e.message || 'Failed to open editor' }
+        }
+    })
+
     // App Version
     ipcMain.handle('get-app-version', () => {
         return app.getVersion()
@@ -1252,23 +1278,36 @@ app.whenReady().then(async () => {
     // Editor open handler
     ipcMain.handle('open-in-editor', async (_, workspacePath: string, editorType?: string) => {
         try {
+            const settings = store.get('settings') as UserSettings
             // Get default editor from settings if not specified
-            const editor = editorType || (store.get('settings') as UserSettings)?.defaultEditor || 'vscode'
+            const editor = editorType || settings?.defaultEditor || 'vscode'
 
-            // Map editor type to command
-            const editorCommands: Record<string, string> = {
-                'vscode': 'code',
-                'cursor': 'cursor',
-                'antigravity': 'antigravity'
-            }
+            let command: string
 
-            const command = editorCommands[editor]
-            if (!command) {
-                throw new Error(`Unknown editor type: ${editor}`)
+            if (editor === 'custom') {
+                // Use custom editor path from settings
+                const customPath = settings?.customEditorPath
+                if (!customPath) {
+                    throw new Error('Custom editor path not configured')
+                }
+                command = customPath
+            } else {
+                // Map editor type to command
+                const editorCommands: Record<string, string> = {
+                    'vscode': 'code',
+                    'cursor': 'cursor',
+                    'antigravity': 'antigravity'
+                }
+                command = editorCommands[editor]
+                if (!command) {
+                    throw new Error(`Unknown editor type: ${editor}`)
+                }
             }
 
             // Execute editor command using login shell (via execWithShell helper)
-            await execWithShell(`${command} .`, { cwd: workspacePath })
+            // Quote the command if it contains spaces (for custom paths)
+            const escapedCommand = command.includes(' ') ? `"${command}"` : command
+            await execWithShell(`${escapedCommand} .`, { cwd: workspacePath })
 
             return { success: true, editor }
         } catch (e: any) {

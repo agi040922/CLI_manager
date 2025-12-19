@@ -1,6 +1,6 @@
 export type NotificationStatus = 'none' | 'info' | 'error' | 'success' | 'warning'
 
-export type EditorType = 'vscode' | 'cursor' | 'antigravity'
+export type EditorType = 'vscode' | 'cursor' | 'antigravity' | 'custom'
 
 export type ErrorType =
     | 'GIT_NOT_FOUND'
@@ -142,6 +142,7 @@ export interface UserSettings {
     fontFamily?: string  // deprecated - 사용 안 함
     defaultShell: string
     defaultEditor: EditorType
+    customEditorPath?: string  // Custom editor command or path
     portFilter?: {
         enabled: boolean
         minPort: number

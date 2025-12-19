@@ -77,6 +77,9 @@ export function Sidebar({
     const isResizing = useRef(false)
     const sidebarRef = useRef<HTMLDivElement>(null)
 
+    // Track previous workspace IDs for detecting new additions
+    const prevWorkspaceIdsRef = useRef<Set<string>>(new Set())
+
     // Vertical resizing logic (Playground section height)
     const [playgroundHeight, setPlaygroundHeight] = useState(() => {
         // Load saved height from localStorage, default to 200px
@@ -176,16 +179,34 @@ export function Sidebar({
         return result.response === 1
     }, [])
 
-    // 워크스페이스 자동 펼치기
+    // 새로 추가된 워크스페이스만 자동 펼치기
     useEffect(() => {
-        if (workspaces.length > 0) {
+        const currentIds = new Set(workspaces.map(w => w.id))
+        const prevIds = prevWorkspaceIdsRef.current
+
+        // Find newly added workspaces
+        const newIds = [...currentIds].filter(id => !prevIds.has(id))
+
+        if (newIds.length > 0) {
             setExpanded(prev => {
-                const newExpanded = new Set(prev)
-                workspaces.forEach(w => newExpanded.add(w.id))
-                return newExpanded
+                const next = new Set(prev)
+                newIds.forEach(id => next.add(id))
+                return next
             })
         }
-    }, [workspaces.length])
+
+        // Clean up deleted workspace IDs from expanded set
+        setExpanded(prev => {
+            const next = new Set([...prev].filter(id => currentIds.has(id)))
+            // Only update if something was removed
+            if (next.size !== prev.size) {
+                return next
+            }
+            return prev
+        })
+
+        prevWorkspaceIdsRef.current = currentIds
+    }, [workspaces])
 
     // 메뉴 외부 클릭 시 닫기
     useEffect(() => {

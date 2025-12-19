@@ -111,6 +111,10 @@ const api = {
     validateShellPath: (shellPath: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }> =>
         ipcRenderer.invoke('validate-shell-path', shellPath),
 
+    // Editor Validation (opens folder picker if testDir not provided)
+    validateEditorPath: (editorPath: string, testDir?: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }> =>
+        ipcRenderer.invoke('validate-editor-path', editorPath, testDir),
+
     // Updates
     checkForUpdate: (): Promise<{ success: boolean; version?: string; hasUpdate?: boolean; error?: string }> =>
         ipcRenderer.invoke('check-for-update'),

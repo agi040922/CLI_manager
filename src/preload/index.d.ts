@@ -82,6 +82,9 @@ declare global {
             // Shell Validation
             validateShellPath: (shellPath: string) => Promise<{ valid: boolean; resolvedPath?: string; error?: string }>
 
+            // Editor Validation (opens folder picker if testDir not provided)
+            validateEditorPath: (editorPath: string, testDir?: string) => Promise<{ valid: boolean; resolvedPath?: string; error?: string }>
+
             // License
             licenseActivate: (licenseKey: string) => Promise<IPCResult<LicenseData>>
             licenseValidate: () => Promise<IPCResult<LicenseData>>

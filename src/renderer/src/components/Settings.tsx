@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS } from '../../../shared/types'
-import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard } from 'lucide-react'
+import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
@@ -57,6 +57,11 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
     const [isCustomShell, setIsCustomShell] = useState(false)
     const [shellValidation, setShellValidation] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid', message?: string }>({ status: 'idle' })
     const standardShells = ['zsh', 'bash', 'fish', 'sh', '/bin/zsh', '/bin/bash']
+    // Editor configuration states
+    const [isCustomEditor, setIsCustomEditor] = useState(false)
+    const [editorValidation, setEditorValidation] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid', message?: string }>({ status: 'idle' })
+    const [customEditorPath, setCustomEditorPath] = useState('')
+    const standardEditors: EditorType[] = ['vscode', 'cursor', 'antigravity']
 
     useEffect(() => {
         if (isOpen) {
@@ -67,6 +72,9 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                     setSettings(loadedSettings)
                     // Check if current shell is a custom path
                     setIsCustomShell(!standardShells.includes(loadedSettings.defaultShell))
+                    // Check if current editor is custom
+                    setIsCustomEditor(loadedSettings.defaultEditor === 'custom')
+                    setCustomEditorPath(loadedSettings.customEditorPath || '')
                 }
             }).catch(() => {
                 // If getSettings is not available, use defaults
@@ -498,16 +506,87 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                         <p className="text-xs text-gray-400 mb-3">
                                             Choose which editor to open workspace folders with
                                         </p>
-                                        <div>
-                                            <select
-                                                value={settings.defaultEditor}
-                                                onChange={e => setSettings(prev => ({ ...prev, defaultEditor: e.target.value as EditorType }))}
-                                                className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                            >
-                                                <option value="vscode">VS Code</option>
-                                                <option value="cursor">Cursor</option>
-                                                <option value="antigravity">Antigravity</option>
-                                            </select>
+                                        <div className="space-y-3">
+                                            {!isCustomEditor ? (
+                                                <select
+                                                    value={settings.defaultEditor}
+                                                    onChange={e => {
+                                                        if (e.target.value === 'custom') {
+                                                            setIsCustomEditor(true)
+                                                            setEditorValidation({ status: 'idle' })
+                                                            setSettings(prev => ({ ...prev, defaultEditor: 'custom' }))
+                                                        } else {
+                                                            setSettings(prev => ({ ...prev, defaultEditor: e.target.value as EditorType }))
+                                                            setEditorValidation({ status: 'idle' })
+                                                        }
+                                                    }}
+                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="vscode">VS Code</option>
+                                                    <option value="cursor">Cursor</option>
+                                                    <option value="antigravity">Antigravity</option>
+                                                    <option value="custom">Custom command...</option>
+                                                </select>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={customEditorPath}
+                                                            onChange={e => {
+                                                                setCustomEditorPath(e.target.value)
+                                                                setSettings(prev => ({ ...prev, customEditorPath: e.target.value }))
+                                                                setEditorValidation({ status: 'idle' })
+                                                            }}
+                                                            placeholder="e.g., /usr/local/bin/subl or sublime"
+                                                            className="flex-1 bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                        />
+                                                        <button
+                                                            onClick={async () => {
+                                                                setEditorValidation({ status: 'checking' })
+                                                                try {
+                                                                    const result = await window.api.validateEditorPath(customEditorPath)
+                                                                    if (result.valid) {
+                                                                        setEditorValidation({ status: 'valid', message: 'Editor opened successfully!' })
+                                                                    } else {
+                                                                        setEditorValidation({ status: 'invalid', message: result.error || 'Failed to open' })
+                                                                    }
+                                                                } catch {
+                                                                    setEditorValidation({ status: 'invalid', message: 'Failed to open editor' })
+                                                                }
+                                                            }}
+                                                            disabled={editorValidation.status === 'checking' || !customEditorPath}
+                                                            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+                                                        >
+                                                            {editorValidation.status === 'checking' ? 'Opening...' : 'Test'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsCustomEditor(false)
+                                                                setSettings(prev => ({ ...prev, defaultEditor: 'vscode', customEditorPath: undefined }))
+                                                                setCustomEditorPath('')
+                                                                setEditorValidation({ status: 'idle' })
+                                                            }}
+                                                            className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                    {editorValidation.status === 'valid' && (
+                                                        <p className="text-xs text-green-400 flex items-center gap-1">
+                                                            <Check size={12} /> {editorValidation.message}
+                                                        </p>
+                                                    )}
+                                                    {editorValidation.status === 'invalid' && (
+                                                        <p className="text-xs text-red-400 flex items-center gap-1">
+                                                            <CircleAlert size={12} /> {editorValidation.message}
+                                                        </p>
+                                                    )}
+                                                    <p className="text-xs text-gray-500">
+                                                        Enter a command (e.g., open -a "Antigravity") and click Test to verify it opens.
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </>
