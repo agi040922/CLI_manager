@@ -2,8 +2,7 @@ import React from 'react'
 import { Terminal, Trash2, GripVertical } from 'lucide-react'
 import clsx from 'clsx'
 import { Reorder, useDragControls } from 'framer-motion'
-import { TerminalSession, NotificationStatus, Workspace, SessionStatus } from '../../../../shared/types'
-import { NOTIFICATION_COLORS } from '../../constants/styles'
+import { TerminalSession, Workspace, SessionStatus } from '../../../../shared/types'
 
 // Session status colors (claude-squad 방식)
 const SESSION_STATUS_COLORS: Record<SessionStatus, string> = {
@@ -24,7 +23,6 @@ interface SessionItemProps {
     session: TerminalSession
     workspace: Workspace
     isActive: boolean
-    notificationStatus?: NotificationStatus
     sessionStatus?: SessionStatus
     isClaudeCodeSession?: boolean
     showStatusInSidebar?: boolean
@@ -46,7 +44,6 @@ export function SessionItem({
     session,
     workspace,
     isActive,
-    notificationStatus,
     sessionStatus,
     isClaudeCodeSession,
     showStatusInSidebar = true,
@@ -85,16 +82,6 @@ export function SessionItem({
             setTempName(session.name)
             onRenameCancel()
         }
-    }
-
-    const getNotificationBadge = () => {
-        if (!notificationStatus || notificationStatus === 'none') return null
-
-        return (
-            <div
-                className={`w-2 h-2 rounded-full ${NOTIFICATION_COLORS[notificationStatus]} animate-pulse shrink-0`}
-            />
-        )
     }
 
     // Session status indicator for Claude Code sessions
@@ -162,7 +149,6 @@ export function SessionItem({
                     <span className="truncate flex-1" style={{ fontSize: `${fontSize}px` }}>{session.name}</span>
                 )}
                 {getSessionStatusBadge()}
-                {getNotificationBadge()}
             </div>
             {!isRenaming && (
                 <button

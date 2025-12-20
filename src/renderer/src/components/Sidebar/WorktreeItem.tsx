@@ -1,14 +1,13 @@
 import React from 'react'
 import { GitBranch, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
 import { Reorder } from 'framer-motion'
-import { Workspace, TerminalSession, NotificationStatus, SessionStatus, HooksSettings } from '../../../../shared/types'
+import { Workspace, TerminalSession, SessionStatus, HooksSettings } from '../../../../shared/types'
 import { SessionItem } from './SessionItem'
 
 interface WorktreeItemProps {
     worktree: Workspace
     expanded: boolean
     activeSessionId?: string
-    sessionNotifications?: Map<string, NotificationStatus>
     sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
     hooksSettings?: HooksSettings
     fontSize?: number  // Sidebar font size
@@ -33,7 +32,6 @@ export function WorktreeItem({
     worktree,
     expanded,
     activeSessionId,
-    sessionNotifications,
     sessionStatuses,
     hooksSettings,
     fontSize = 14,
@@ -120,7 +118,6 @@ export function WorktreeItem({
                                     session={session}
                                     workspace={worktree}
                                     isActive={activeSessionId === session.id}
-                                    notificationStatus={sessionNotifications?.get(session.id)}
                                     sessionStatus={statusInfo?.status}
                                     isClaudeCodeSession={statusInfo?.isClaudeCode}
                                     showStatusInSidebar={hooksSettings?.enabled && hooksSettings?.claudeCode?.showInSidebar}

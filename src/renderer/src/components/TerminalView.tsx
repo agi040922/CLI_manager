@@ -1,40 +1,24 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { AlertCircle, CheckCircle, Bell, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-react'
-import { TerminalPatternMatcher, ToolType, NotificationType } from '../utils/terminalPatterns'
+import { ChevronUp, ChevronDown } from 'lucide-react'
+import { TerminalPatternMatcher } from '../utils/terminalPatterns'
 import { SessionStatus, HooksSettings } from '../../../shared/types'
 
 interface TerminalViewProps {
     id: string
     cwd: string
     visible: boolean
-    onNotification?: (type: NotificationType) => void
     onSessionStatusChange?: (sessionId: string, status: SessionStatus, isClaudeCode: boolean) => void
     fontSize?: number
     initialCommand?: string
     shell?: string  // User's preferred shell from settings
-    notificationSettings?: {
-        enabled: boolean
-        tools: {
-            cc: boolean
-            codex: boolean
-            gemini: boolean
-            generic: boolean
-        }
-    }
     keyboardSettings?: {
         scrollShortcuts: boolean
         showScrollButtons: boolean
     }
     hooksSettings?: HooksSettings
-}
-
-interface Notification {
-    id: string
-    type: NotificationType
-    message: string
 }
 
 // 터미널 폰트 패밀리 (고정값)
@@ -44,20 +28,16 @@ export function TerminalView({
     id,
     cwd,
     visible,
-    onNotification,
     onSessionStatusChange,
     fontSize = 14,
     initialCommand,
     shell,
-    notificationSettings,
     keyboardSettings,
     hooksSettings
 }: TerminalViewProps) {
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
-    const [notifications, setNotifications] = useState<Notification[]>([])
-    const lastNotificationRef = useRef<{ type: string; message: string; time: number } | null>(null)
     const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
     // 초기화 직후 불필요한 resize를 방지하기 위한 플래그
     const isInitializedRef = useRef<boolean>(false)
@@ -81,6 +61,20 @@ export function TerminalView({
     const lastSessionStatusRef = useRef<SessionStatus>('idle')
     // Ready 상태 체크 타이머
     const readyCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
+    // 세션을 떠난 시점 기록 (쿨다운용)
+    const leftSessionTimeRef = useRef<number>(0)
+    // 쿨다운 시간 (ms) - 세션 떠난 후 이 시간 동안은 상태 업데이트 무시
+    const STATUS_COOLDOWN_MS = 1500
+
+    // visible을 ref로 추적 (closure 문제 해결)
+    const visibleRef = useRef<boolean>(visible)
+    useEffect(() => {
+        // visible이 true→false로 바뀔 때 쿨다운 시작
+        if (visibleRef.current && !visible) {
+            leftSessionTimeRef.current = Date.now()
+        }
+        visibleRef.current = visible
+    }, [visible])
 
     /**
      * claude-squad 방식의 상태 감지
@@ -110,7 +104,9 @@ export function TerminalView({
         const result = matcherRef.current.processWithStatus(text)
 
         // Handle session status change (only for Claude Code)
-        if (result.isClaudeCode && hooks.claudeCode.showInSidebar) {
+        // 현재 보고 있는 세션(visible) 또는 쿨다운 중에는 상태 업데이트 하지 않음
+        const isInCooldown = Date.now() - leftSessionTimeRef.current < STATUS_COOLDOWN_MS
+        if (result.isClaudeCode && hooks.claudeCode.showInSidebar && !visibleRef.current && !isInCooldown) {
             // claude-squad 방식: 출력이 들어왔으므로 Running
             const newStatus: SessionStatus = (hooks.claudeCode.detectRunning ?? true) ? 'running' : 'idle'
 
@@ -129,32 +125,17 @@ export function TerminalView({
             }, 500)
         }
 
-        // Handle notifications based on settings
-        if (result.notification) {
-            const notif = result.notification
-
-            // Check if this notification type is enabled
-            let shouldNotify = false
-
-            if (notif.type === 'info' && hooks.claudeCode.detectReady) {
-                shouldNotify = true
-            } else if (notif.type === 'error' && hooks.claudeCode.detectError) {
-                shouldNotify = true
-            } else if (notif.type === 'warning') {
-                // Warnings are always shown if hooks are enabled
-                shouldNotify = true
-            }
-
-            if (shouldNotify) {
-                addNotification(notif.type, notif.message, hooks.claudeCode.autoDismissSeconds)
-            }
-        }
     }
 
     /**
      * claude-squad 방식: 출력이 멈추면 Ready로 전환
+     * visible이거나 쿨다운 중에는 상태 업데이트 하지 않음
      */
     const checkAndUpdateReadyStatus = () => {
+        // 현재 보고 있는 세션 또는 쿨다운 중에는 상태 업데이트 하지 않음
+        const isInCooldown = Date.now() - leftSessionTimeRef.current < STATUS_COOLDOWN_MS
+        if (visibleRef.current || isInCooldown) return
+
         const hooks = hooksSettingsRef.current
         if (!hooks?.enabled || !hooks?.claudeCode?.enabled) return
 
@@ -166,44 +147,8 @@ export function TerminalView({
             if (newStatus !== lastSessionStatusRef.current) {
                 lastSessionStatusRef.current = newStatus
                 onSessionStatusChange?.(id, newStatus, true)
-
-                // hasPrompt가 true면 알림 표시 (사용자 입력 필요)
-                if (hasPrompt) {
-                    addNotification('info', '🔔 Claude Code가 입력을 기다리고 있습니다', hooks.claudeCode.autoDismissSeconds)
-                }
             }
         }
-    }
-
-    const addNotification = (type: NotificationType, message: string, autoDismissSeconds?: number) => {
-        // Prevent duplicates: ignore if same type and message within 3 seconds
-        const now = Date.now()
-        const last = lastNotificationRef.current
-        if (last && last.type === type && last.message === message && now - last.time < 3000) {
-            return
-        }
-
-        // Record last notification
-        lastNotificationRef.current = { type, message, time: now }
-
-        const newNotif: Notification = {
-            id: `${Date.now()}-${Math.random()}`,
-            type,
-            message
-        }
-
-        setNotifications(prev => [...prev, newNotif])
-
-        // Notify parent component
-        onNotification?.(type)
-
-        // Use custom dismiss time if provided, otherwise default:
-        // info/warning (user intervention needed): 10s, others: 5s
-        const defaultDismissTime = (type === 'info' || type === 'warning') ? 10000 : 5000
-        const dismissTime = autoDismissSeconds ? autoDismissSeconds * 1000 : defaultDismissTime
-        setTimeout(() => {
-            setNotifications(prev => prev.filter(n => n.id !== newNotif.id))
-        }, dismissTime)
     }
 
     // Handle visibility changes
@@ -419,56 +364,6 @@ export function TerminalView({
             onDrop={handleDrop}
         >
             <div className="w-full h-full" ref={terminalRef} />
-
-            {/* Notifications */}
-            <div className="fixed top-4 right-4 z-50 space-y-2 pointer-events-none">
-                {notifications.map(notif => (
-                    <div
-                        key={notif.id}
-                        className={`
-                            pointer-events-auto
-                            flex items-start gap-3 p-4 rounded-lg shadow-2xl
-                            backdrop-blur-md border min-w-[300px] max-w-[400px]
-                            animate-in slide-in-from-right-5 duration-300
-                            ${notif.type === 'error' ? 'bg-red-500/20 border-red-500/30' : ''}
-                            ${notif.type === 'success' ? 'bg-green-500/20 border-green-500/30' : ''}
-                            ${notif.type === 'warning' ? 'bg-orange-500/20 border-orange-500/30 ring-1 ring-orange-400/30' : ''}
-                            ${notif.type === 'info' ? 'bg-amber-500/30 border-amber-500/50 ring-2 ring-amber-400/50 animate-pulse' : ''}
-                        `}
-                    >
-                        {notif.type === 'error' && <AlertCircle size={20} className="text-red-400 shrink-0 mt-0.5" />}
-                        {notif.type === 'success' && <CheckCircle size={20} className="text-green-400 shrink-0 mt-0.5" />}
-                        {notif.type === 'warning' && <AlertTriangle size={20} className="text-orange-400 shrink-0 mt-0.5" />}
-                        {notif.type === 'info' && <Bell size={20} className="text-amber-300 shrink-0 mt-0.5 animate-bounce" />}
-                        <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium ${
-                                notif.type === 'error' ? 'text-red-200' :
-                                notif.type === 'success' ? 'text-green-200' :
-                                notif.type === 'warning' ? 'text-orange-200' :
-                                'text-amber-100'
-                            }`}>
-                                {notif.type === 'error' ? '❌ 오류 발생' :
-                                 notif.type === 'success' ? '✅ 완료' :
-                                 notif.type === 'warning' ? '⚠️ 주의' :
-                                 '🔔 입력 필요'}
-                            </p>
-                            <p className={`text-xs mt-1 break-words ${
-                                notif.type === 'info' ? 'text-amber-100 font-medium' :
-                                notif.type === 'warning' ? 'text-orange-100' :
-                                'text-gray-300'
-                            }`}>
-                                {notif.message}
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                            className="text-gray-400 hover:text-white transition-colors"
-                        >
-                            ×
-                        </button>
-                    </div>
-                ))}
-            </div>
 
             {/* Floating Scroll Buttons */}
             {(keyboardSettings?.showScrollButtons ?? true) && (

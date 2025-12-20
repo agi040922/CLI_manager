@@ -2,7 +2,7 @@ import React from 'react'
 import { Folder, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown, GitBranch, Home } from 'lucide-react'
 import clsx from 'clsx'
 import { Reorder } from 'framer-motion'
-import { Workspace, TerminalSession, NotificationStatus, SessionStatus, HooksSettings } from '../../../../shared/types'
+import { Workspace, TerminalSession, SessionStatus, HooksSettings } from '../../../../shared/types'
 import { SessionItem } from './SessionItem'
 import { WorktreeItem } from './WorktreeItem'
 
@@ -13,7 +13,6 @@ interface WorkspaceItemProps {
     expandedSet: Set<string>  // 전체 expanded 상태를 관리하는 Set 추가
     branchInfo?: { current: string; all: string[] }
     activeSessionId?: string
-    sessionNotifications?: Map<string, NotificationStatus>
     sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
     hooksSettings?: HooksSettings
     fontSize?: number  // Sidebar font size
@@ -42,7 +41,6 @@ export function WorkspaceItem({
     expandedSet,
     branchInfo,
     activeSessionId,
-    sessionNotifications,
     sessionStatuses,
     hooksSettings,
     fontSize = 14,
@@ -161,7 +159,6 @@ export function WorkspaceItem({
                                         session={session}
                                         workspace={workspace}
                                         isActive={activeSessionId === session.id}
-                                        notificationStatus={sessionNotifications?.get(session.id)}
                                         sessionStatus={statusInfo?.status}
                                         isClaudeCodeSession={statusInfo?.isClaudeCode}
                                         showStatusInSidebar={hooksSettings?.enabled && hooksSettings?.claudeCode?.showInSidebar}
@@ -185,7 +182,6 @@ export function WorkspaceItem({
                             worktree={worktree}
                             expanded={expandedSet.has(worktree.id)}
                             activeSessionId={activeSessionId}
-                            sessionNotifications={sessionNotifications}
                             sessionStatuses={sessionStatuses}
                             hooksSettings={hooksSettings}
                             fontSize={fontSize}

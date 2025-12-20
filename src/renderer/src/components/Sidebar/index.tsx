@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, PanelLeftClose } from 'lucide-react'
-import { Workspace, TerminalSession, NotificationStatus, SessionStatus, HooksSettings } from '../../../../shared/types'
+import { Workspace, TerminalSession, SessionStatus, HooksSettings } from '../../../../shared/types'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
@@ -17,7 +17,6 @@ interface SidebarProps {
     onRemoveSession: (workspaceId: string, sessionId: string) => void
     onCreatePlayground: () => void
     activeSessionId?: string
-    sessionNotifications?: Map<string, NotificationStatus>
     sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
     hooksSettings?: HooksSettings
     onOpenInEditor: (workspacePath: string) => void
@@ -50,7 +49,6 @@ export function Sidebar({
     onRemoveSession,
     onCreatePlayground,
     activeSessionId,
-    sessionNotifications,
     sessionStatuses,
     hooksSettings,
     onOpenInEditor,
@@ -588,7 +586,6 @@ export function Sidebar({
                             expandedSet={expanded}
                             branchInfo={workspaceBranches.get(homeWorkspace.id)}
                             activeSessionId={activeSessionId}
-                            sessionNotifications={sessionNotifications}
                             sessionStatuses={sessionStatuses}
                             hooksSettings={hooksSettings}
                             renamingSessionId={renamingSessionId}
@@ -619,7 +616,6 @@ export function Sidebar({
                                 expandedSet={expanded}
                                 branchInfo={workspaceBranches.get(workspace.id)}
                                 activeSessionId={activeSessionId}
-                                sessionNotifications={sessionNotifications}
                                 sessionStatuses={sessionStatuses}
                                 hooksSettings={hooksSettings}
                                 renamingSessionId={renamingSessionId}
@@ -665,7 +661,6 @@ export function Sidebar({
                                     expandedSet={expanded}
                                     branchInfo={workspaceBranches.get(workspace.id)}
                                     activeSessionId={activeSessionId}
-                                    sessionNotifications={sessionNotifications}
                                     sessionStatuses={sessionStatuses}
                                     hooksSettings={hooksSettings}
                                     renamingSessionId={renamingSessionId}

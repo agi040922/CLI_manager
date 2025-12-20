@@ -5,7 +5,7 @@ import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
 import { ConfirmationModal } from './components/Sidebar/Modals'
-import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus } from '../../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft } from 'lucide-react'
 import { Onboarding } from './components/Onboarding'
@@ -18,8 +18,7 @@ function App() {
     const [activeSession, setActiveSession] = useState<TerminalSession | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [gitPanelOpen, setGitPanelOpen] = useState(false)
-    const [sessionNotifications, setSessionNotifications] = useState<Map<string, NotificationStatus>>(new Map())
-    // Session status tracking for Claude Code hooks (inspired by claude-squad)
+    // Session status tracking for Claude Code hooks (claude-squad style)
     const [sessionStatuses, setSessionStatuses] = useState<Map<string, { status: SessionStatus, isClaudeCode: boolean }>>(new Map())
     const [settings, setSettings] = useState<UserSettings>({
         theme: 'dark',
@@ -219,23 +218,15 @@ function App() {
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
         setActiveWorkspace(workspace)
         setActiveSession(session)
-        // 세션 선택 시 알림 초기화
-        setSessionNotifications(prev => {
+        // 세션 선택 시 상태 초기화 (사용자가 확인했으므로 idle로 리셋)
+        setSessionStatuses(prev => {
             const next = new Map(prev)
-            next.set(session.id, 'none')
+            const current = next.get(session.id)
+            if (current) {
+                next.set(session.id, { ...current, status: 'idle' })
+            }
             return next
         })
-    }
-
-    const handleNotification = (sessionId: string, type: 'info' | 'error' | 'success' | 'warning') => {
-        // 현재 활성 세션이 아닐 때만 알림 표시
-        if (activeSession?.id !== sessionId) {
-            setSessionNotifications(prev => {
-                const next = new Map(prev)
-                next.set(sessionId, type)
-                return next
-            })
-        }
     }
 
     // Handle session status change from Claude Code hooks
@@ -509,7 +500,6 @@ function App() {
                     onRemoveSession={handleRemoveSession}
                     onCreatePlayground={handleCreatePlayground}
                     activeSessionId={activeSession?.id}
-                    sessionNotifications={sessionNotifications}
                     sessionStatuses={sessionStatuses}
                     hooksSettings={settings.hooks}
                     onOpenInEditor={handleOpenInEditor}
@@ -583,12 +573,10 @@ function App() {
                                     id={session.id}
                                     cwd={session.cwd}
                                     visible={activeSession?.id === session.id}
-                                    onNotification={(type) => handleNotification(session.id, type)}
                                     onSessionStatusChange={handleSessionStatusChange}
                                     fontSize={terminalFontSize}
                                     initialCommand={session.initialCommand}
                                     shell={settings.defaultShell}
-                                    notificationSettings={settings.notifications}
                                     keyboardSettings={settings.keyboard}
                                     hooksSettings={settings.hooks}
                                 />
