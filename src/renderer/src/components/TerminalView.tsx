@@ -67,6 +67,10 @@ export function TerminalView({
     const STATUS_COOLDOWN_MS = 1500
     // 쿨다운이 끝난 후 첫 폴링인지 추적 (해시 동기화용)
     const needsSyncAfterCooldownRef = useRef<boolean>(false)
+    // Ready → Running 전환 debounce (깜빡임 방지)
+    // 2초(4회 폴링) 동안 연속 Running 판정 시에만 전환
+    const runningCountRef = useRef<number>(0)
+    const RUNNING_DEBOUNCE_COUNT = 4  // 500ms * 4 = 2초
 
     // visible을 ref로 추적 (closure 문제 해결)
     const visibleRef = useRef<boolean>(visible)
@@ -133,15 +137,27 @@ export function TerminalView({
 
         if (!isClaudeCode) return
 
-        // 상태가 변경되었을 때만 콜백 호출
-        let newStatus: SessionStatus = status
-
         // 설정에 따라 상태 필터링
+        let newStatus: SessionStatus = status
         if (status === 'running' && !(hooks.claudeCode.detectRunning ?? true)) {
             newStatus = 'idle'
         }
         if (status === 'ready' && !hooks.claudeCode.detectReady) {
             newStatus = 'idle'
+        }
+
+        // Ready → Running 전환에 debounce 적용 (깜빡임 방지)
+        // 현재 Ready이고 새 상태가 Running이면 debounce
+        if (lastSessionStatusRef.current === 'ready' && newStatus === 'running') {
+            runningCountRef.current++
+            // 2초(4회) 연속 Running 판정이 아니면 전환하지 않음
+            if (runningCountRef.current < RUNNING_DEBOUNCE_COUNT) {
+                return  // Ready 유지
+            }
+            // 2초 지났으면 Running으로 전환
+        } else {
+            // Running 판정이 아니면 카운터 리셋
+            runningCountRef.current = 0
         }
 
         if (newStatus !== lastSessionStatusRef.current) {
