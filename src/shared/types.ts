@@ -1,5 +1,12 @@
 export type NotificationStatus = 'none' | 'info' | 'error' | 'success' | 'warning'
 
+// Session status for Claude Code monitoring (claude-squad 방식)
+// idle: No activity detected / Claude Code not running
+// running: Output being generated (화면이 변경됨)
+// ready: Waiting for user input (출력이 멈춤)
+// error: Error occurred
+export type SessionStatus = 'idle' | 'running' | 'ready' | 'error'
+
 export type EditorType = 'vscode' | 'cursor' | 'antigravity' | 'custom'
 
 export type ErrorType =
@@ -178,6 +185,23 @@ export interface UserSettings {
         scrollShortcuts: boolean    // ⌘↑/⌘↓ 스크롤 단축키 활성화 (기본값: true)
         showScrollButtons: boolean  // 플로팅 스크롤 버튼 표시 (기본값: true)
     }
+    // Hooks 설정 (Claude Code 세션 모니터링)
+    hooks?: HooksSettings
+}
+
+// Hooks settings for AI tool session monitoring
+// claude-squad 방식: 화면 변경 = Running, 변경 없음 = Ready
+export interface HooksSettings {
+    enabled: boolean                    // Master switch for hooks
+    claudeCode: {
+        enabled: boolean                // Enable Claude Code monitoring
+        detectRunning: boolean          // Detect "Running" state (output being generated)
+        detectReady: boolean            // Detect "Ready" state (output stopped)
+        detectError: boolean            // Detect errors
+        showInSidebar: boolean          // Show status indicator in sidebar
+        autoDismissSeconds: number      // Auto-dismiss notification time (default: 5)
+    }
+    // Future: codex, gemini, etc.
 }
 
 export interface PortActionLog {

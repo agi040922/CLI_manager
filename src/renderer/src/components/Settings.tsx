@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS } from '../../../shared/types'
-import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug } from 'lucide-react'
+import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS, HooksSettings } from '../../../shared/types'
+import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug, Webhook } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
@@ -22,7 +22,7 @@ interface SettingsProps {
     onLicenseChange?: (info: LicenseInfo) => void
 }
 
-type SettingsCategory = 'general' | 'editor' | 'terminal' | 'keyboard' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license'
+type SettingsCategory = 'general' | 'editor' | 'terminal' | 'keyboard' | 'hooks' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license'
 
 export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding, licenseInfo, onLicenseChange }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
@@ -227,6 +227,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         { id: 'editor' as const, label: 'Editor', icon: <Code2 size={16} /> },
         { id: 'terminal' as const, label: 'Terminal', icon: <Terminal size={16} /> },
         { id: 'keyboard' as const, label: 'Keyboard', icon: <Keyboard size={16} /> },
+        { id: 'hooks' as const, label: 'Hooks', icon: <Webhook size={16} /> },
         { id: 'notifications' as const, label: 'Notifications', icon: <Bell size={16} /> },
         { id: 'port-monitoring' as const, label: 'Port Monitoring', icon: <Monitor size={16} /> },
         { id: 'templates' as const, label: 'Templates', icon: <Play size={16} /> },
@@ -782,6 +783,171 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                 <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘+/-/0</kbd> Font size · <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘↑/↓</kbd> Scroll
                                             </p>
                                         </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Hooks Settings (Session Monitoring) */}
+                            {activeCategory === 'hooks' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">Session Monitoring</h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Show status indicator next to AI tool sessions in the sidebar
+                                        </p>
+
+                                        {/* Master Toggle */}
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm text-gray-300">Enable Session Monitoring</p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Monitor AI tool session status
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const newEnabled = !(settings.hooks?.enabled ?? false)
+                                                    setSettings(prev => ({
+                                                        ...prev,
+                                                        hooks: {
+                                                            enabled: newEnabled,
+                                                            claudeCode: prev.hooks?.claudeCode ?? {
+                                                                enabled: true,
+                                                                detectRunning: true,
+                                                                detectReady: true,
+                                                                detectError: true,
+                                                                showInSidebar: true,
+                                                                autoDismissSeconds: 5
+                                                            }
+                                                        }
+                                                    }))
+                                                }}
+                                                className={`relative w-11 h-6 rounded-full transition-colors ${
+                                                    (settings.hooks?.enabled ?? false)
+                                                        ? 'bg-blue-600'
+                                                        : 'bg-white/20'
+                                                }`}
+                                            >
+                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                    (settings.hooks?.enabled ?? false)
+                                                        ? 'translate-x-6'
+                                                        : 'translate-x-1'
+                                                }`} />
+                                            </button>
+                                        </div>
+
+                                        {/* Claude Code Section - only show when enabled */}
+                                        {(settings.hooks?.enabled ?? false) && (
+                                            <div className="mt-6 pt-4 border-t border-white/10">
+                                                <h4 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+                                                    <Terminal size={14} className="text-blue-400" />
+                                                    Claude Code
+                                                </h4>
+
+                                                {/* Status toggles */}
+                                                <div className="space-y-3">
+                                                    {/* Running */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                                            <span className="text-sm text-gray-300">Running</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSettings(prev => ({
+                                                                ...prev,
+                                                                hooks: {
+                                                                    ...prev.hooks!,
+                                                                    claudeCode: {
+                                                                        ...prev.hooks!.claudeCode,
+                                                                        detectRunning: !(prev.hooks?.claudeCode?.detectRunning ?? true)
+                                                                    }
+                                                                }
+                                                            }))}
+                                                            className={`relative w-9 h-5 rounded-full transition-colors ${
+                                                                (settings.hooks?.claudeCode?.detectRunning ?? true)
+                                                                    ? 'bg-blue-600'
+                                                                    : 'bg-white/20'
+                                                            }`}
+                                                        >
+                                                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                                (settings.hooks?.claudeCode?.detectRunning ?? true)
+                                                                    ? 'translate-x-4'
+                                                                    : 'translate-x-0.5'
+                                                            }`} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Ready */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                                            <span className="text-sm text-gray-300">Ready (Waiting)</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSettings(prev => ({
+                                                                ...prev,
+                                                                hooks: {
+                                                                    ...prev.hooks!,
+                                                                    claudeCode: {
+                                                                        ...prev.hooks!.claudeCode,
+                                                                        detectReady: !(prev.hooks?.claudeCode?.detectReady ?? true)
+                                                                    }
+                                                                }
+                                                            }))}
+                                                            className={`relative w-9 h-5 rounded-full transition-colors ${
+                                                                (settings.hooks?.claudeCode?.detectReady ?? true)
+                                                                    ? 'bg-blue-600'
+                                                                    : 'bg-white/20'
+                                                            }`}
+                                                        >
+                                                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                                (settings.hooks?.claudeCode?.detectReady ?? true)
+                                                                    ? 'translate-x-4'
+                                                                    : 'translate-x-0.5'
+                                                            }`} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Error */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                                            <span className="text-sm text-gray-300">Error</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSettings(prev => ({
+                                                                ...prev,
+                                                                hooks: {
+                                                                    ...prev.hooks!,
+                                                                    claudeCode: {
+                                                                        ...prev.hooks!.claudeCode,
+                                                                        detectError: !(prev.hooks?.claudeCode?.detectError ?? true)
+                                                                    }
+                                                                }
+                                                            }))}
+                                                            className={`relative w-9 h-5 rounded-full transition-colors ${
+                                                                (settings.hooks?.claudeCode?.detectError ?? true)
+                                                                    ? 'bg-blue-600'
+                                                                    : 'bg-white/20'
+                                                            }`}
+                                                        >
+                                                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                                (settings.hooks?.claudeCode?.detectError ?? true)
+                                                                    ? 'translate-x-4'
+                                                                    : 'translate-x-0.5'
+                                                            }`} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Tip Box */}
+                                                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded mt-4">
+                                                    <p className="text-xs text-blue-200">
+                                                        <strong>Tip:</strong> Currently only Claude Code is supported. More AI tools will be added in future updates.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </>
                             )}

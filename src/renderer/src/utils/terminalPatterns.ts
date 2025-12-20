@@ -1,17 +1,18 @@
 /**
  * Terminal Pattern Matcher for Claude Code, Codex, Gemini
  *
- * Claude Code의 stdout에서 나오는 JSON 이벤트와 텍스트 패턴을 파싱하여
- * 알림을 생성하는 유틸리티입니다.
+ * Inspired by claude-squad's status detection:
+ * - Running: Screen content changed (output is being generated)
+ * - Ready: Screen content stopped changing (waiting for user input)
+ * - hasPrompt: Contains prompt string like "No, and tell Claude what to do differently"
  *
- * 파싱 포인트:
- * 1. 권한 요청: {"event":"permission_request",...}
- * 2. 사용자 입력 대기: {"event":"user_input_request",...}
- * 3. 작업 완료: "completed successfully" 포함 문자열
- * 4. 에러 발생: "Error:", "Command failed", "Permission denied", "Rate limit exceeded"
- * 5. 컨텍스트 초과: "Context window exceeded", "compacting context..."
- * 6. MCP 서버 대기: "Waiting for MCP server at ws://..." (10초 이상 대기 시 알림)
+ * claude-squad 방식:
+ * 1. CapturePaneContent()로 화면 내용 캡처
+ * 2. SHA256 해시로 이전 출력과 비교
+ * 3. 변경됨 = Running, 변경 없음 = Ready
  */
+
+import { SessionStatus } from '../../../shared/types'
 
 export type ToolType = 'cc' | 'codex' | 'gemini' | 'generic'
 
@@ -21,18 +22,25 @@ export interface NotificationResult {
     type: NotificationType
     message: string
     tool: ToolType
-    eventType?: ClaudeEventType // 어떤 이벤트에서 발생했는지
+    eventType?: ClaudeEventType
+}
+
+// Extended result including session status (inspired by claude-squad)
+export interface StatusResult {
+    notification: NotificationResult | null
+    sessionStatus: SessionStatus
+    isClaudeCode: boolean
+    hasPrompt: boolean  // claude-squad와 동일: 프롬프트 문자열 포함 여부
 }
 
 // Claude Code JSON 이벤트 타입
 export type ClaudeEventType =
-    | 'permission_request'    // 권한 요청 (가장 자주 발생)
-    | 'user_input_request'    // 사용자 입력 대기 (Plan Mode에서 자주)
-    | 'task_completed'        // 작업 완료
-    | 'error'                 // 에러 발생
-    | 'context_exceeded'      // 컨텍스트 초과
-    | 'mcp_waiting'           // MCP 서버 연결 대기
-    | 'rate_limit'            // Rate limit 초과
+    | 'permission_request'
+    | 'user_input_request'
+    | 'error'
+    | 'context_exceeded'
+    | 'mcp_waiting'
+    | 'rate_limit'
 
 // Claude Code JSON 이벤트 인터페이스
 interface ClaudePermissionEvent {
@@ -62,6 +70,7 @@ export const TOOLS: Record<ToolType, ToolConfig> = {
         startPatterns: [
             /Claude Code v\d+/i,
             /Welcome to Claude Code/i,
+            /^claude\s*$/m,  // claude 명령어 추가
             /^cc\s*$/m
         ],
         endPatterns: [
@@ -94,19 +103,30 @@ export const TOOLS: Record<ToolType, ToolConfig> = {
     }
 }
 
-// 알림 메시지 한국어 템플릿
+// 알림 메시지 템플릿
 const NOTIFICATION_MESSAGES = {
     permission_request: (tool: string, command?: string) =>
         `🔐 권한 승인 필요: ${tool}${command ? ` - ${command.slice(0, 50)}` : ''}`,
     user_input_request: (question: string) =>
         `❓ 입력 대기 중: ${question.slice(0, 60)}${question.length > 60 ? '...' : ''}`,
-    task_completed: () => '✅ 작업이 완료되었습니다',
     error: (message: string) => `❌ 오류: ${message.slice(0, 80)}`,
     context_exceeded: () => '⚠️ 컨텍스트 초과 - 재시작을 고려해주세요',
     mcp_waiting: (url: string) => `⏳ MCP 서버 연결 대기 중: ${url}`,
     rate_limit: () => '⏱️ Rate limit 초과 - 잠시 후 다시 시도해주세요',
-    generic_error: (message: string) => `⚠️ ${message.slice(0, 80)}`
 }
+
+// Claude Code prompt patterns (from claude-squad)
+// claude-squad: hasPrompt = strings.Contains(content, "No, and tell Claude what to do differently")
+const CC_PROMPT_PATTERNS = [
+    /No, and tell Claude what to do differently/,
+]
+
+// Claude Code session end patterns
+const CC_END_PATTERNS = [
+    /Bye!/,
+    /Session ended/i,
+    /Goodbye!/i,
+]
 
 export class TerminalPatternMatcher {
     private currentTool: ToolType = 'generic'
@@ -115,13 +135,113 @@ export class TerminalPatternMatcher {
     private lastNotificationSignature: string = ''
     private lastToolActivity: number = Date.now()
 
+    // claude-squad 방식: 화면 변경 감지
+    // - 출력이 들어오면 Running (화면이 변경됨)
+    // - 일정 시간 출력이 없으면 Ready (화면이 멈춤)
+    private lastOutputTime: number = 0
+    private readyTimeoutMs: number = 500  // claude-squad의 tick 간격과 동일
+
     // MCP 서버 대기 추적
     private mcpWaitStartTime: number | null = null
     private mcpWaitUrl: string | null = null
-    private mcpNotified: boolean = false // 이미 알림을 보냈는지
+    private mcpNotified: boolean = false
 
-    // 디버그 모드 - 콘솔에서 실제 데이터 확인
+    // 디버그 모드
     private debug = false
+
+    /**
+     * claude-squad 방식의 상태 감지
+     *
+     * claude-squad 로직:
+     * updated, prompt := instance.HasUpdated()
+     * if updated {
+     *     instance.SetStatus(Running)   // 화면이 바뀌면 = Running
+     * } else {
+     *     instance.SetStatus(Ready)     // 변경 없으면 = Ready
+     * }
+     *
+     * CLImanger에서는 이벤트 기반이므로:
+     * - 출력이 들어오면 → Running
+     * - 일정 시간 출력이 없으면 → Ready
+     */
+    processWithStatus(data: string): StatusResult {
+        const cleanChunk = this.stripAnsi(data)
+        const notification = this.process(data)
+        const now = Date.now()
+
+        // 도구 감지
+        this.detectTool(cleanChunk)
+
+        // Claude Code가 아니면 idle
+        if (this.currentTool !== 'cc') {
+            return {
+                notification,
+                sessionStatus: 'idle',
+                isClaudeCode: false,
+                hasPrompt: false
+            }
+        }
+
+        // claude-squad 방식: hasPrompt 체크
+        // hasPrompt = strings.Contains(content, "No, and tell Claude what to do differently")
+        let hasPrompt = false
+        for (const pattern of CC_PROMPT_PATTERNS) {
+            if (pattern.test(this.buffer)) {
+                hasPrompt = true
+                break
+            }
+        }
+
+        // 세션 종료 체크
+        for (const pattern of CC_END_PATTERNS) {
+            if (pattern.test(cleanChunk)) {
+                return {
+                    notification,
+                    sessionStatus: 'idle',
+                    isClaudeCode: false,
+                    hasPrompt: false
+                }
+            }
+        }
+
+        // claude-squad 방식: 출력이 들어왔으므로 Running
+        // (화면이 변경됨 = updated = true)
+        this.lastOutputTime = now
+
+        return {
+            notification,
+            sessionStatus: 'running',  // 출력이 들어왔으므로 Running
+            isClaudeCode: true,
+            hasPrompt
+        }
+    }
+
+    /**
+     * Ready 상태 체크 (출력이 멈췄는지)
+     * TerminalView에서 주기적으로 호출하여 Ready 상태 전환 확인
+     */
+    checkReadyStatus(): { isReady: boolean, hasPrompt: boolean } {
+        if (this.currentTool !== 'cc') {
+            return { isReady: false, hasPrompt: false }
+        }
+
+        const now = Date.now()
+        const timeSinceLastOutput = now - this.lastOutputTime
+
+        // 일정 시간 출력이 없으면 Ready
+        const isReady = this.lastOutputTime > 0 && timeSinceLastOutput > this.readyTimeoutMs
+
+        // hasPrompt 체크
+        let hasPrompt = false
+        for (const pattern of CC_PROMPT_PATTERNS) {
+            if (pattern.test(this.buffer)) {
+                hasPrompt = true
+                break
+            }
+        }
+
+        return { isReady, hasPrompt }
+    }
 
     // JSON 이벤트를 우선 파싱하고, 없으면 텍스트 패턴 매칭
     process(data: string): NotificationResult | null {
@@ -291,25 +411,6 @@ export class TerminalPatternMatcher {
 
         // === 공통 패턴 ===
 
-        // 작업 완료 감지
-        const successPatterns = [
-            /completed successfully/i,
-            /All tasks completed/i,
-            /Task completed/i
-        ]
-        for (const line of recentLines) {
-            for (const pattern of successPatterns) {
-                if (pattern.test(line)) {
-                    return this.createNotification(
-                        'success',
-                        NOTIFICATION_MESSAGES.task_completed(),
-                        tool,
-                        'task_completed'
-                    )
-                }
-            }
-        }
-
         // 에러 감지
         const errorPatterns = [
             { pattern: /^Error:/i, extract: true },
@@ -355,27 +456,6 @@ export class TerminalPatternMatcher {
                     'gemini',
                     'error'
                 )
-            }
-        }
-
-        // Generic 빌드 성공
-        if (tool === 'generic') {
-            const buildSuccessPatterns = [
-                /Build (succeeded|success|complete|completed)/i,
-                /Compiled successfully/i,
-                /Tests? (passed|green)/i
-            ]
-            for (const line of recentLines) {
-                for (const pattern of buildSuccessPatterns) {
-                    if (pattern.test(line)) {
-                        return this.createNotification(
-                            'success',
-                            '✅ 빌드 완료',
-                            'generic',
-                            'task_completed'
-                        )
-                    }
-                }
             }
         }
 
@@ -461,7 +541,6 @@ export class TerminalPatternMatcher {
         const cooldowns: Record<string, number> = {
             'permission_request': 10000,  // 권한 요청: 10초
             'user_input_request': 10000,  // 입력 대기: 10초
-            'task_completed': 5000,       // 작업 완료: 5초
             'error': 3000,                // 에러: 3초
             'context_exceeded': 30000,    // 컨텍스트 초과: 30초
             'mcp_waiting': 30000,         // MCP 대기: 30초
@@ -500,8 +579,16 @@ export class TerminalPatternMatcher {
         this.lastNotificationTime = 0
         this.lastNotificationSignature = ''
         this.lastToolActivity = Date.now()
+        this.lastOutputTime = 0
         this.mcpWaitStartTime = null
         this.mcpWaitUrl = null
         this.mcpNotified = false
+    }
+
+    /**
+     * Check if Claude Code is currently active
+     */
+    isClaudeCodeActive(): boolean {
+        return this.currentTool === 'cc'
     }
 }

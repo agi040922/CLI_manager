@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, PanelLeftClose } from 'lucide-react'
-import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, SessionStatus, HooksSettings } from '../../../../shared/types'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
@@ -18,6 +18,8 @@ interface SidebarProps {
     onCreatePlayground: () => void
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
+    sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
+    hooksSettings?: HooksSettings
     onOpenInEditor: (workspacePath: string) => void
     onOpenSettings: () => void
     settingsOpen?: boolean
@@ -49,6 +51,8 @@ export function Sidebar({
     onCreatePlayground,
     activeSessionId,
     sessionNotifications,
+    sessionStatuses,
+    hooksSettings,
     onOpenInEditor,
     onOpenSettings,
     settingsOpen,
@@ -585,6 +589,8 @@ export function Sidebar({
                             branchInfo={workspaceBranches.get(homeWorkspace.id)}
                             activeSessionId={activeSessionId}
                             sessionNotifications={sessionNotifications}
+                            sessionStatuses={sessionStatuses}
+                            hooksSettings={hooksSettings}
                             renamingSessionId={renamingSessionId}
                             fontSize={fontSize}
                             onToggleExpand={toggleExpand}
@@ -614,6 +620,8 @@ export function Sidebar({
                                 branchInfo={workspaceBranches.get(workspace.id)}
                                 activeSessionId={activeSessionId}
                                 sessionNotifications={sessionNotifications}
+                                sessionStatuses={sessionStatuses}
+                                hooksSettings={hooksSettings}
                                 renamingSessionId={renamingSessionId}
                                 fontSize={fontSize}
                                 onToggleExpand={toggleExpand}
@@ -658,6 +666,8 @@ export function Sidebar({
                                     branchInfo={workspaceBranches.get(workspace.id)}
                                     activeSessionId={activeSessionId}
                                     sessionNotifications={sessionNotifications}
+                                    sessionStatuses={sessionStatuses}
+                                    hooksSettings={hooksSettings}
                                     renamingSessionId={renamingSessionId}
                                     fontSize={fontSize}
                                     onToggleExpand={toggleExpand}

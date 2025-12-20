@@ -4,12 +4,14 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { AlertCircle, CheckCircle, Bell, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-react'
 import { TerminalPatternMatcher, ToolType, NotificationType } from '../utils/terminalPatterns'
+import { SessionStatus, HooksSettings } from '../../../shared/types'
 
 interface TerminalViewProps {
     id: string
     cwd: string
     visible: boolean
     onNotification?: (type: NotificationType) => void
+    onSessionStatusChange?: (sessionId: string, status: SessionStatus, isClaudeCode: boolean) => void
     fontSize?: number
     initialCommand?: string
     shell?: string  // User's preferred shell from settings
@@ -26,6 +28,7 @@ interface TerminalViewProps {
         scrollShortcuts: boolean
         showScrollButtons: boolean
     }
+    hooksSettings?: HooksSettings
 }
 
 interface Notification {
@@ -42,11 +45,13 @@ export function TerminalView({
     cwd,
     visible,
     onNotification,
+    onSessionStatusChange,
     fontSize = 14,
     initialCommand,
     shell,
     notificationSettings,
-    keyboardSettings
+    keyboardSettings,
+    hooksSettings
 }: TerminalViewProps) {
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
@@ -66,29 +71,111 @@ export function TerminalView({
         keyboardSettingsRef.current = keyboardSettings
     }, [keyboardSettings])
 
-    // Detection patterns - DISABLED: Will be enabled in a future update
-    const detectOutput = (_text: string) => {
-        // Notification feature is temporarily disabled
-        // Will be re-enabled when the pattern matching is improved
-        return
+    // hooksSettings를 ref로 저장하여 실시간 적용 지원
+    const hooksSettingsRef = useRef(hooksSettings)
+    useEffect(() => {
+        hooksSettingsRef.current = hooksSettings
+    }, [hooksSettings])
 
-        /*
-        // Check if notifications are globally enabled
-        if (notificationSettings?.enabled === false) return
+    // Track last session status to avoid duplicate callbacks
+    const lastSessionStatusRef = useRef<SessionStatus>('idle')
+    // Ready 상태 체크 타이머
+    const readyCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-        const result = matcherRef.current.process(text)
-        if (result) {
-            const toolKey: ToolType = result.tool ?? 'generic'
-            const isEnabled = notificationSettings?.tools?.[toolKey] ?? true
+    /**
+     * claude-squad 방식의 상태 감지
+     *
+     * claude-squad 로직 (app.go):
+     * updated, prompt := instance.HasUpdated()
+     * if updated {
+     *     instance.SetStatus(Running)   // 화면이 바뀌면 = Running
+     * } else {
+     *     instance.SetStatus(Ready)     // 변경 없으면 = Ready
+     * }
+     *
+     * CLImanger에서는 이벤트 기반이므로:
+     * - 출력이 들어오면 → Running
+     * - 500ms 동안 출력이 없으면 → Ready (타이머로 체크)
+     */
+    const detectOutput = (text: string) => {
+        const hooks = hooksSettingsRef.current
 
-            if (isEnabled) {
-                addNotification(result.type, result.message)
+        // Check if hooks are globally enabled
+        if (!hooks?.enabled) return
+
+        // Check if Claude Code monitoring is enabled
+        if (!hooks?.claudeCode?.enabled) return
+
+        // Use processWithStatus for combined notification and status detection
+        const result = matcherRef.current.processWithStatus(text)
+
+        // Handle session status change (only for Claude Code)
+        if (result.isClaudeCode && hooks.claudeCode.showInSidebar) {
+            // claude-squad 방식: 출력이 들어왔으므로 Running
+            const newStatus: SessionStatus = (hooks.claudeCode.detectRunning ?? true) ? 'running' : 'idle'
+
+            if (newStatus !== lastSessionStatusRef.current) {
+                lastSessionStatusRef.current = newStatus
+                onSessionStatusChange?.(id, newStatus, result.isClaudeCode)
+            }
+
+            // Ready 체크 타이머 시작/리셋
+            // claude-squad의 tick 간격(500ms)과 동일하게 설정
+            if (readyCheckTimerRef.current) {
+                clearTimeout(readyCheckTimerRef.current)
+            }
+            readyCheckTimerRef.current = setTimeout(() => {
+                checkAndUpdateReadyStatus()
+            }, 500)
+        }
+
+        // Handle notifications based on settings
+        if (result.notification) {
+            const notif = result.notification
+
+            // Check if this notification type is enabled
+            let shouldNotify = false
+
+            if (notif.type === 'info' && hooks.claudeCode.detectReady) {
+                shouldNotify = true
+            } else if (notif.type === 'error' && hooks.claudeCode.detectError) {
+                shouldNotify = true
+            } else if (notif.type === 'warning') {
+                // Warnings are always shown if hooks are enabled
+                shouldNotify = true
+            }
+
+            if (shouldNotify) {
+                addNotification(notif.type, notif.message, hooks.claudeCode.autoDismissSeconds)
             }
         }
-        */
     }
 
-    const addNotification = (type: NotificationType, message: string) => {
+    /**
+     * claude-squad 방식: 출력이 멈추면 Ready로 전환
+     */
+    const checkAndUpdateReadyStatus = () => {
+        const hooks = hooksSettingsRef.current
+        if (!hooks?.enabled || !hooks?.claudeCode?.enabled) return
+
+        const { isReady, hasPrompt } = matcherRef.current.checkReadyStatus()
+
+        if (isReady && hooks.claudeCode.detectReady) {
+            const newStatus: SessionStatus = 'ready'
+
+            if (newStatus !== lastSessionStatusRef.current) {
+                lastSessionStatusRef.current = newStatus
+                onSessionStatusChange?.(id, newStatus, true)
+
+                // hasPrompt가 true면 알림 표시 (사용자 입력 필요)
+                if (hasPrompt) {
+                    addNotification('info', '🔔 Claude Code가 입력을 기다리고 있습니다', hooks.claudeCode.autoDismissSeconds)
+                }
+            }
+        }
+    }
+
+    const addNotification = (type: NotificationType, message: string, autoDismissSeconds?: number) => {
         // Prevent duplicates: ignore if same type and message within 3 seconds
         const now = Date.now()
         const last = lastNotificationRef.current
@@ -110,8 +197,10 @@ export function TerminalView({
         // Notify parent component
         onNotification?.(type)
 
-        // info/warning (user intervention needed): 10s, others: 5s auto dismiss
-        const dismissTime = (type === 'info' || type === 'warning') ? 10000 : 5000
+        // Use custom dismiss time if provided, otherwise default:
+        // info/warning (user intervention needed): 10s, others: 5s
+        const defaultDismissTime = (type === 'info' || type === 'warning') ? 10000 : 5000
+        const dismissTime = autoDismissSeconds ? autoDismissSeconds * 1000 : defaultDismissTime
         setTimeout(() => {
             setNotifications(prev => prev.filter(n => n.id !== newNotif.id))
         }, dismissTime)
@@ -283,6 +372,10 @@ export function TerminalView({
             window.removeEventListener('resize', handleResize)
             resizeObserver.disconnect()
             term.dispose()
+            // Ready 체크 타이머 정리
+            if (readyCheckTimerRef.current) {
+                clearTimeout(readyCheckTimerRef.current)
+            }
         }
     // fontSize는 별도 useEffect에서 동적으로 처리하므로 의존성에서 제외
     // eslint-disable-next-line react-hooks/exhaustive-deps

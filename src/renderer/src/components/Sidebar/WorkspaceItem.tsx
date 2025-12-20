@@ -2,7 +2,7 @@ import React from 'react'
 import { Folder, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown, GitBranch, Home } from 'lucide-react'
 import clsx from 'clsx'
 import { Reorder } from 'framer-motion'
-import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, SessionStatus, HooksSettings } from '../../../../shared/types'
 import { SessionItem } from './SessionItem'
 import { WorktreeItem } from './WorktreeItem'
 
@@ -14,6 +14,8 @@ interface WorkspaceItemProps {
     branchInfo?: { current: string; all: string[] }
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
+    sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
+    hooksSettings?: HooksSettings
     fontSize?: number  // Sidebar font size
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
@@ -41,6 +43,8 @@ export function WorkspaceItem({
     branchInfo,
     activeSessionId,
     sessionNotifications,
+    sessionStatuses,
+    hooksSettings,
     fontSize = 14,
     onToggleExpand,
     onContextMenu,
@@ -149,22 +153,28 @@ export function WorkspaceItem({
                             onReorder={(newOrder) => onReorderSessions(workspace.id, newOrder)}
                             className="space-y-0.5"
                         >
-                            {workspace.sessions.map((session: TerminalSession) => (
-                                <SessionItem
-                                    key={session.id}
-                                    session={session}
-                                    workspace={workspace}
-                                    isActive={activeSessionId === session.id}
-                                    notificationStatus={sessionNotifications?.get(session.id)}
-                                    isRenaming={renamingSessionId === session.id}
-                                    fontSize={fontSize}
-                                    onSelect={onSelect}
-                                    onRemove={onRemoveSession}
-                                    onRename={onRenameSession}
-                                    onContextMenu={onSessionContextMenu}
-                                    onRenameCancel={onRenameCancel}
-                                />
-                            ))}
+                            {workspace.sessions.map((session: TerminalSession) => {
+                                const statusInfo = sessionStatuses?.get(session.id)
+                                return (
+                                    <SessionItem
+                                        key={session.id}
+                                        session={session}
+                                        workspace={workspace}
+                                        isActive={activeSessionId === session.id}
+                                        notificationStatus={sessionNotifications?.get(session.id)}
+                                        sessionStatus={statusInfo?.status}
+                                        isClaudeCodeSession={statusInfo?.isClaudeCode}
+                                        showStatusInSidebar={hooksSettings?.enabled && hooksSettings?.claudeCode?.showInSidebar}
+                                        isRenaming={renamingSessionId === session.id}
+                                        fontSize={fontSize}
+                                        onSelect={onSelect}
+                                        onRemove={onRemoveSession}
+                                        onRename={onRenameSession}
+                                        onContextMenu={onSessionContextMenu}
+                                        onRenameCancel={onRenameCancel}
+                                    />
+                                )
+                            })}
                         </Reorder.Group>
                     )}
 
@@ -176,6 +186,8 @@ export function WorkspaceItem({
                             expanded={expandedSet.has(worktree.id)}
                             activeSessionId={activeSessionId}
                             sessionNotifications={sessionNotifications}
+                            sessionStatuses={sessionStatuses}
+                            hooksSettings={hooksSettings}
                             fontSize={fontSize}
                             onToggleExpand={onToggleExpand}
                             onContextMenu={onContextMenu}

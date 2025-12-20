@@ -1,7 +1,7 @@
 import React from 'react'
 import { GitBranch, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
 import { Reorder } from 'framer-motion'
-import { Workspace, TerminalSession, NotificationStatus } from '../../../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, SessionStatus, HooksSettings } from '../../../../shared/types'
 import { SessionItem } from './SessionItem'
 
 interface WorktreeItemProps {
@@ -9,6 +9,8 @@ interface WorktreeItemProps {
     expanded: boolean
     activeSessionId?: string
     sessionNotifications?: Map<string, NotificationStatus>
+    sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
+    hooksSettings?: HooksSettings
     fontSize?: number  // Sidebar font size
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
@@ -32,6 +34,8 @@ export function WorktreeItem({
     expanded,
     activeSessionId,
     sessionNotifications,
+    sessionStatuses,
+    hooksSettings,
     fontSize = 14,
     onToggleExpand,
     onContextMenu,
@@ -108,22 +112,28 @@ export function WorktreeItem({
                         onReorder={(newOrder) => onReorderSessions(worktree.id, newOrder)}
                         className="space-y-0.5"
                     >
-                        {worktree.sessions.map((session: TerminalSession) => (
-                            <SessionItem
-                                key={session.id}
-                                session={session}
-                                workspace={worktree}
-                                isActive={activeSessionId === session.id}
-                                notificationStatus={sessionNotifications?.get(session.id)}
-                                isRenaming={renamingSessionId === session.id}
-                                fontSize={fontSize}
-                                onSelect={onSelect}
-                                onRemove={onRemoveSession}
-                                onRename={onRenameSession}
-                                onContextMenu={onSessionContextMenu}
-                                onRenameCancel={onRenameCancel}
-                            />
-                        ))}
+                        {worktree.sessions.map((session: TerminalSession) => {
+                            const statusInfo = sessionStatuses?.get(session.id)
+                            return (
+                                <SessionItem
+                                    key={session.id}
+                                    session={session}
+                                    workspace={worktree}
+                                    isActive={activeSessionId === session.id}
+                                    notificationStatus={sessionNotifications?.get(session.id)}
+                                    sessionStatus={statusInfo?.status}
+                                    isClaudeCodeSession={statusInfo?.isClaudeCode}
+                                    showStatusInSidebar={hooksSettings?.enabled && hooksSettings?.claudeCode?.showInSidebar}
+                                    isRenaming={renamingSessionId === session.id}
+                                    fontSize={fontSize}
+                                    onSelect={onSelect}
+                                    onRemove={onRemoveSession}
+                                    onRename={onRenameSession}
+                                    onContextMenu={onSessionContextMenu}
+                                    onRenameCancel={onRenameCancel}
+                                />
+                            )
+                        })}
                     </Reorder.Group>
                 </div>
             )}

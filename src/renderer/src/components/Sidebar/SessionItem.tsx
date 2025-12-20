@@ -2,14 +2,32 @@ import React from 'react'
 import { Terminal, Trash2, GripVertical } from 'lucide-react'
 import clsx from 'clsx'
 import { Reorder, useDragControls } from 'framer-motion'
-import { TerminalSession, NotificationStatus, Workspace } from '../../../../shared/types'
+import { TerminalSession, NotificationStatus, Workspace, SessionStatus } from '../../../../shared/types'
 import { NOTIFICATION_COLORS } from '../../constants/styles'
+
+// Session status colors (claude-squad 방식)
+const SESSION_STATUS_COLORS: Record<SessionStatus, string> = {
+    idle: 'bg-gray-500',
+    running: 'bg-blue-500 animate-pulse',
+    ready: 'bg-amber-500',
+    error: 'bg-red-500'
+}
+
+const SESSION_STATUS_TITLES: Record<SessionStatus, string> = {
+    idle: 'Idle',
+    running: 'Running (output being generated)',
+    ready: 'Ready (waiting for input)',
+    error: 'Error occurred'
+}
 
 interface SessionItemProps {
     session: TerminalSession
     workspace: Workspace
     isActive: boolean
     notificationStatus?: NotificationStatus
+    sessionStatus?: SessionStatus
+    isClaudeCodeSession?: boolean
+    showStatusInSidebar?: boolean
     fontSize?: number  // Sidebar font size
     onSelect: (workspace: Workspace, session: TerminalSession) => void
     onRemove: (workspaceId: string, sessionId: string) => void
@@ -29,6 +47,9 @@ export function SessionItem({
     workspace,
     isActive,
     notificationStatus,
+    sessionStatus,
+    isClaudeCodeSession,
+    showStatusInSidebar = true,
     fontSize = 14,
     onSelect,
     onRemove,
@@ -72,6 +93,23 @@ export function SessionItem({
         return (
             <div
                 className={`w-2 h-2 rounded-full ${NOTIFICATION_COLORS[notificationStatus]} animate-pulse shrink-0`}
+            />
+        )
+    }
+
+    // Session status indicator for Claude Code sessions
+    const getSessionStatusBadge = () => {
+        // Don't show for active session (user is already looking at it)
+        if (isActive) return null
+        // Only show if enabled and it's a Claude Code session
+        if (!showStatusInSidebar || !isClaudeCodeSession || !sessionStatus) return null
+        // Don't show idle status to reduce visual noise
+        if (sessionStatus === 'idle') return null
+
+        return (
+            <div
+                className={`w-2 h-2 rounded-full ${SESSION_STATUS_COLORS[sessionStatus]} shrink-0`}
+                title={SESSION_STATUS_TITLES[sessionStatus]}
             />
         )
     }
@@ -123,6 +161,7 @@ export function SessionItem({
                 ) : (
                     <span className="truncate flex-1" style={{ fontSize: `${fontSize}px` }}>{session.name}</span>
                 )}
+                {getSessionStatusBadge()}
                 {getNotificationBadge()}
             </div>
             {!isRenaming && (

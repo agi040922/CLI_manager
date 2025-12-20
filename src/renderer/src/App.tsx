@@ -5,7 +5,7 @@ import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
 import { ConfirmationModal } from './components/Sidebar/Modals'
-import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS } from '../../shared/types'
+import { Workspace, TerminalSession, NotificationStatus, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft } from 'lucide-react'
 import { Onboarding } from './components/Onboarding'
@@ -19,6 +19,8 @@ function App() {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [gitPanelOpen, setGitPanelOpen] = useState(false)
     const [sessionNotifications, setSessionNotifications] = useState<Map<string, NotificationStatus>>(new Map())
+    // Session status tracking for Claude Code hooks (inspired by claude-squad)
+    const [sessionStatuses, setSessionStatuses] = useState<Map<string, { status: SessionStatus, isClaudeCode: boolean }>>(new Map())
     const [settings, setSettings] = useState<UserSettings>({
         theme: 'dark',
         fontSize: 14,
@@ -234,6 +236,15 @@ function App() {
                 return next
             })
         }
+    }
+
+    // Handle session status change from Claude Code hooks
+    const handleSessionStatusChange = (sessionId: string, status: SessionStatus, isClaudeCode: boolean) => {
+        setSessionStatuses(prev => {
+            const next = new Map(prev)
+            next.set(sessionId, { status, isClaudeCode })
+            return next
+        })
     }
 
     const handleAddWorkspace = async () => {
@@ -499,6 +510,8 @@ function App() {
                     onCreatePlayground={handleCreatePlayground}
                     activeSessionId={activeSession?.id}
                     sessionNotifications={sessionNotifications}
+                    sessionStatuses={sessionStatuses}
+                    hooksSettings={settings.hooks}
                     onOpenInEditor={handleOpenInEditor}
                     onOpenSettings={() => handleOpenSettings('general')}
                     settingsOpen={settingsOpen}
@@ -571,11 +584,13 @@ function App() {
                                     cwd={session.cwd}
                                     visible={activeSession?.id === session.id}
                                     onNotification={(type) => handleNotification(session.id, type)}
+                                    onSessionStatusChange={handleSessionStatusChange}
                                     fontSize={terminalFontSize}
                                     initialCommand={session.initialCommand}
                                     shell={settings.defaultShell}
                                     notificationSettings={settings.notifications}
                                     keyboardSettings={settings.keyboard}
+                                    hooksSettings={settings.hooks}
                                 />
                             </div>
                         ))
