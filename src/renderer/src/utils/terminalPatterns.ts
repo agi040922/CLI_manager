@@ -135,11 +135,13 @@ export class TerminalPatternMatcher {
     private lastNotificationSignature: string = ''
     private lastToolActivity: number = Date.now()
 
-    // claude-squad 방식: 화면 변경 감지
-    // - 출력이 들어오면 Running (화면이 변경됨)
-    // - 일정 시간 출력이 없으면 Ready (화면이 멈춤)
+    // claude-squad 방식: 화면 변경 감지 (SHA256 해시 비교)
+    // - 500ms마다 버퍼 해시 비교
+    // - 해시가 다르면 Running (화면이 변경됨)
+    // - 해시가 같으면 Ready (화면이 멈춤)
     private lastOutputTime: number = 0
-    private readyTimeoutMs: number = 500  // claude-squad의 tick 간격과 동일
+    private lastBufferHash: string = ''
+    private pollIntervalMs: number = 500  // claude-squad의 tick 간격과 동일
 
     // MCP 서버 대기 추적
     private mcpWaitStartTime: number | null = null
@@ -150,27 +152,32 @@ export class TerminalPatternMatcher {
     private debug = false
 
     /**
-     * claude-squad 방식의 상태 감지
-     *
-     * claude-squad 로직:
-     * updated, prompt := instance.HasUpdated()
-     * if updated {
-     *     instance.SetStatus(Running)   // 화면이 바뀌면 = Running
-     * } else {
-     *     instance.SetStatus(Ready)     // 변경 없으면 = Ready
-     * }
-     *
-     * CLImanger에서는 이벤트 기반이므로:
-     * - 출력이 들어오면 → Running
-     * - 일정 시간 출력이 없으면 → Ready
+     * 단순 해시 함수 (claude-squad의 SHA256 대신 간단한 해시)
+     * 성능을 위해 간소화된 해시 사용
+     */
+    private hashBuffer(str: string): string {
+        let hash = 0
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i)
+            hash = ((hash << 5) - hash) + char
+            hash = hash & hash // Convert to 32bit integer
+        }
+        return hash.toString(16)
+    }
+
+    /**
+     * 출력 처리 (버퍼 업데이트만)
+     * 상태 변경은 pollStatus()에서 처리
      */
     processWithStatus(data: string): StatusResult {
         const cleanChunk = this.stripAnsi(data)
         const notification = this.process(data)
-        const now = Date.now()
 
         // 도구 감지
         this.detectTool(cleanChunk)
+
+        // 출력 시간 기록 (마지막 출력이 언제인지)
+        this.lastOutputTime = Date.now()
 
         // Claude Code가 아니면 idle
         if (this.currentTool !== 'cc') {
@@ -179,16 +186,6 @@ export class TerminalPatternMatcher {
                 sessionStatus: 'idle',
                 isClaudeCode: false,
                 hasPrompt: false
-            }
-        }
-
-        // claude-squad 방식: hasPrompt 체크
-        // hasPrompt = strings.Contains(content, "No, and tell Claude what to do differently")
-        let hasPrompt = false
-        for (const pattern of CC_PROMPT_PATTERNS) {
-            if (pattern.test(this.buffer)) {
-                hasPrompt = true
-                break
             }
         }
 
@@ -204,43 +201,84 @@ export class TerminalPatternMatcher {
             }
         }
 
-        // claude-squad 방식: 출력이 들어왔으므로 Running
-        // (화면이 변경됨 = updated = true)
-        this.lastOutputTime = now
+        // hasPrompt 체크
+        const hasPrompt = this.checkHasPrompt()
 
+        // 상태는 pollStatus()에서 결정하므로 여기서는 현재 상태 유지
+        // 단, 처음 Claude Code가 감지되면 'running'으로 시작
         return {
             notification,
-            sessionStatus: 'running',  // 출력이 들어왔으므로 Running
+            sessionStatus: 'idle',  // pollStatus()에서 상태 결정
             isClaudeCode: true,
             hasPrompt
         }
     }
 
     /**
-     * Ready 상태 체크 (출력이 멈췄는지)
-     * TerminalView에서 주기적으로 호출하여 Ready 상태 전환 확인
+     * hasPrompt 체크 (claude-squad 방식)
+     * hasPrompt = strings.Contains(content, "No, and tell Claude what to do differently")
      */
-    checkReadyStatus(): { isReady: boolean, hasPrompt: boolean } {
-        if (this.currentTool !== 'cc') {
-            return { isReady: false, hasPrompt: false }
-        }
-
-        const now = Date.now()
-        const timeSinceLastOutput = now - this.lastOutputTime
-
-        // 일정 시간 출력이 없으면 Ready
-        const isReady = this.lastOutputTime > 0 && timeSinceLastOutput > this.readyTimeoutMs
-
-        // hasPrompt 체크
-        let hasPrompt = false
+    private checkHasPrompt(): boolean {
         for (const pattern of CC_PROMPT_PATTERNS) {
             if (pattern.test(this.buffer)) {
-                hasPrompt = true
-                break
+                return true
             }
         }
+        return false
+    }
 
-        return { isReady, hasPrompt }
+    /**
+     * claude-squad 방식 상태 폴링
+     * 500ms마다 호출하여 버퍼 해시 비교로 상태 결정
+     *
+     * claude-squad 로직 (app.go):
+     * updated, prompt := instance.HasUpdated()
+     * if updated {
+     *     instance.SetStatus(Running)   // 해시가 다르면 = Running
+     * } else {
+     *     instance.SetStatus(Ready)     // 해시가 같으면 = Ready
+     * }
+     */
+    pollStatus(): { status: SessionStatus, isClaudeCode: boolean, hasPrompt: boolean } {
+        // Claude Code가 아니면 idle
+        if (this.currentTool !== 'cc') {
+            return { status: 'idle', isClaudeCode: false, hasPrompt: false }
+        }
+
+        // 현재 버퍼의 해시 계산
+        const currentHash = this.hashBuffer(this.buffer)
+
+        // hasPrompt 체크
+        const hasPrompt = this.checkHasPrompt()
+
+        // claude-squad 방식: 해시 비교
+        if (currentHash !== this.lastBufferHash) {
+            // 해시가 다르면 = 화면이 변경됨 = Running
+            this.lastBufferHash = currentHash
+            return { status: 'running', isClaudeCode: true, hasPrompt }
+        } else {
+            // 해시가 같으면 = 화면이 멈춤 = Ready
+            return { status: 'ready', isClaudeCode: true, hasPrompt }
+        }
+    }
+
+    /**
+     * Get poll interval (for TerminalView to set up timer)
+     */
+    getPollInterval(): number {
+        return this.pollIntervalMs
+    }
+
+    /**
+     * 현재 버퍼 해시를 동기화
+     * 세션을 나올 때 호출하여 첫 폴링에서 잘못된 Running 상태 방지
+     *
+     * 문제: 세션에 들어가 있는 동안 해시가 업데이트되지 않음
+     * → 나올 때 이전 해시와 현재 버퍼가 달라서 Running으로 잘못 판정
+     * 해결: 나올 때 해시를 현재 버퍼로 동기화
+     */
+    syncHash(): void {
+        this.lastBufferHash = this.hashBuffer(this.buffer)
     }
 
     // JSON 이벤트를 우선 파싱하고, 없으면 텍스트 패턴 매칭
@@ -580,6 +618,7 @@ export class TerminalPatternMatcher {
         this.lastNotificationSignature = ''
         this.lastToolActivity = Date.now()
         this.lastOutputTime = 0
+        this.lastBufferHash = ''
         this.mcpWaitStartTime = null
         this.mcpWaitUrl = null
         this.mcpNotified = false

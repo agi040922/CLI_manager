@@ -59,37 +59,30 @@ export function TerminalView({
 
     // Track last session status to avoid duplicate callbacks
     const lastSessionStatusRef = useRef<SessionStatus>('idle')
-    // Ready 상태 체크 타이머
-    const readyCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
+    // claude-squad 방식 폴링 타이머 (500ms마다 상태 체크)
+    const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
     // 세션을 떠난 시점 기록 (쿨다운용)
     const leftSessionTimeRef = useRef<number>(0)
     // 쿨다운 시간 (ms) - 세션 떠난 후 이 시간 동안은 상태 업데이트 무시
     const STATUS_COOLDOWN_MS = 1500
+    // 쿨다운이 끝난 후 첫 폴링인지 추적 (해시 동기화용)
+    const needsSyncAfterCooldownRef = useRef<boolean>(false)
 
     // visible을 ref로 추적 (closure 문제 해결)
     const visibleRef = useRef<boolean>(visible)
     useEffect(() => {
-        // visible이 true→false로 바뀔 때 쿨다운 시작
+        // visible이 true→false로 바뀔 때 (세션을 나올 때)
         if (visibleRef.current && !visible) {
             leftSessionTimeRef.current = Date.now()
+            // 쿨다운 후 첫 폴링에서 해시 동기화 필요 표시
+            needsSyncAfterCooldownRef.current = true
         }
         visibleRef.current = visible
     }, [visible])
 
     /**
-     * claude-squad 방식의 상태 감지
-     *
-     * claude-squad 로직 (app.go):
-     * updated, prompt := instance.HasUpdated()
-     * if updated {
-     *     instance.SetStatus(Running)   // 화면이 바뀌면 = Running
-     * } else {
-     *     instance.SetStatus(Ready)     // 변경 없으면 = Ready
-     * }
-     *
-     * CLImanger에서는 이벤트 기반이므로:
-     * - 출력이 들어오면 → Running
-     * - 500ms 동안 출력이 없으면 → Ready (타이머로 체크)
+     * 터미널 출력 처리
+     * 버퍼만 업데이트하고, 상태 결정은 pollStatus()에서 처리
      */
     const detectOutput = (text: string) => {
         const hooks = hooksSettingsRef.current
@@ -100,56 +93,78 @@ export function TerminalView({
         // Check if Claude Code monitoring is enabled
         if (!hooks?.claudeCode?.enabled) return
 
-        // Use processWithStatus for combined notification and status detection
-        const result = matcherRef.current.processWithStatus(text)
-
-        // Handle session status change (only for Claude Code)
-        // 현재 보고 있는 세션(visible) 또는 쿨다운 중에는 상태 업데이트 하지 않음
-        const isInCooldown = Date.now() - leftSessionTimeRef.current < STATUS_COOLDOWN_MS
-        if (result.isClaudeCode && hooks.claudeCode.showInSidebar && !visibleRef.current && !isInCooldown) {
-            // claude-squad 방식: 출력이 들어왔으므로 Running
-            const newStatus: SessionStatus = (hooks.claudeCode.detectRunning ?? true) ? 'running' : 'idle'
-
-            if (newStatus !== lastSessionStatusRef.current) {
-                lastSessionStatusRef.current = newStatus
-                onSessionStatusChange?.(id, newStatus, result.isClaudeCode)
-            }
-
-            // Ready 체크 타이머 시작/리셋
-            // claude-squad의 tick 간격(500ms)과 동일하게 설정
-            if (readyCheckTimerRef.current) {
-                clearTimeout(readyCheckTimerRef.current)
-            }
-            readyCheckTimerRef.current = setTimeout(() => {
-                checkAndUpdateReadyStatus()
-            }, 500)
-        }
-
+        // 버퍼 업데이트만 수행 (상태 변경은 pollStatus에서)
+        matcherRef.current.processWithStatus(text)
     }
 
     /**
-     * claude-squad 방식: 출력이 멈추면 Ready로 전환
-     * visible이거나 쿨다운 중에는 상태 업데이트 하지 않음
+     * claude-squad 방식 폴링
+     * 500ms마다 버퍼 해시 비교로 상태 결정
+     *
+     * claude-squad 로직 (app.go):
+     * updated, prompt := instance.HasUpdated()
+     * if updated {
+     *     instance.SetStatus(Running)   // 해시가 다르면 = Running
+     * } else {
+     *     instance.SetStatus(Ready)     // 해시가 같으면 = Ready
+     * }
      */
-    const checkAndUpdateReadyStatus = () => {
-        // 현재 보고 있는 세션 또는 쿨다운 중에는 상태 업데이트 하지 않음
+    const pollStatus = () => {
+        // 현재 보고 있는 세션에는 상태 업데이트 하지 않음
+        if (visibleRef.current) return
+
+        // 쿨다운 체크
         const isInCooldown = Date.now() - leftSessionTimeRef.current < STATUS_COOLDOWN_MS
-        if (visibleRef.current || isInCooldown) return
+        if (isInCooldown) return
+
+        // 쿨다운이 끝난 후 첫 폴링: 해시만 동기화하고 상태는 변경하지 않음
+        // 이렇게 하면 세션 나온 후 파란색 깜빡임 방지
+        if (needsSyncAfterCooldownRef.current) {
+            needsSyncAfterCooldownRef.current = false
+            matcherRef.current.syncHash()
+            return  // 이번 폴링은 스킵
+        }
 
         const hooks = hooksSettingsRef.current
-        if (!hooks?.enabled || !hooks?.claudeCode?.enabled) return
+        if (!hooks?.enabled || !hooks?.claudeCode?.enabled || !hooks?.claudeCode?.showInSidebar) return
 
-        const { isReady, hasPrompt } = matcherRef.current.checkReadyStatus()
+        // 폴링으로 상태 결정
+        const { status, isClaudeCode } = matcherRef.current.pollStatus()
 
-        if (isReady && hooks.claudeCode.detectReady) {
-            const newStatus: SessionStatus = 'ready'
+        if (!isClaudeCode) return
 
-            if (newStatus !== lastSessionStatusRef.current) {
-                lastSessionStatusRef.current = newStatus
-                onSessionStatusChange?.(id, newStatus, true)
-            }
+        // 상태가 변경되었을 때만 콜백 호출
+        let newStatus: SessionStatus = status
+
+        // 설정에 따라 상태 필터링
+        if (status === 'running' && !(hooks.claudeCode.detectRunning ?? true)) {
+            newStatus = 'idle'
+        }
+        if (status === 'ready' && !hooks.claudeCode.detectReady) {
+            newStatus = 'idle'
+        }
+
+        if (newStatus !== lastSessionStatusRef.current) {
+            lastSessionStatusRef.current = newStatus
+            onSessionStatusChange?.(id, newStatus, isClaudeCode)
         }
     }
+
+    // claude-squad 방식 폴링 타이머 설정 (500ms 간격)
+    useEffect(() => {
+        const pollInterval = matcherRef.current.getPollInterval()
+
+        pollTimerRef.current = setInterval(() => {
+            pollStatus()
+        }, pollInterval)
+
+        return () => {
+            if (pollTimerRef.current) {
+                clearInterval(pollTimerRef.current)
+            }
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, onSessionStatusChange])
 
     // Handle visibility changes
     useEffect(() => {
@@ -317,10 +332,7 @@ export function TerminalView({
             window.removeEventListener('resize', handleResize)
             resizeObserver.disconnect()
             term.dispose()
-            // Ready 체크 타이머 정리
-            if (readyCheckTimerRef.current) {
-                clearTimeout(readyCheckTimerRef.current)
-            }
+            // 폴링 타이머는 별도 useEffect에서 정리됨
         }
     // fontSize는 별도 useEffect에서 동적으로 처리하므로 의존성에서 제외
     // eslint-disable-next-line react-hooks/exhaustive-deps
