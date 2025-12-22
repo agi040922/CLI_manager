@@ -41,6 +41,12 @@ export function TerminalView({
     const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
     // 초기화 직후 불필요한 resize를 방지하기 위한 플래그
     const isInitializedRef = useRef<boolean>(false)
+    // fit() 중복 호출 방지 플래그 (race condition 방지)
+    const isFittingRef = useRef<boolean>(false)
+    // ResizeObserver debounce 타이머
+    const resizeDebounceRef = useRef<NodeJS.Timeout | null>(null)
+    // fit() 요청 큐 (pending 상태 추적)
+    const fitPendingRef = useRef<boolean>(false)
     // initialCommand가 이미 실행되었는지 추적 (StrictMode에서 2번 실행 방지)
     const initialCommandExecutedRef = useRef<boolean>(false)
     // keyboardSettings를 ref로 저장하여 실시간 적용 지원
@@ -83,6 +89,50 @@ export function TerminalView({
         }
         visibleRef.current = visible
     }, [visible])
+
+    /**
+     * 안전한 fit() 호출 - 중복 호출 방지 및 throttle 적용
+     * xterm.js의 fit()은 재진입 불안전(non-reentrant)하므로 동시 호출 방지
+     *
+     * 문제 해결:
+     * - 스크롤 중 ResizeObserver 트리거로 인한 viewport 충돌 방지
+     * - 여러 useEffect에서 동시에 fit() 호출 시 race condition 방지
+     */
+    const safeFit = (options?: { focus?: boolean }) => {
+        // 이미 fitting 중이면 pending으로 표시하고 skip
+        if (isFittingRef.current) {
+            fitPendingRef.current = true
+            return
+        }
+
+        if (!fitAddonRef.current || !xtermRef.current) return
+
+        isFittingRef.current = true
+
+        // requestAnimationFrame으로 렌더링 사이클과 동기화
+        requestAnimationFrame(() => {
+            try {
+                fitAddonRef.current?.fit()
+                if (xtermRef.current) {
+                    window.api.resizeTerminal(id, xtermRef.current.cols, xtermRef.current.rows)
+                    if (options?.focus) {
+                        xtermRef.current.focus()
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fit terminal:', e)
+            } finally {
+                isFittingRef.current = false
+
+                // pending 요청이 있으면 다음 프레임에서 처리
+                if (fitPendingRef.current) {
+                    fitPendingRef.current = false
+                    // 다음 이벤트 루프에서 처리 (즉시 재귀 방지)
+                    setTimeout(() => safeFit(options), 0)
+                }
+            }
+        })
+    }
 
     /**
      * 터미널 출력 처리
@@ -188,19 +238,14 @@ export function TerminalView({
         if (!isInitializedRef.current) return
 
         if (visible && fitAddonRef.current && xtermRef.current) {
-            // Small delay to ensure layout is computed after display: block
-            requestAnimationFrame(() => {
-                try {
-                    fitAddonRef.current?.fit()
-                    const { cols, rows } = xtermRef.current!
-                    window.api.resizeTerminal(id, cols, rows)
-                    // Auto-focus terminal when it becomes visible
-                    xtermRef.current?.focus()
-                } catch (e) {
-                    console.error('Failed to resize terminal:', e)
-                }
-            })
+            // 터미널로 돌아올 때: 백그라운드에서 쌓인 텍스트 렌더링 시간 확보
+            // 즉시 fit()하면 렌더링 중인 xterm과 충돌할 수 있음
+            // 100ms 후에 safeFit() 호출하여 렌더링이 어느정도 진행된 후 처리
+            setTimeout(() => {
+                safeFit({ focus: true })
+            }, 100)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, id])
 
     // fontSize 변경 시 터미널 재생성 없이 동적으로 업데이트
@@ -210,17 +255,10 @@ export function TerminalView({
             // visible 상태일 때만 fit 호출 (display:none 상태에서는 크기 계산이 잘못됨)
             // 비활성 터미널은 visible이 true가 될 때 visibility useEffect에서 fit 호출됨
             if (visible) {
-                requestAnimationFrame(() => {
-                    try {
-                        fitAddonRef.current?.fit()
-                        const { cols, rows } = xtermRef.current!
-                        window.api.resizeTerminal(id, cols, rows)
-                    } catch (e) {
-                        console.error('Failed to resize after font change:', e)
-                    }
-                })
+                safeFit()
             }
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fontSize, id, visible])
 
     useEffect(() => {
@@ -315,28 +353,28 @@ export function TerminalView({
             }
         })
 
-        // Handle resize
+        // Handle resize - safeFit()으로 중복 호출 방지
         const handleResize = () => {
-            try {
-                fitAddon.fit()
-                if (xtermRef.current) {
-                    window.api.resizeTerminal(id, xtermRef.current.cols, xtermRef.current.rows)
-                }
-            } catch (e) {
-                // Ignore resize errors (e.g. when hidden)
-            }
+            safeFit()
         }
 
         window.addEventListener('resize', handleResize)
 
         // Add ResizeObserver for container size changes (e.g. display: block)
+        // IMPORTANT: debounce 적용으로 스크롤 중 멈춤 현상 방지
+        // 문제: 스크롤 시 ResizeObserver가 연속 트리거되어 xterm viewport 충돌 발생
+        // 해결: 150ms debounce로 연속 이벤트를 병합
         const resizeObserver = new ResizeObserver(() => {
             // 초기화 완료 후에만 resize 처리
             if (visible && isInitializedRef.current) {
-                // Small delay to ensure layout is computed
-                requestAnimationFrame(() => {
-                    handleResize()
-                })
+                // debounce: 이전 타이머 취소하고 새로 설정
+                if (resizeDebounceRef.current) {
+                    clearTimeout(resizeDebounceRef.current)
+                }
+                resizeDebounceRef.current = setTimeout(() => {
+                    resizeDebounceRef.current = null
+                    safeFit()
+                }, 150)  // 150ms debounce
             }
         })
 
@@ -347,6 +385,11 @@ export function TerminalView({
         return () => {
             window.removeEventListener('resize', handleResize)
             resizeObserver.disconnect()
+            // debounce 타이머 정리
+            if (resizeDebounceRef.current) {
+                clearTimeout(resizeDebounceRef.current)
+                resizeDebounceRef.current = null
+            }
             term.dispose()
             // 폴링 타이머는 별도 useEffect에서 정리됨
         }
