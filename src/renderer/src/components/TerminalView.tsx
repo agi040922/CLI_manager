@@ -139,11 +139,10 @@ export function TerminalView({
                             if (options?.scrollToBottom) {
                                 xtermRef.current.scrollToBottom()
 
-                                // DOM 스크롤바도 강제 동기화
-                                const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement
-                                if (viewport) {
-                                    viewport.scrollTop = viewport.scrollHeight
-                                }
+                                // xterm.js와 DOM 스크롤 강제 동기화
+                                // scrollLines로 xterm.js 내부 스크롤 이벤트를 트리거
+                                xtermRef.current.scrollLines(1)
+                                xtermRef.current.scrollLines(-1)
                             }
                         }
                     }, 50)
@@ -314,7 +313,8 @@ export function TerminalView({
             fontFamily: TERMINAL_FONT_FAMILY,
             fontSize,
             allowProposedApi: true,
-            cursorBlink: true
+            cursorBlink: true,
+            scrollback: 10000  // 기본값 1000 → 10000 (더 많은 히스토리 보관)
         })
 
         const fitAddon = new FitAddon()
