@@ -1425,9 +1425,9 @@ app.on('before-quit', async (event) => {
         // Terminate all and quit
         isQuitting = true
         terminalManager.killAll()
-        // Force quit after a short delay to ensure cleanup
+        // Quit after a short delay to ensure cleanup (use quit() not exit() for proper cleanup)
         setTimeout(() => {
-            app.exit(0)
+            app.quit()
         }, 100)
     }
     // Cancel (2) - do nothing, stay open
@@ -1615,5 +1615,10 @@ ipcMain.handle('download-update', async () => {
 })
 
 ipcMain.handle('install-update', () => {
+    // Set isQuitting flag to skip before-quit dialog
+    isQuitting = true
+    // Clean up all terminals before installing update
+    terminalManager.killAll()
+    // Install and restart with update
     autoUpdater.quitAndInstall()
 })

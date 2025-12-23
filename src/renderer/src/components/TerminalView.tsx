@@ -47,6 +47,12 @@ export function TerminalView({
     const resizeDebounceRef = useRef<NodeJS.Timeout | null>(null)
     // fit() 요청 큐 (pending 상태 추적)
     const fitPendingRef = useRef<boolean>(false)
+    // 스크롤 중인지 추적 (스크롤 중에는 ResizeObserver 무시)
+    const isScrollingRef = useRef<boolean>(false)
+    // 마지막 크기 추적 (1px 이상 변화만 감지)
+    const lastSizeRef = useRef<{ width: number; height: number } | null>(null)
+    // 터미널 떠날 때 라인 수 저장 (10줄 이상 증가하면 맨 아래로)
+    const lastLineCountRef = useRef<number>(0)
     // initialCommand가 이미 실행되었는지 추적 (StrictMode에서 2번 실행 방지)
     const initialCommandExecutedRef = useRef<boolean>(false)
     // keyboardSettings를 ref로 저장하여 실시간 적용 지원
@@ -97,8 +103,9 @@ export function TerminalView({
      * 문제 해결:
      * - 스크롤 중 ResizeObserver 트리거로 인한 viewport 충돌 방지
      * - 여러 useEffect에서 동시에 fit() 호출 시 race condition 방지
+     * - fit() 후 scrollToBottom()을 다음 프레임에서 실행하여 스크롤바 동기화 보장
      */
-    const safeFit = (options?: { focus?: boolean }) => {
+    const safeFit = (options?: { focus?: boolean; scrollToBottom?: boolean }) => {
         // 이미 fitting 중이면 pending으로 표시하고 skip
         if (isFittingRef.current) {
             fitPendingRef.current = true
@@ -115,8 +122,17 @@ export function TerminalView({
                 fitAddonRef.current?.fit()
                 if (xtermRef.current) {
                     window.api.resizeTerminal(id, xtermRef.current.cols, xtermRef.current.rows)
+
                     if (options?.focus) {
                         xtermRef.current.focus()
+                    }
+
+                    // scrollToBottom은 fit() 효과가 완전히 적용된 다음 프레임에서 실행
+                    // 이렇게 하면 스크롤바 위치와 실제 viewport가 정확히 동기화됨
+                    if (options?.scrollToBottom) {
+                        requestAnimationFrame(() => {
+                            xtermRef.current?.scrollToBottom()
+                        })
                     }
                 }
             } catch (e) {
@@ -237,12 +253,25 @@ export function TerminalView({
         // 초기화 직후에는 resize 건너뛰기 (createTerminal에서 이미 올바른 크기로 생성됨)
         if (!isInitializedRef.current) return
 
+        if (!visible && xtermRef.current) {
+            // 터미널 떠날 때: 현재 라인 수 저장
+            lastLineCountRef.current = xtermRef.current.buffer.active.length
+        }
+
         if (visible && fitAddonRef.current && xtermRef.current) {
             // 터미널로 돌아올 때: 백그라운드에서 쌓인 텍스트 렌더링 시간 확보
             // 즉시 fit()하면 렌더링 중인 xterm과 충돌할 수 있음
             // 100ms 후에 safeFit() 호출하여 렌더링이 어느정도 진행된 후 처리
             setTimeout(() => {
-                safeFit({ focus: true })
+                // 10줄 이상 증가했으면 맨 아래로 스크롤
+                const currentLines = xtermRef.current?.buffer.active.length || 0
+                const linesDiff = currentLines - lastLineCountRef.current
+                const shouldScrollToBottom = linesDiff >= 10
+
+                safeFit({
+                    focus: true,
+                    scrollToBottom: shouldScrollToBottom
+                })
             }, 100)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -321,6 +350,18 @@ export function TerminalView({
                 window.api.writeTerminal(id, data)
             })
 
+            // Handle scroll events (스크롤 중에는 ResizeObserver 무시)
+            let scrollTimeout: NodeJS.Timeout | null = null
+            term.onScroll(() => {
+                isScrollingRef.current = true
+
+                // 스크롤 멈춘 지 200ms 후에 "스크롤 끝"으로 표시
+                if (scrollTimeout) clearTimeout(scrollTimeout)
+                scrollTimeout = setTimeout(() => {
+                    isScrollingRef.current = false
+                }, 200)
+            })
+
             // Handle output
             const cleanup = window.api.onTerminalData(id, (data) => {
                 term.write(data)
@@ -361,21 +402,47 @@ export function TerminalView({
         window.addEventListener('resize', handleResize)
 
         // Add ResizeObserver for container size changes (e.g. display: block)
-        // IMPORTANT: debounce 적용으로 스크롤 중 멈춤 현상 방지
-        // 문제: 스크롤 시 ResizeObserver가 연속 트리거되어 xterm viewport 충돌 발생
-        // 해결: 150ms debounce로 연속 이벤트를 병합
+        // IMPORTANT: 스크롤 중 멈춤 현상 방지
+        // - 스크롤 중에는 ResizeObserver 무시
+        // - 1px 이상 변화만 감지 (불필요한 트리거 방지)
+        // - 150ms debounce로 연속 이벤트 병합
         const resizeObserver = new ResizeObserver(() => {
-            // 초기화 완료 후에만 resize 처리
-            if (visible && isInitializedRef.current) {
-                // debounce: 이전 타이머 취소하고 새로 설정
-                if (resizeDebounceRef.current) {
-                    clearTimeout(resizeDebounceRef.current)
-                }
-                resizeDebounceRef.current = setTimeout(() => {
-                    resizeDebounceRef.current = null
-                    safeFit()
-                }, 150)  // 150ms debounce
+            if (!visible || !isInitializedRef.current) return
+
+            // 스크롤 중이면 무시
+            if (isScrollingRef.current) return
+
+            const rect = terminalRef.current?.getBoundingClientRect()
+            if (!rect) return
+
+            const newWidth = Math.round(rect.width)
+            const newHeight = Math.round(rect.height)
+
+            // 초기값 설정
+            if (!lastSizeRef.current) {
+                lastSizeRef.current = { width: newWidth, height: newHeight }
+                return
             }
+
+            // 1px 이상 변화만 감지
+            const widthChanged = Math.abs(newWidth - lastSizeRef.current.width) >= 1
+            const heightChanged = Math.abs(newHeight - lastSizeRef.current.height) >= 1
+
+            if (!widthChanged && !heightChanged) {
+                return  // 크기 변화 없으면 무시
+            }
+
+            // 변화 기록
+            lastSizeRef.current = { width: newWidth, height: newHeight }
+
+            // debounce: 이전 타이머 취소하고 새로 설정
+            if (resizeDebounceRef.current) {
+                clearTimeout(resizeDebounceRef.current)
+            }
+            resizeDebounceRef.current = setTimeout(() => {
+                resizeDebounceRef.current = null
+                safeFit()
+            }, 150)  // 150ms debounce
         })
 
         if (terminalRef.current) {
