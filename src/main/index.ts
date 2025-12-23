@@ -73,6 +73,7 @@ const store = new Store<AppConfig>({
             fontFamily: 'Monaco, Courier New, monospace',
             defaultShell: 'zsh',
             defaultEditor: 'vscode',
+            customEditorPath: undefined,
             portFilter: {
                 enabled: true,
                 minPort: 3000,
@@ -1305,7 +1306,6 @@ app.whenReady().then(async () => {
             }
 
             // Execute editor command using login shell (via execWithShell helper)
-            // Quote the command if it contains spaces (for custom paths)
             const escapedCommand = command.includes(' ') ? `"${command}"` : command
             await execWithShell(`${escapedCommand} .`, { cwd: workspacePath })
 
