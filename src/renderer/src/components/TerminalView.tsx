@@ -103,7 +103,7 @@ export function TerminalView({
      * 문제 해결:
      * - 스크롤 중 ResizeObserver 트리거로 인한 viewport 충돌 방지
      * - 여러 useEffect에서 동시에 fit() 호출 시 race condition 방지
-     * - fit() 후 scrollToBottom()을 다음 프레임에서 실행하여 스크롤바 동기화 보장
+     * - fit() 후 scrollLines(0)로 내부 스크롤 상태 동기화하여 스크롤 갇힘 방지
      */
     const safeFit = (options?: { focus?: boolean; scrollToBottom?: boolean }) => {
         // 이미 fitting 중이면 pending으로 표시하고 skip
@@ -120,6 +120,7 @@ export function TerminalView({
         requestAnimationFrame(() => {
             try {
                 fitAddonRef.current?.fit()
+
                 if (xtermRef.current) {
                     window.api.resizeTerminal(id, xtermRef.current.cols, xtermRef.current.rows)
 
@@ -127,13 +128,25 @@ export function TerminalView({
                         xtermRef.current.focus()
                     }
 
-                    // scrollToBottom은 fit() 효과가 완전히 적용된 다음 프레임에서 실행
-                    // 이렇게 하면 스크롤바 위치와 실제 viewport가 정확히 동기화됨
-                    if (options?.scrollToBottom) {
-                        requestAnimationFrame(() => {
-                            xtermRef.current?.scrollToBottom()
-                        })
-                    }
+                    // fit() 후 xterm.js 내부 렌더링이 완료될 때까지 대기
+                    // fit()으로 rows가 변경되면 xterm.js가 내부적으로 버퍼를 재계산하고
+                    // 스크롤 위치를 리셋할 수 있음. 충분한 딜레이 후 scrollToBottom() 호출
+                    setTimeout(() => {
+                        if (xtermRef.current) {
+                            // 스크롤 상태 동기화
+                            xtermRef.current.scrollLines(0)
+
+                            if (options?.scrollToBottom) {
+                                xtermRef.current.scrollToBottom()
+
+                                // DOM 스크롤바도 강제 동기화
+                                const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement
+                                if (viewport) {
+                                    viewport.scrollTop = viewport.scrollHeight
+                                }
+                            }
+                        }
+                    }, 50)
                 }
             } catch (e) {
                 console.error('Failed to fit terminal:', e)
@@ -143,7 +156,6 @@ export function TerminalView({
                 // pending 요청이 있으면 다음 프레임에서 처리
                 if (fitPendingRef.current) {
                     fitPendingRef.current = false
-                    // 다음 이벤트 루프에서 처리 (즉시 재귀 방지)
                     setTimeout(() => safeFit(options), 0)
                 }
             }
@@ -259,15 +271,12 @@ export function TerminalView({
         }
 
         if (visible && fitAddonRef.current && xtermRef.current) {
-            // 터미널로 돌아올 때: 백그라운드에서 쌓인 텍스트 렌더링 시간 확보
-            // 즉시 fit()하면 렌더링 중인 xterm과 충돌할 수 있음
-            // 100ms 후에 safeFit() 호출하여 렌더링이 어느정도 진행된 후 처리
-            setTimeout(() => {
-                // 10줄 이상 증가했으면 맨 아래로 스크롤
-                const currentLines = xtermRef.current?.buffer.active.length || 0
-                const linesDiff = currentLines - lastLineCountRef.current
-                const shouldScrollToBottom = linesDiff >= 10
+            // 터미널로 돌아올 때: 10줄 이상 추가됐으면 맨 아래로 스크롤
+            const currentLineCount = xtermRef.current.buffer.active.length
+            const linesAdded = currentLineCount - lastLineCountRef.current
+            const shouldScrollToBottom = linesAdded >= 10
 
+            setTimeout(() => {
                 safeFit({
                     focus: true,
                     scrollToBottom: shouldScrollToBottom
@@ -278,8 +287,10 @@ export function TerminalView({
     }, [visible, id])
 
     // fontSize 변경 시 터미널 재생성 없이 동적으로 업데이트
+    // IMPORTANT: visible은 의존성에서 제거 - visible 변경 시에는 visibility useEffect에서 처리함
+    // visible을 의존성에 넣으면 세션 전환 시 scrollToBottom 없이 safeFit()이 먼저 호출되는 문제 발생
     useEffect(() => {
-        if (xtermRef.current && fitAddonRef.current) {
+        if (xtermRef.current && fitAddonRef.current && isInitializedRef.current) {
             xtermRef.current.options.fontSize = fontSize
             // visible 상태일 때만 fit 호출 (display:none 상태에서는 크기 계산이 잘못됨)
             // 비활성 터미널은 visible이 true가 될 때 visibility useEffect에서 fit 호출됨
@@ -288,7 +299,7 @@ export function TerminalView({
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fontSize, id, visible])
+    }, [fontSize, id])  // visible 제거!
 
     useEffect(() => {
         if (!terminalRef.current) return
@@ -428,11 +439,8 @@ export function TerminalView({
             const widthChanged = Math.abs(newWidth - lastSizeRef.current.width) >= 1
             const heightChanged = Math.abs(newHeight - lastSizeRef.current.height) >= 1
 
-            if (!widthChanged && !heightChanged) {
-                return  // 크기 변화 없으면 무시
-            }
+            if (!widthChanged && !heightChanged) return
 
-            // 변화 기록
             lastSizeRef.current = { width: newWidth, height: newHeight }
 
             // debounce: 이전 타이머 취소하고 새로 설정
