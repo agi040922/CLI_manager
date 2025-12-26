@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS, HooksSettings } from '../../../shared/types'
-import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug, Webhook } from 'lucide-react'
+import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug, Webhook, HelpCircle, ExternalLink } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
@@ -53,6 +53,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
     const [activeCategory, setActiveCategory] = useState<SettingsCategory>(initialCategory)
     const [appVersion, setAppVersion] = useState<string>('')
     const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
+    const [showUpdateHelp, setShowUpdateHelp] = useState(false)
     // Shell configuration states
     const [isCustomShell, setIsCustomShell] = useState(false)
     const [shellValidation, setShellValidation] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid', message?: string }>({ status: 'idle' })
@@ -273,9 +274,16 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                             {/* Version and Update Section */}
                             <div className="p-3 border-t border-white/5 space-y-2">
                                 {appVersion && (
-                                    <div className="text-center leading-tight">
-                                        <div className="text-[10px] text-gray-500">
+                                    <div className="text-center leading-tight relative">
+                                        <div className="text-[10px] text-gray-500 flex items-center justify-center gap-1">
                                             v{appVersion}
+                                            <button
+                                                onClick={() => setShowUpdateHelp(!showUpdateHelp)}
+                                                className="text-gray-500 hover:text-gray-300 transition-colors"
+                                                title="Update help"
+                                            >
+                                                <HelpCircle size={10} />
+                                            </button>
                                         </div>
                                         <a
                                             href="https://www.solhun.com/changelog"
@@ -350,6 +358,70 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                         <RefreshCw size={10} />
                                         Check Updates
                                     </button>
+                                )}
+
+                                {/* Update Help Modal */}
+                                {showUpdateHelp && (
+                                    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+                                        {/* Backdrop */}
+                                        <div
+                                            className="absolute inset-0 bg-black/50"
+                                            onClick={() => setShowUpdateHelp(false)}
+                                        />
+                                        {/* Modal */}
+                                        <div className="relative w-72 p-4 bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl text-left">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <span className="text-sm font-medium text-white">Update Troubleshooting</span>
+                                                <button
+                                                    onClick={() => setShowUpdateHelp(false)}
+                                                    className="text-gray-400 hover:text-white"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+
+                                            {updateState.status === 'error' && updateState.message && (
+                                                <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-300">
+                                                    <strong>Error:</strong> {updateState.message}
+                                                </div>
+                                            )}
+
+                                            <div className="mb-4 space-y-3">
+                                                <p className="text-xs text-gray-300">If update fails, check:</p>
+
+                                                <div>
+                                                    <p className="text-xs text-white mb-1">1. App Location</p>
+                                                    <p className="text-[11px] text-gray-400">
+                                                        App must be in /Applications folder. If you run directly from DMG, updates won't work. Drag the app to Applications first.
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-xs text-white mb-1">2. Firewall Settings</p>
+                                                    <p className="text-[11px] text-gray-400">
+                                                        System Settings → Network → Firewall. Make sure CLI Manager is not blocked.
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-xs text-white mb-1">3. Network</p>
+                                                    <p className="text-[11px] text-gray-400">
+                                                        Check internet connection. VPN or proxy may interfere with updates.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-3 border-t border-white/10">
+                                                <p className="text-xs text-gray-400 mb-2">Still having issues? Contact:</p>
+                                                <a
+                                                    href="mailto:solhun.jeong@gmail.com"
+                                                    className="text-xs text-blue-400 hover:text-blue-300"
+                                                >
+                                                    solhun.jeong@gmail.com
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </div>
