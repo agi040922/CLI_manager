@@ -70,12 +70,30 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
             // Load settings from main process
             window.api.getSettings().then((loadedSettings: UserSettings) => {
                 if (loadedSettings) {
-                    setSettings(loadedSettings)
+                    // Auto-fix: trim custom editor path if it has whitespace
+                    const trimmedEditorPath = (loadedSettings.customEditorPath || '').trim()
+                    const needsAutoFix = loadedSettings.customEditorPath !== trimmedEditorPath
+
+                    // Update settings with trimmed value
+                    const cleanedSettings = {
+                        ...loadedSettings,
+                        customEditorPath: trimmedEditorPath || undefined
+                    }
+
+                    setSettings(cleanedSettings)
                     // Check if current shell is a custom path
                     setIsCustomShell(!standardShells.includes(loadedSettings.defaultShell))
                     // Check if current editor is custom
                     setIsCustomEditor(loadedSettings.defaultEditor === 'custom')
-                    setCustomEditorPath(loadedSettings.customEditorPath || '')
+                    // Trim custom editor path to remove any accidental whitespace
+                    setCustomEditorPath(trimmedEditorPath)
+
+                    // Auto-save if we fixed whitespace
+                    if (needsAutoFix) {
+                        window.api.saveSettings(cleanedSettings).then(() => {
+                            console.log('[Settings] Auto-fixed custom editor path whitespace')
+                        })
+                    }
                 }
             }).catch(() => {
                 // If getSettings is not available, use defaults
@@ -607,8 +625,9 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                             type="text"
                                                             value={customEditorPath}
                                                             onChange={e => {
-                                                                setCustomEditorPath(e.target.value)
-                                                                setSettings(prev => ({ ...prev, customEditorPath: e.target.value }))
+                                                                const trimmedValue = e.target.value.trim()
+                                                                setCustomEditorPath(trimmedValue)
+                                                                setSettings(prev => ({ ...prev, customEditorPath: trimmedValue }))
                                                                 setEditorValidation({ status: 'idle' })
                                                             }}
                                                             placeholder="e.g., /usr/local/bin/subl or sublime"

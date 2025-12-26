@@ -1283,21 +1283,26 @@ app.whenReady().then(async () => {
             // Get default editor from settings if not specified
             const editor = editorType || settings?.defaultEditor || 'vscode'
 
+            console.log('[open-in-editor] Editor type:', editor)
+            console.log('[open-in-editor] Workspace path:', workspacePath)
+
             let command: string
 
             if (editor === 'custom') {
                 // Use custom editor path from settings
                 const customPath = settings?.customEditorPath
+                console.log('[open-in-editor] Custom editor path:', customPath)
                 if (!customPath) {
                     throw new Error('Custom editor path not configured')
                 }
-                command = customPath
+                // Trim whitespace to prevent issues with extra spaces
+                command = customPath.trim()
             } else {
                 // Map editor type to command
                 const editorCommands: Record<string, string> = {
                     'vscode': 'code',
                     'cursor': 'cursor',
-                    'antigravity': 'antigravity'
+                    'antigravity': 'open -a "Antigravity"'
                 }
                 command = editorCommands[editor]
                 if (!command) {
@@ -1306,12 +1311,106 @@ app.whenReady().then(async () => {
             }
 
             // Execute editor command using login shell (via execWithShell helper)
-            const escapedCommand = command.includes(' ') ? `"${command}"` : command
-            await execWithShell(`${escapedCommand} .`, { cwd: workspacePath })
+            // For 'open -a' commands, don't escape (already properly formatted)
+            // For other commands, escape if they contain spaces
+            const escapedCommand = command.startsWith('open -a')
+                ? command
+                : (command.includes(' ') ? `"${command}"` : command)
 
+            const fullCommand = `${escapedCommand} .`
+            console.log('[open-in-editor] Executing command:', fullCommand)
+            console.log('[open-in-editor] Working directory:', workspacePath)
+
+            await execWithShell(fullCommand, { cwd: workspacePath })
+
+            console.log('[open-in-editor] Command executed successfully')
             return { success: true, editor }
         } catch (e: any) {
-            console.error('Open in editor error:', e)
+            console.error('[open-in-editor] ERROR:', e.message)
+            console.error('[open-in-editor] Full error:', e)
+            return { success: false, error: e.message }
+        }
+    })
+
+    // Open specific file in editor (with optional line/column)
+    // Used for Cmd+Click on file paths in terminal
+    ipcMain.handle('open-file-in-editor', async (
+        _,
+        filePath: string,
+        baseCwd: string,
+        line?: number,
+        column?: number
+    ): Promise<{ success: boolean; error?: string }> => {
+        try {
+            const settings = store.get('settings') as UserSettings
+            const editor = settings?.defaultEditor || 'vscode'
+
+            // 1. Resolve path - try multiple strategies
+            let absolutePath = filePath
+            let found = false
+
+            // Strategy 1: If absolute path, check if exists
+            if (path.isAbsolute(filePath)) {
+                if (existsSync(filePath)) {
+                    absolutePath = filePath
+                    found = true
+                } else {
+                    // Strategy 2: Treat as project-root relative (e.g., /jcon/api/... -> cwd/jcon/api/...)
+                    const cwdRelative = path.join(baseCwd, filePath)
+                    if (existsSync(cwdRelative)) {
+                        absolutePath = cwdRelative
+                        found = true
+                    }
+                }
+            } else {
+                // Strategy 3: Relative path from cwd
+                absolutePath = path.resolve(baseCwd, filePath)
+                found = existsSync(absolutePath)
+            }
+
+            // 2. Check if file exists
+            if (!found) {
+                return { success: false, error: `File not found: ${filePath}` }
+            }
+
+            // 3. Get editor command
+            let command: string
+            if (editor === 'custom') {
+                const customPath = settings?.customEditorPath
+                if (!customPath) {
+                    return { success: false, error: 'Custom editor path not configured' }
+                }
+                command = customPath
+            } else {
+                const editorCommands: Record<string, string> = {
+                    'vscode': 'code',
+                    'cursor': 'cursor',
+                    'antigravity': 'antigravity'
+                }
+                command = editorCommands[editor]
+                if (!command) {
+                    return { success: false, error: `Unknown editor: ${editor}` }
+                }
+            }
+
+            // 4. Build command with -g option for line/column
+            // VSCode, Cursor support: code -g file:line:column
+            let fullCommand: string
+            if (line) {
+                const location = column
+                    ? `${absolutePath}:${line}:${column}`
+                    : `${absolutePath}:${line}`
+                fullCommand = `${command} -g "${location}"`
+            } else {
+                fullCommand = `${command} "${absolutePath}"`
+            }
+
+            console.log('[open-file-in-editor] Executing:', fullCommand)
+            await execWithShell(fullCommand)
+
+            return { success: true }
+        } catch (e: any) {
+            console.error('[open-file-in-editor] Error:', e.message)
             return { success: false, error: e.message }
         }
     })

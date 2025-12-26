@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo } from '../shared/types'
 
@@ -56,6 +56,7 @@ const api = {
 
     // Editor
     openInEditor: (workspacePath: string, editorType?: string): Promise<{ success: boolean; editor?: string; error?: string }> => ipcRenderer.invoke('open-in-editor', workspacePath, editorType),
+    openFileInEditor: (filePath: string, baseCwd: string, line?: number, column?: number): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('open-file-in-editor', filePath, baseCwd, line, column),
 
     // Dialog
     selectDirectory: (): Promise<string | null> => ipcRenderer.invoke('select-directory'),
@@ -126,7 +127,11 @@ const api = {
         const listener = (_: any, data: any) => callback(data)
         ipcRenderer.on('update-status', listener)
         return () => ipcRenderer.removeListener('update-status', listener)
-    }
+    },
+
+    // File utilities (for drag & drop)
+    // Electron 9.0+ requires webUtils.getPathForFile() instead of file.path
+    getFilePath: (file: File): string => webUtils.getPathForFile(file)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

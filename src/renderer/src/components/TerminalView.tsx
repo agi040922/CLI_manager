@@ -1,9 +1,11 @@
 import React, { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import { TerminalPatternMatcher } from '../utils/terminalPatterns'
+import { registerFilePathLinks } from '../utils/filePathLinkProvider'
 import { SessionStatus, HooksSettings } from '../../../shared/types'
 
 interface TerminalViewProps {
@@ -320,10 +322,20 @@ export function TerminalView({
         const fitAddon = new FitAddon()
         term.loadAddon(fitAddon)
 
+        // URL links addon (http://, https://, localhost, etc.)
+        const webLinksAddon = new WebLinksAddon((event, uri) => {
+            console.log('[WebLinks] Clicked:', uri)
+            window.open(uri, '_blank')
+        })
+        term.loadAddon(webLinksAddon)
+
         term.open(terminalRef.current)
 
         xtermRef.current = term
         fitAddonRef.current = fitAddon
+
+        // Register file path link provider (Cmd+Click to open in editor)
+        registerFilePathLinks(term, cwd)
 
         // Initialize backend terminal
         let initialCols = 80
@@ -407,7 +419,27 @@ export function TerminalView({
 
         // Handle resize - safeFit()으로 중복 호출 방지
         const handleResize = () => {
-            safeFit()
+            if (!visibleRef.current || !isInitializedRef.current) return
+
+            const rect = terminalRef.current?.getBoundingClientRect()
+            if (!rect) return
+
+            const newWidth = Math.round(rect.width)
+            const newHeight = Math.round(rect.height)
+
+            if (!lastSizeRef.current) {
+                lastSizeRef.current = { width: newWidth, height: newHeight }
+                safeFit({ scrollToBottom: true })
+                return
+            }
+
+            const widthChanged = Math.abs(newWidth - lastSizeRef.current.width) >= 1
+            const heightChanged = Math.abs(newHeight - lastSizeRef.current.height) >= 1
+
+            if (!widthChanged && !heightChanged) return
+
+            lastSizeRef.current = { width: newWidth, height: newHeight }
+            safeFit({ scrollToBottom: true })
         }
 
         window.addEventListener('resize', handleResize)
@@ -418,7 +450,7 @@ export function TerminalView({
         // - 1px 이상 변화만 감지 (불필요한 트리거 방지)
         // - 150ms debounce로 연속 이벤트 병합
         const resizeObserver = new ResizeObserver(() => {
-            if (!visible || !isInitializedRef.current) return
+            if (!visibleRef.current || !isInitializedRef.current) return
 
             // 스크롤 중이면 무시
             if (isScrollingRef.current) return
@@ -449,7 +481,7 @@ export function TerminalView({
             }
             resizeDebounceRef.current = setTimeout(() => {
                 resizeDebounceRef.current = null
-                safeFit()
+                safeFit({ scrollToBottom: true })
             }, 150)  // 150ms debounce
         })
 
@@ -489,8 +521,9 @@ export function TerminalView({
             // 경로에 공백이 있으면 이스케이프 처리
             const paths = Array.from(files)
                 .map(file => {
-                    // Electron에서는 file.path로 전체 경로를 얻을 수 있음
-                    const filePath = (file as any).path as string
+                    // Electron 9.0+ requires webUtils.getPathForFile()
+                    // file.path is deprecated and removed in newer Electron versions
+                    const filePath = window.api.getFilePath(file)
                     // 공백이 포함된 경로는 백슬래시로 이스케이프
                     return filePath.replace(/ /g, '\\ ')
                 })

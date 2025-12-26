@@ -59,6 +59,7 @@ declare global {
 
             // Editor
             openInEditor: (workspacePath: string, editorType?: string) => Promise<{ success: boolean; editor?: string; error?: string }>
+            openFileInEditor: (filePath: string, baseCwd: string, line?: number, column?: number) => Promise<{ success: boolean; error?: string }>
 
             // Terminal
             createTerminal: (id: string, cwd: string, cols: number, rows: number, shell?: string) => Promise<boolean>
@@ -99,6 +100,9 @@ declare global {
             onUpdateStatus: (callback: (status: { status: string; version?: string; percent?: number; message?: string }) => void) => () => void
             getAppVersion: () => Promise<string>
             checkTools: () => Promise<{ git: boolean; gh: boolean; brew: boolean }>
+
+            // File utilities (for drag & drop)
+            getFilePath: (file: File) => string
         }
     }
 }
