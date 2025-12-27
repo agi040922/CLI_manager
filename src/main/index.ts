@@ -1214,6 +1214,13 @@ app.whenReady().then(async () => {
         }
     })
 
+    // Open in Finder (cross-platform: Finder/Explorer/File Manager)
+    // Uses openPath to open the folder directly, not showItemInFolder which selects the item in parent
+    ipcMain.handle('reveal-in-finder', async (_, filePath: string) => {
+        await shell.openPath(filePath)
+        return true
+    })
+
     // Directory selection dialog
     ipcMain.handle('select-directory', async () => {
         const result = await dialog.showOpenDialog({
@@ -1228,7 +1235,7 @@ app.whenReady().then(async () => {
     })
 
     // Show native message box with custom icon (defaults to app logo)
-    ipcMain.handle('show-message-box', async (_, options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons: string[]; icon?: string }) => {
+    ipcMain.handle('show-message-box', async (_, options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; detail?: string; buttons: string[]; icon?: string }) => {
         // Use provided icon or default to app logo
         const iconPath = options.icon ? path.resolve(options.icon) : logoIcon
         console.log('[showMessageBox] Icon path:', iconPath)
@@ -1239,10 +1246,22 @@ app.whenReady().then(async () => {
             type: options.type,
             title: options.title,
             message: options.message,
+            detail: options.detail,
             buttons: options.buttons,
             icon: dialogIcon.isEmpty() ? undefined : dialogIcon
         })
         return result
+    })
+
+    // Open external URL in browser
+    ipcMain.handle('open-external', async (_, url: string) => {
+        try {
+            await shell.openExternal(url)
+            return { success: true }
+        } catch (error: any) {
+            console.error('[openExternal] Error:', error)
+            return { success: false, error: error.message }
+        }
     })
 
     ipcMain.handle('check-tools', async () => {
@@ -1395,14 +1414,20 @@ app.whenReady().then(async () => {
 
             // 4. Build command with -g option for line/column
             // VSCode, Cursor support: code -g file:line:column
+            // For 'open -a' commands, -g is not supported, so just open the file
+            const escapedPath = absolutePath.replace(/'/g, "'\\''")
+
             let fullCommand: string
-            if (line) {
+            if (line && !command.startsWith('open -a')) {
+                // Editors like VSCode/Cursor support -g for line/column jumping
                 const location = column
                     ? `${absolutePath}:${line}:${column}`
                     : `${absolutePath}:${line}`
-                fullCommand = `${command} -g "${location}"`
+                const escapedLocation = location.replace(/'/g, "'\\''")
+                fullCommand = `${command} -g '${escapedLocation}'`
             } else {
-                fullCommand = `${command} "${absolutePath}"`
+                // For 'open -a' or editors without line number, just open the file
+                fullCommand = `${command} '${escapedPath}'`
             }
 
             console.log('[open-file-in-editor] Executing:', fullCommand)

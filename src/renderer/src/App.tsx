@@ -92,18 +92,11 @@ function App() {
                 if (!loadedSettings.hasCompletedOnboarding) {
                     setShowOnboarding(true)
                 }
-                // Show license screen only if not completed before
-                if (!loadedSettings.licenseScreenCompleted) {
-                    setShowLicenseVerification(true)
-                }
-            } else {
-                // No settings = first run, show license screen
-                setShowLicenseVerification(true)
+                // License screen removed - users start with Free Plan by default
+                // They can upgrade via Settings > License or when hitting feature limits
             }
         }).catch(err => {
             console.error('Failed to load settings:', err)
-            // On error, show license screen
-            setShowLicenseVerification(true)
         })
 
         // Load license info
@@ -245,12 +238,18 @@ function App() {
         if (result.success && result.data) {
             setWorkspaces(prev => [...prev, result.data!])
         } else if (result.errorType === 'UPGRADE_REQUIRED') {
-            await window.api.showMessageBox({
+            const { response } = await window.api.showMessageBox({
                 type: 'info',
-                title: 'Upgrade Required',
+                title: 'Upgrade to Pro',
                 message: result.error || 'Please upgrade to Pro to add more workspaces.',
-                buttons: ['OK']
+                detail: 'Visit https://www.solhun.com/pricing for more details',
+                buttons: ['Later', 'Upgrade']
             })
+
+            if (response === 1) {
+                // Open pricing page in external browser
+                window.api.openExternal('https://www.solhun.com/pricing')
+            }
         }
     }
 
@@ -322,12 +321,17 @@ function App() {
                 return w
             }))
         } else if (result.errorType === 'UPGRADE_REQUIRED') {
-            await window.api.showMessageBox({
+            const { response } = await window.api.showMessageBox({
                 type: 'info',
-                title: 'Upgrade Required',
+                title: 'Upgrade to Pro',
                 message: result.error || 'Please upgrade to Pro to add more sessions.',
-                buttons: ['OK']
+                detail: 'Visit https://www.solhun.com/pricing for more details',
+                buttons: ['Later', 'Upgrade']
             })
+
+            if (response === 1) {
+                window.api.openExternal('https://www.solhun.com/pricing')
+            }
         }
     }
 
@@ -337,12 +341,17 @@ function App() {
         if (result.success && result.data) {
             setWorkspaces(prev => [...prev, result.data!])
         } else if (result.errorType === 'UPGRADE_REQUIRED') {
-            await window.api.showMessageBox({
+            const { response } = await window.api.showMessageBox({
                 type: 'info',
-                title: 'Pro Feature',
+                title: 'Upgrade to Pro',
                 message: result.error || 'Git Worktree is a Pro feature. Upgrade to unlock.',
-                buttons: ['OK']
+                detail: 'Visit https://www.solhun.com/pricing for more details',
+                buttons: ['Later', 'Upgrade']
             })
+
+            if (response === 1) {
+                window.api.openExternal('https://www.solhun.com/pricing')
+            }
         } else {
             await window.api.showMessageBox({
                 type: 'error',

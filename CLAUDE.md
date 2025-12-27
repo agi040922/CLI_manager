@@ -277,6 +277,17 @@ exec('/bin/zsh -l -c "code ."')
 4. **재사용성**: 중복 코드는 유틸리티 함수나 공통 컴포넌트로 추출
 5. **주석**: 복잡한 로직에는 JSDoc 주석 추가
 
+### Developer Tools
+
+**Settings > Developer 카테고리 (현재 비활성화)**
+- Settings.tsx:261-262에서 주석 처리됨
+- 제한 메시지 다이얼로그 테스트용 (4개 버튼)
+- 필요시 주석 해제하여 활성화:
+  ```typescript
+  // Developer tools - uncomment to enable testing dialogs
+  { id: 'developer' as const, label: 'Developer', icon: <Bug size={16} /> },
+  ```
+
 ### Git Workflow
 
 1. Feature 브랜치 생성

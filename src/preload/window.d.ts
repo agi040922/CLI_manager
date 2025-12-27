@@ -22,7 +22,9 @@ declare global {
 
             // Dialog
             selectDirectory: () => Promise<string | null>
-            showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons: string[]; icon?: string }) => Promise<{ response: number }>
+            revealInFinder: (filePath: string) => Promise<boolean>
+            showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; detail?: string; buttons: string[]; icon?: string }) => Promise<{ response: number }>
+            openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
 
             // Templates
             getTemplates: () => Promise<any[]>

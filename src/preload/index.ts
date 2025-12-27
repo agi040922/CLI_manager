@@ -60,7 +60,9 @@ const api = {
 
     // Dialog
     selectDirectory: (): Promise<string | null> => ipcRenderer.invoke('select-directory'),
-    showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons: string[]; icon?: string }): Promise<{ response: number }> => ipcRenderer.invoke('show-message-box', options),
+    revealInFinder: (filePath: string): Promise<boolean> => ipcRenderer.invoke('reveal-in-finder', filePath),
+    showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; detail?: string; buttons: string[]; icon?: string }): Promise<{ response: number }> => ipcRenderer.invoke('show-message-box', options),
+    openExternal: (url: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('open-external', url),
 
     // Terminal
     createTerminal: (id: string, cwd: string, cols: number, rows: number, shell?: string): Promise<boolean> => ipcRenderer.invoke('terminal-create', id, cwd, cols, rows, shell),

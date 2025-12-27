@@ -22,7 +22,7 @@ interface SettingsProps {
     onLicenseChange?: (info: LicenseInfo) => void
 }
 
-type SettingsCategory = 'general' | 'editor' | 'terminal' | 'keyboard' | 'hooks' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license'
+type SettingsCategory = 'general' | 'editor' | 'terminal' | 'keyboard' | 'hooks' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license' | 'developer'
 
 export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding, licenseInfo, onLicenseChange }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
@@ -172,12 +172,17 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         // Check template limit (Free: 3, Pro: unlimited)
         const limit = licenseInfo?.limits.maxTemplates ?? 3
         if (limit !== -1 && templates.length >= limit) {
-            await window.api.showMessageBox({
-                type: 'warning',
-                title: 'Template Limit Reached',
+            const { response } = await window.api.showMessageBox({
+                type: 'info',
+                title: 'Upgrade to Pro',
                 message: `Free plan allows up to ${limit} templates. Upgrade to Pro for unlimited templates.`,
-                buttons: ['OK']
+                detail: 'Visit https://www.solhun.com/pricing for more details',
+                buttons: ['Later', 'Upgrade']
             })
+
+            if (response === 1) {
+                window.api.openExternal('https://www.solhun.com/pricing')
+            }
             return
         }
 
@@ -253,6 +258,8 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         { id: 'git' as const, label: 'Git (Local)', icon: <GitBranch size={16} /> },
         { id: 'github' as const, label: 'GitHub', icon: <Github size={16} /> },
         { id: 'license' as const, label: 'License', icon: <Crown size={16} /> },
+        // Developer tools - uncomment to enable testing dialogs
+        // { id: 'developer' as const, label: 'Developer', icon: <Bug size={16} /> },
     ]
 
     return (
@@ -1579,6 +1586,134 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             </p>
                                         </div>
 
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Developer Tools */}
+                            {activeCategory === 'developer' && (
+                                <>
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white mb-1">Developer Tools</h3>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Test feature limit messages and dialogs
+                                        </p>
+
+                                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded mb-4">
+                                            <p className="text-xs text-yellow-200">
+                                                <strong>Warning:</strong> This section is for development and testing only. These buttons will show actual upgrade dialogs.
+                                            </p>
+                                        </div>
+
+                                        {/* Test Buttons Grid */}
+                                        <div className="space-y-3">
+                                            {/* Test Workspace Limit */}
+                                            <div className="p-4 bg-white/5 border border-white/10 rounded-lg">
+                                                <h4 className="text-sm font-medium text-white mb-2">Test Workspace Limit</h4>
+                                                <p className="text-xs text-gray-400 mb-3">
+                                                    Triggers the upgrade dialog shown when workspace limit is reached
+                                                </p>
+                                                <button
+                                                    onClick={async () => {
+                                                        const { response } = await window.api.showMessageBox({
+                                                            type: 'info',
+                                                            title: 'Upgrade to Pro',
+                                                            message: 'Free plan allows up to 3 workspaces. Upgrade to Pro for unlimited workspaces.',
+                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            buttons: ['Later', 'Upgrade']
+                                                        })
+                                                        if (response === 1) {
+                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
+                                                >
+                                                    Show Dialog
+                                                </button>
+                                            </div>
+
+                                            {/* Test Session Limit */}
+                                            <div className="p-4 bg-white/5 border border-white/10 rounded-lg">
+                                                <h4 className="text-sm font-medium text-white mb-2">Test Session Limit</h4>
+                                                <p className="text-xs text-gray-400 mb-3">
+                                                    Triggers the upgrade dialog shown when session limit is reached
+                                                </p>
+                                                <button
+                                                    onClick={async () => {
+                                                        const { response } = await window.api.showMessageBox({
+                                                            type: 'info',
+                                                            title: 'Upgrade to Pro',
+                                                            message: 'Free plan allows up to 5 sessions per workspace. Upgrade to Pro for unlimited sessions.',
+                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            buttons: ['Later', 'Upgrade']
+                                                        })
+                                                        if (response === 1) {
+                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
+                                                >
+                                                    Show Dialog
+                                                </button>
+                                            </div>
+
+                                            {/* Test Template Limit */}
+                                            <div className="p-4 bg-white/5 border border-white/10 rounded-lg">
+                                                <h4 className="text-sm font-medium text-white mb-2">Test Template Limit</h4>
+                                                <p className="text-xs text-gray-400 mb-3">
+                                                    Triggers the upgrade dialog shown when template limit is reached
+                                                </p>
+                                                <button
+                                                    onClick={async () => {
+                                                        const { response } = await window.api.showMessageBox({
+                                                            type: 'info',
+                                                            title: 'Upgrade to Pro',
+                                                            message: 'Free plan allows up to 3 templates. Upgrade to Pro for unlimited templates.',
+                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            buttons: ['Later', 'Upgrade']
+                                                        })
+                                                        if (response === 1) {
+                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
+                                                >
+                                                    Show Dialog
+                                                </button>
+                                            </div>
+
+                                            {/* Test Worktree Feature */}
+                                            <div className="p-4 bg-white/5 border border-white/10 rounded-lg">
+                                                <h4 className="text-sm font-medium text-white mb-2">Test Worktree Feature</h4>
+                                                <p className="text-xs text-gray-400 mb-3">
+                                                    Triggers the upgrade dialog shown when trying to use Git Worktree (Pro feature)
+                                                </p>
+                                                <button
+                                                    onClick={async () => {
+                                                        const { response } = await window.api.showMessageBox({
+                                                            type: 'info',
+                                                            title: 'Upgrade to Pro',
+                                                            message: 'Git Worktree is a Pro feature. Upgrade to unlock.',
+                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            buttons: ['Later', 'Upgrade']
+                                                        })
+                                                        if (response === 1) {
+                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
+                                                >
+                                                    Show Dialog
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Info Box */}
+                                        <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded">
+                                            <p className="text-xs text-blue-200">
+                                                <strong>Tip:</strong> Click "Upgrade" button in any dialog to test the external link opening to pricing page.
+                                            </p>
+                                        </div>
                                     </div>
                                 </>
                             )}
