@@ -4,10 +4,11 @@ import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
+import { FileSearch } from './components/FileSearch'
 import { ConfirmationModal } from './components/Sidebar/Modals'
 import { Workspace, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
-import { PanelLeft } from 'lucide-react'
+import { PanelLeft, Search } from 'lucide-react'
 import { Onboarding } from './components/Onboarding'
 import { LicenseVerification } from './components/LicenseVerification'
 import { UpdateNotification, UpdateStatus } from './components/UpdateNotification'
@@ -18,6 +19,8 @@ function App() {
     const [activeSession, setActiveSession] = useState<TerminalSession | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [gitPanelOpen, setGitPanelOpen] = useState(false)
+    const [fileSearchOpen, setFileSearchOpen] = useState(false)
+    const [fileSearchMode, setFileSearchMode] = useState<'files' | 'content'>('files')
     // Session status tracking for Claude Code hooks (claude-squad style)
     const [sessionStatuses, setSessionStatuses] = useState<Map<string, { status: SessionStatus, isClaudeCode: boolean }>>(new Map())
     const [settings, setSettings] = useState<UserSettings>({
@@ -157,6 +160,31 @@ function App() {
 
         return cleanup
     }, [])
+
+    // Cmd+P (파일명 검색) / Cmd+Shift+F (파일 내용 검색) 단축키
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Cmd+P (Mac) or Ctrl+P (Windows/Linux) - 파일명 검색
+            if ((e.metaKey || e.ctrlKey) && e.key === 'p' && !e.shiftKey) {
+                e.preventDefault()
+                if (activeWorkspace) {
+                    setFileSearchMode('files')
+                    setFileSearchOpen(true)
+                }
+            }
+            // Cmd+Shift+F (Mac) or Ctrl+Shift+F (Windows/Linux) - 파일 내용 검색
+            else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
+                e.preventDefault()
+                if (activeWorkspace) {
+                    setFileSearchMode('content')
+                    setFileSearchOpen(true)
+                }
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [activeWorkspace])
 
     const handleOnboardingComplete = () => {
         setShowOnboarding(false)
@@ -417,6 +445,19 @@ function App() {
         }
     }
 
+    const handleFileSelect = async (filePath: string, line?: number) => {
+        if (!activeWorkspace) return
+
+        try {
+            const result = await window.api.openFileInEditor(filePath, activeWorkspace.path, line)
+            if (!result.success) {
+                console.error('Failed to open file in editor:', result.error)
+            }
+        } catch (error) {
+            console.error('Failed to open file in editor:', error)
+        }
+    }
+
     const [settingsCategory, setSettingsCategory] = useState<any>('general')
 
     const logPortAction = async (action: 'kill' | 'ignore-port' | 'ignore-process', target: string, port?: number, details?: string) => {
@@ -523,7 +564,7 @@ function App() {
                 />
             )}
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
-                <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between">
+                <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between relative z-10">
                     <div className="flex items-center gap-2">
                         {!isSidebarOpen && (
                             <button
@@ -542,6 +583,18 @@ function App() {
                         </span>
                     </div>
                     <div className="flex items-center gap-2 no-drag">
+                        <button
+                            onClick={() => {
+                                if (activeWorkspace) {
+                                    setFileSearchOpen(true)
+                                }
+                            }}
+                            className="p-2 hover:bg-white/10 rounded transition-colors no-drag disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Search Files (Cmd+P)"
+                            disabled={!activeWorkspace}
+                        >
+                            <Search size={16} className="text-gray-400" />
+                        </button>
                         <button
                             onClick={() => setGitPanelOpen(true)}
                             className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
@@ -669,6 +722,15 @@ function App() {
                     }}
                 />
             )}
+
+            {/* File Search */}
+            <FileSearch
+                isOpen={fileSearchOpen}
+                onClose={() => setFileSearchOpen(false)}
+                workspacePath={activeWorkspace?.path || null}
+                onFileSelect={handleFileSelect}
+                initialMode={fileSearchMode}
+            />
         </div>
     )
 }

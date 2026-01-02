@@ -20,7 +20,8 @@
     "onlyBuiltDependencies": [
       "electron",
       "node-pty",
-      "esbuild"
+      "esbuild",
+      "@vscode/ripgrep"
     ]
   },
   "keywords": [],
@@ -46,6 +47,7 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@types/uuid": "^11.0.0",
+    "@vscode/ripgrep": "^1.17.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-image": "^0.8.0",
     "@xterm/addon-web-links": "^0.12.0",

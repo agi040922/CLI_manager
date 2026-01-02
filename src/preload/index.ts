@@ -133,7 +133,25 @@ const api = {
 
     // File utilities (for drag & drop)
     // Electron 9.0+ requires webUtils.getPathForFile() instead of file.path
-    getFilePath: (file: File): string => webUtils.getPathForFile(file)
+    getFilePath: (file: File): string => webUtils.getPathForFile(file),
+
+    // File Search
+    searchFiles: (workspacePath: string, searchQuery: string): Promise<{ success: boolean; files: Array<{ path: string; relativePath: string; name: string }>; error?: string }> =>
+        ipcRenderer.invoke('search-files', workspacePath, searchQuery),
+    searchContent: (workspacePath: string, searchQuery: string): Promise<{
+        success: boolean;
+        results: Array<{
+            path: string;
+            relativePath: string;
+            line: number;
+            column: number;
+            text: string;
+            matches: Array<{ start: number; end: number }>
+        }>;
+        method?: string;
+        error?: string
+    }> =>
+        ipcRenderer.invoke('search-content', workspacePath, searchQuery)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

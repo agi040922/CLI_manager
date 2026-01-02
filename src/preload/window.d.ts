@@ -105,6 +105,22 @@ declare global {
 
             // File utilities (for drag & drop)
             getFilePath: (file: File) => string
+
+            // File Search
+            searchFiles: (workspacePath: string, searchQuery: string) => Promise<{ success: boolean; files: Array<{ path: string; relativePath: string; name: string }>; error?: string }>
+            searchContent: (workspacePath: string, searchQuery: string) => Promise<{
+                success: boolean;
+                results: Array<{
+                    path: string;
+                    relativePath: string;
+                    line: number;
+                    column: number;
+                    text: string;
+                    matches: Array<{ start: number; end: number }>
+                }>;
+                method?: string;
+                error?: string
+            }>
         }
     }
 }
