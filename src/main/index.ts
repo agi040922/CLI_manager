@@ -1616,6 +1616,29 @@ app.whenReady().then(async () => {
         }
     })
 
+    // Read file content for preview
+    ipcMain.handle('read-file-content', async (
+        _,
+        filePath: string,
+        maxSize: number = 500000  // 500KB limit
+    ): Promise<{ success: boolean; content?: string; error?: string; size?: number }> => {
+        try {
+            if (!existsSync(filePath)) {
+                return { success: false, error: 'File not found' }
+            }
+
+            const stats = statSync(filePath)
+            if (stats.size > maxSize) {
+                return { success: false, error: `File too large (${Math.round(stats.size / 1024)}KB)`, size: stats.size }
+            }
+
+            const content = readFileSync(filePath, 'utf-8')
+            return { success: true, content, size: stats.size }
+        } catch (e: any) {
+            return { success: false, error: e.message }
+        }
+    })
+
     // Open specific file in editor (with optional line/column)
     // Used for Cmd+Click on file paths in terminal
     ipcMain.handle('open-file-in-editor', async (
@@ -1694,22 +1717,26 @@ app.whenReady().then(async () => {
                 }
             }
 
-            // 4. Build command with -g option for line/column
-            // VSCode, Cursor support: code -g file:line:column
-            // For 'open -a' commands, -g is not supported, so just open the file
+            // 4. Build command with project folder + file
+            // VSCode, Cursor support: code /project -g file:line:column
             const escapedPath = absolutePath.replace(/'/g, "'\\''")
+            const escapedCwd = baseCwd.replace(/'/g, "'\\''")
 
             let fullCommand: string
-            if (line && !command.startsWith('open -a')) {
-                // Editors like VSCode/Cursor support -g for line/column jumping
-                const location = column
-                    ? `${absolutePath}:${line}:${column}`
-                    : `${absolutePath}:${line}`
-                const escapedLocation = location.replace(/'/g, "'\\''")
-                fullCommand = `${command} -g '${escapedLocation}'`
+            if (!command.startsWith('open -a')) {
+                // Editors like VSCode/Cursor: open project folder + goto file:line
+                if (line) {
+                    const location = column
+                        ? `${absolutePath}:${line}:${column}`
+                        : `${absolutePath}:${line}`
+                    const escapedLocation = location.replace(/'/g, "'\\''")
+                    fullCommand = `${command} '${escapedCwd}' -g '${escapedLocation}'`
+                } else {
+                    fullCommand = `${command} '${escapedCwd}' '${escapedPath}'`
+                }
             } else {
-                // For 'open -a' or editors without line number, just open the file
-                fullCommand = `${command} '${escapedPath}'`
+                // For 'open -a' commands: open project folder, then file
+                fullCommand = `${command} '${escapedCwd}' '${escapedPath}'`
             }
 
             console.log('[open-file-in-editor] Executing:', fullCommand)

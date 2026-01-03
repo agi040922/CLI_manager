@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { X, File, FileText, Search as SearchIcon } from 'lucide-react'
+import { FilePreview } from './FilePreview'
 
 interface FileSearchProps {
     isOpen: boolean
@@ -32,6 +33,7 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
     const [selectedIndex, setSelectedIndex] = useState(0)
     const [isSearching, setIsSearching] = useState(false)
     const [searchMethod, setSearchMethod] = useState<string>('')
+    const [previewFile, setPreviewFile] = useState<{ path: string; relativePath: string; line?: number } | null>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const resultsRef = useRef<HTMLDivElement>(null)
 
@@ -101,10 +103,29 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
             setSelectedIndex(prev => Math.max(prev - 1, 0))
         } else if (e.key === 'Enter' && results[selectedIndex]) {
             e.preventDefault()
-            if (searchMode === 'files') {
-                handleFileSelect(fileResults[selectedIndex])
+            // Cmd+Enter = Toggle Preview, Enter = Open in editor
+            if (e.metaKey) {
+                // Toggle preview with Cmd+Enter
+                if (previewFile) {
+                    // Close preview if already open
+                    setPreviewFile(null)
+                } else {
+                    // Open preview
+                    if (searchMode === 'files') {
+                        const file = fileResults[selectedIndex]
+                        setPreviewFile({ path: file.path, relativePath: file.relativePath })
+                    } else {
+                        const result = contentResults[selectedIndex]
+                        setPreviewFile({ path: result.path, relativePath: result.relativePath, line: result.line })
+                    }
+                }
             } else {
-                handleContentSelect(contentResults[selectedIndex])
+                // Open in editor with Enter
+                if (searchMode === 'files') {
+                    handleFileSelect(fileResults[selectedIndex])
+                } else {
+                    handleContentSelect(contentResults[selectedIndex])
+                }
             }
         } else if (e.key === 'Escape') {
             e.preventDefault()
@@ -347,6 +368,10 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
                         <span>Open</span>
                     </div>
                     <div className="flex items-center gap-1">
+                        <kbd className="px-1.5 py-0.5 bg-white/10 rounded">⌘ Enter</kbd>
+                        <span>Preview</span>
+                    </div>
+                    <div className="flex items-center gap-1">
                         <kbd className="px-1.5 py-0.5 bg-white/10 rounded">Esc</kbd>
                         <span>Close</span>
                     </div>
@@ -356,6 +381,21 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
                     </div>
                 </div>
             </div>
+
+            {/* File Preview Modal */}
+            {previewFile && (
+                <FilePreview
+                    isOpen={true}
+                    onClose={() => setPreviewFile(null)}
+                    filePath={previewFile.path}
+                    relativePath={previewFile.relativePath}
+                    line={previewFile.line}
+                    onOpenInEditor={() => {
+                        onFileSelect(previewFile.path, previewFile.line)
+                        setPreviewFile(null)
+                    }}
+                />
+            )}
         </div>
     )
 }

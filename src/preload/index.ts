@@ -151,7 +151,14 @@ const api = {
         method?: string;
         error?: string
     }> =>
-        ipcRenderer.invoke('search-content', workspacePath, searchQuery)
+        ipcRenderer.invoke('search-content', workspacePath, searchQuery),
+    readFileContent: (filePath: string, maxSize?: number): Promise<{
+        success: boolean;
+        content?: string;
+        error?: string;
+        size?: number
+    }> =>
+        ipcRenderer.invoke('read-file-content', filePath, maxSize)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

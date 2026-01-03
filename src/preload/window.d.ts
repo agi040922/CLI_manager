@@ -121,6 +121,12 @@ declare global {
                 method?: string;
                 error?: string
             }>
+            readFileContent: (filePath: string, maxSize?: number) => Promise<{
+                success: boolean;
+                content?: string;
+                error?: string;
+                size?: number
+            }>
         }
     }
 }
