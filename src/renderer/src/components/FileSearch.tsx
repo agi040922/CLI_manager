@@ -35,15 +35,10 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
     const inputRef = useRef<HTMLInputElement>(null)
     const resultsRef = useRef<HTMLDivElement>(null)
 
-    // Reset when opened
+    // Focus input when opened (keep search query and results)
     useEffect(() => {
         if (isOpen) {
             setSearchMode(initialMode)
-            setSearchQuery('')
-            setFileResults([])
-            setContentResults([])
-            setSelectedIndex(0)
-            setSearchMethod('')
             setTimeout(() => inputRef.current?.focus(), 50)
         }
     }, [isOpen, initialMode])
@@ -119,12 +114,12 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
 
     const handleFileSelect = (file: FileResult) => {
         onFileSelect(file.path)
-        onClose()
+        // Keep modal open so user can open multiple files
     }
 
     const handleContentSelect = (result: ContentResult) => {
         onFileSelect(result.path, result.line)
-        onClose()
+        // Keep modal open so user can open multiple files
     }
 
     // Truncate text around match and adjust match positions
@@ -147,7 +142,11 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
             visibleEnd++
         }
 
-        let truncated = text.substring(visibleStart, visibleEnd).trim()
+        let truncated = text.substring(visibleStart, visibleEnd)
+
+        // Calculate leading spaces before trim (needed for offset calculation)
+        const leadingSpaces = truncated.length - truncated.trimStart().length
+        truncated = truncated.trim()
 
         // Add ellipsis
         const hasPrefix = visibleStart > 0
@@ -156,12 +155,13 @@ export function FileSearch({ isOpen, onClose, workspacePath, onFileSelect, initi
         if (hasSuffix) truncated = truncated + '...'
 
         // Adjust match positions for truncated text
-        const offset = visibleStart - (hasPrefix ? 3 : 0)
+        // Original position - (visibleStart + leadingSpaces removed by trim) + ("..." prefix length)
+        const offset = visibleStart + leadingSpaces
         const adjustedMatches = matches
             .filter(m => m.start >= visibleStart && m.end <= visibleEnd)
             .map(m => ({
-                start: m.start - offset,
-                end: m.end - offset
+                start: m.start - offset + (hasPrefix ? 3 : 0),
+                end: m.end - offset + (hasPrefix ? 3 : 0)
             }))
 
         return { text: truncated, matches: adjustedMatches }

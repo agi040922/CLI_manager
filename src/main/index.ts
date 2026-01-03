@@ -29,6 +29,19 @@ autoUpdater.autoInstallOnAppQuit = true
 
 const execAsync = promisify(exec)
 
+// Get ripgrep path for development and production modes
+const getRipgrepPath = (): string => {
+    if (is.dev) {
+        // In development mode, use node_modules path
+        const devPath = path.join(__dirname, '../../node_modules/@vscode/ripgrep/bin/rg')
+        console.log('[getRipgrepPath] Development mode, using:', devPath)
+        return devPath
+    }
+    // In production mode, use bundled path
+    console.log('[getRipgrepPath] Production mode, using:', rgPath)
+    return rgPath
+}
+
 // Fix PATH for packaged app on macOS
 // When launched from Finder/Spotlight, the app doesn't inherit shell PATH
 // This ensures git, gh, and other CLI tools are found
@@ -1347,7 +1360,7 @@ app.whenReady().then(async () => {
                     '--hidden',  // Include hidden files
                     ...excludeDirs.map(dir => `--glob=!${dir}/`),
                     searchQuery,
-                    workspacePath
+                    '.'  // Search in current directory (will use cwd option)
                 ]
 
                 const { stdout } = await execAsync(`"${rgCommand}" ${rgArgs.join(' ')}`, { cwd: workspacePath })
@@ -1379,7 +1392,7 @@ app.whenReady().then(async () => {
                                 relativePath: filePath,
                                 line: lineNumber,
                                 column: submatches[0]?.start || 0,
-                                text: lineText.trim(),
+                                text: lineText,  // Don't trim! Submatches use original text positions
                                 matches: submatches.map((m: any) => ({
                                     start: m.start,
                                     end: m.end
@@ -1397,10 +1410,13 @@ app.whenReady().then(async () => {
 
             // 1. Try bundled ripgrep (always available, fastest)
             try {
-                console.log('[searchContent] Trying bundled ripgrep:', rgPath)
-                return await tryRipgrep(rgPath, 'ripgrep (bundled)')
+                const ripgrepPath = getRipgrepPath()
+                console.log('[searchContent] Trying ripgrep:', ripgrepPath)
+                console.log('[searchContent] File exists:', existsSync(ripgrepPath))
+                return await tryRipgrep(ripgrepPath, 'ripgrep (bundled)')
             } catch (bundledError) {
-                console.log('[searchContent] Bundled ripgrep failed, trying system ripgrep')
+                console.log('[searchContent] Bundled ripgrep failed:', bundledError)
+                console.log('[searchContent] Trying system ripgrep')
 
                 // 2. Try system ripgrep (if installed via brew)
                 try {
@@ -1609,6 +1625,9 @@ app.whenReady().then(async () => {
         line?: number,
         column?: number
     ): Promise<{ success: boolean; error?: string }> => {
+        console.log('[open-file-in-editor] ===== START =====')
+        console.log('[open-file-in-editor] Input:', { filePath, baseCwd, line, column })
+
         try {
             const settings = store.get('settings') as UserSettings
             const editor = settings?.defaultEditor || 'vscode'
@@ -1619,27 +1638,41 @@ app.whenReady().then(async () => {
 
             // Strategy 1: If absolute path, check if exists
             if (path.isAbsolute(filePath)) {
+                console.log('[open-file-in-editor] Path is absolute, checking if exists...')
+                console.log('[open-file-in-editor] File exists?', existsSync(filePath))
                 if (existsSync(filePath)) {
                     absolutePath = filePath
                     found = true
+                    console.log('[open-file-in-editor] ✓ Found with Strategy 1 (absolute path)')
                 } else {
                     // Strategy 2: Treat as project-root relative (e.g., /jcon/api/... -> cwd/jcon/api/...)
                     const cwdRelative = path.join(baseCwd, filePath)
+                    console.log('[open-file-in-editor] Trying Strategy 2 (cwd relative):', cwdRelative)
+                    console.log('[open-file-in-editor] File exists?', existsSync(cwdRelative))
                     if (existsSync(cwdRelative)) {
                         absolutePath = cwdRelative
                         found = true
+                        console.log('[open-file-in-editor] ✓ Found with Strategy 2')
                     }
                 }
             } else {
                 // Strategy 3: Relative path from cwd
                 absolutePath = path.resolve(baseCwd, filePath)
+                console.log('[open-file-in-editor] Trying Strategy 3 (resolve):', absolutePath)
                 found = existsSync(absolutePath)
+                console.log('[open-file-in-editor] File exists?', found)
+                if (found) {
+                    console.log('[open-file-in-editor] ✓ Found with Strategy 3')
+                }
             }
 
             // 2. Check if file exists
             if (!found) {
+                console.log('[open-file-in-editor] ✗ File not found!')
                 return { success: false, error: `File not found: ${filePath}` }
             }
+
+            console.log('[open-file-in-editor] Final absolutePath:', absolutePath)
 
             // 3. Get editor command
             let command: string
