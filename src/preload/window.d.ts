@@ -128,6 +128,13 @@ declare global {
                 error?: string;
                 size?: number
             }>
+            readImageAsBase64: (filePath: string, maxSize?: number) => Promise<{
+                success: boolean;
+                data?: string;
+                mimeType?: string;
+                error?: string;
+                size?: number
+            }>
         }
     }
 }

@@ -1,7 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { X, FileText, Loader2, AlertCircle, ExternalLink } from 'lucide-react'
+import { X, FileText, Loader2, AlertCircle, ExternalLink, Image } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+
+// Image file extensions
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp']
+
+const isImageFile = (filePath: string): boolean => {
+    const ext = filePath.split('.').pop()?.toLowerCase() || ''
+    return IMAGE_EXTENSIONS.includes(ext)
+}
 
 interface FilePreviewProps {
     isOpen: boolean
@@ -80,22 +88,38 @@ const getLanguageFromPath = (filePath: string): string => {
 
 export function FilePreview({ isOpen, onClose, filePath, relativePath, line, onOpenInEditor }: FilePreviewProps) {
     const [content, setContent] = useState<string>('')
+    const [imageData, setImageData] = useState<{ data: string; mimeType: string } | null>(null)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
-    // Load file content
+    const isImage = isImageFile(filePath)
+
+    // Load file content (text or image)
     const loadContent = useCallback(async () => {
         if (!filePath) return
 
         setLoading(true)
         setError(null)
+        setContent('')
+        setImageData(null)
 
         try {
-            const result = await window.api.readFileContent(filePath)
-            if (result.success && result.content !== undefined) {
-                setContent(result.content)
+            if (isImageFile(filePath)) {
+                // Load image as base64
+                const result = await window.api.readImageAsBase64(filePath)
+                if (result.success && result.data && result.mimeType) {
+                    setImageData({ data: result.data, mimeType: result.mimeType })
+                } else {
+                    setError(result.error || 'Failed to read image')
+                }
             } else {
-                setError(result.error || 'Failed to read file')
+                // Load text content
+                const result = await window.api.readFileContent(filePath)
+                if (result.success && result.content !== undefined) {
+                    setContent(result.content)
+                } else {
+                    setError(result.error || 'Failed to read file')
+                }
             }
         } catch (e: any) {
             setError(e.message)
@@ -170,10 +194,14 @@ export function FilePreview({ isOpen, onClose, filePath, relativePath, line, onO
                 {/* Header */}
                 <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-[#252526]">
                     <div className="flex items-center gap-2 min-w-0">
-                        <FileText size={14} className="text-blue-400 flex-shrink-0" />
+                        {isImage ? (
+                            <Image size={14} className="text-green-400 flex-shrink-0" />
+                        ) : (
+                            <FileText size={14} className="text-blue-400 flex-shrink-0" />
+                        )}
                         <span className="text-xs text-white truncate font-mono">
                             {displayPath}
-                            {line && <span className="text-gray-400">:{line}</span>}
+                            {line && !isImage && <span className="text-gray-400">:{line}</span>}
                         </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -213,6 +241,19 @@ export function FilePreview({ isOpen, onClose, filePath, relativePath, line, onO
                         </div>
                     )}
 
+                    {/* Image Preview */}
+                    {!loading && !error && imageData && (
+                        <div className="flex items-center justify-center p-4 min-h-[200px]">
+                            <img
+                                src={`data:${imageData.mimeType};base64,${imageData.data}`}
+                                alt={displayPath}
+                                className="max-w-full max-h-[50vh] object-contain rounded"
+                                style={{ imageRendering: 'auto' }}
+                            />
+                        </div>
+                    )}
+
+                    {/* Code Preview */}
                     {!loading && !error && content && (
                         <SyntaxHighlighter
                             language={language}

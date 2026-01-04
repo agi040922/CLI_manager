@@ -1658,6 +1658,45 @@ app.whenReady().then(async () => {
         }
     })
 
+    // Read image file as base64 for preview
+    ipcMain.handle('read-image-as-base64', async (
+        _,
+        filePath: string,
+        maxSize: number = 10000000  // 10MB limit for images
+    ): Promise<{ success: boolean; data?: string; mimeType?: string; error?: string; size?: number }> => {
+        try {
+            if (!existsSync(filePath)) {
+                return { success: false, error: 'File not found' }
+            }
+
+            const stats = statSync(filePath)
+            if (stats.size > maxSize) {
+                return { success: false, error: `Image too large (${Math.round(stats.size / 1024 / 1024)}MB)`, size: stats.size }
+            }
+
+            // Determine MIME type from extension
+            const ext = path.extname(filePath).toLowerCase().slice(1)
+            const mimeTypes: Record<string, string> = {
+                'png': 'image/png',
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'gif': 'image/gif',
+                'webp': 'image/webp',
+                'svg': 'image/svg+xml',
+                'ico': 'image/x-icon',
+                'bmp': 'image/bmp'
+            }
+            const mimeType = mimeTypes[ext] || 'image/png'
+
+            const buffer = readFileSync(filePath)
+            const base64 = buffer.toString('base64')
+
+            return { success: true, data: base64, mimeType, size: stats.size }
+        } catch (e: any) {
+            return { success: false, error: e.message }
+        }
+    })
+
     // Open specific file in editor (with optional line/column)
     // Used for Cmd+Click on file paths in terminal
     ipcMain.handle('open-file-in-editor', async (

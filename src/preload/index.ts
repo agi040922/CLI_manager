@@ -159,7 +159,15 @@ const api = {
         error?: string;
         size?: number
     }> =>
-        ipcRenderer.invoke('read-file-content', filePath, maxSize)
+        ipcRenderer.invoke('read-file-content', filePath, maxSize),
+    readImageAsBase64: (filePath: string, maxSize?: number): Promise<{
+        success: boolean;
+        data?: string;
+        mimeType?: string;
+        error?: string;
+        size?: number
+    }> =>
+        ipcRenderer.invoke('read-image-as-base64', filePath, maxSize)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
