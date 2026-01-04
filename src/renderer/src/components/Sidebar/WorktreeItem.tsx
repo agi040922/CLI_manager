@@ -10,6 +10,7 @@ interface WorktreeItemProps {
     activeSessionId?: string
     sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
     hooksSettings?: HooksSettings
+    terminalPreview?: { enabled: boolean; lineCount: number }
     fontSize?: number  // Sidebar font size
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
@@ -34,6 +35,7 @@ export function WorktreeItem({
     activeSessionId,
     sessionStatuses,
     hooksSettings,
+    terminalPreview,
     fontSize = 14,
     onToggleExpand,
     onContextMenu,
@@ -121,6 +123,7 @@ export function WorktreeItem({
                                     sessionStatus={statusInfo?.status}
                                     isClaudeCodeSession={statusInfo?.isClaudeCode}
                                     showStatusInSidebar={hooksSettings?.enabled && hooksSettings?.claudeCode?.showInSidebar}
+                                    terminalPreview={terminalPreview}
                                     isRenaming={renamingSessionId === session.id}
                                     fontSize={fontSize}
                                     onSelect={onSelect}

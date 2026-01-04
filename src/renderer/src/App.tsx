@@ -552,6 +552,7 @@ function App() {
                     activeSessionId={activeSession?.id}
                     sessionStatuses={sessionStatuses}
                     hooksSettings={settings.hooks}
+                    terminalPreview={settings.terminalPreview}
                     onOpenInEditor={handleOpenInEditor}
                     onOpenSettings={() => handleOpenSettings('general')}
                     settingsOpen={settingsOpen}

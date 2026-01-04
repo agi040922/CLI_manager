@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import { ChevronUp, ChevronDown } from 'lucide-react'
+import { ChevronUp, ChevronDown, FolderOpen, ExternalLink, Code } from 'lucide-react'
 import { TerminalPatternMatcher } from '../utils/terminalPatterns'
 import { registerFilePathLinks } from '../utils/filePathLinkProvider'
 import { SessionStatus, HooksSettings } from '../../../shared/types'
@@ -59,6 +60,14 @@ export function TerminalView({
     const initialCommandExecutedRef = useRef<boolean>(false)
     // keyboardSettings를 ref로 저장하여 실시간 적용 지원
     const keyboardSettingsRef = useRef(keyboardSettings)
+
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<{
+        visible: boolean
+        x: number
+        y: number
+        selectedText: string
+    }>({ visible: false, x: 0, y: 0, selectedText: '' })
 
     // keyboardSettings가 변경될 때 ref 업데이트 (실시간 적용)
     useEffect(() => {
@@ -337,6 +346,28 @@ export function TerminalView({
         // Register file path link provider (Cmd+Click to open in editor)
         registerFilePathLinks(term, cwd)
 
+        // Context menu handler for right-click on selected text
+        const contextMenuHandler = (e: MouseEvent) => {
+            const selection = term.getSelection()?.trim()
+
+            if (!selection) {
+                return // No selection, let default context menu show
+            }
+
+            e.preventDefault()
+            e.stopPropagation()
+
+            setContextMenu({
+                visible: true,
+                x: e.clientX,
+                y: e.clientY,
+                selectedText: selection
+            })
+        }
+
+        // Use capture phase to catch event before xterm.js handles it
+        terminalRef.current?.addEventListener('contextmenu', contextMenuHandler, { capture: true })
+
         // Initialize backend terminal
         let initialCols = 80
         let initialRows = 30
@@ -489,9 +520,13 @@ export function TerminalView({
             resizeObserver.observe(terminalRef.current)
         }
 
+        // Store ref for cleanup
+        const terminalElement = terminalRef.current
+
         return () => {
             window.removeEventListener('resize', handleResize)
             resizeObserver.disconnect()
+            terminalElement?.removeEventListener('contextmenu', contextMenuHandler, { capture: true })
             // debounce 타이머 정리
             if (resizeDebounceRef.current) {
                 clearTimeout(resizeDebounceRef.current)
@@ -503,6 +538,65 @@ export function TerminalView({
     // fontSize는 별도 useEffect에서 동적으로 처리하므로 의존성에서 제외
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, cwd])
+
+    // Context menu handlers
+    const closeContextMenu = useCallback(() => {
+        setContextMenu({ visible: false, x: 0, y: 0, selectedText: '' })
+    }, [])
+
+    const handleOpenInEditor = useCallback(async () => {
+        const text = contextMenu.selectedText
+        closeContextMenu()
+
+        // Parse line:column if present (e.g., file.ts:42:10)
+        const match = text.match(/^(.+?)(?::(\d+))?(?::(\d+))?$/)
+        if (match) {
+            const filePath = match[1]
+            const line = match[2] ? parseInt(match[2], 10) : undefined
+            const column = match[3] ? parseInt(match[3], 10) : undefined
+            await window.api.openFileInEditor(filePath, cwd, line, column)
+        }
+    }, [contextMenu.selectedText, cwd, closeContextMenu])
+
+    const handleRevealInFinder = useCallback(async () => {
+        const text = contextMenu.selectedText
+        closeContextMenu()
+
+        // Remove line:column suffix if present
+        const filePath = text.replace(/:\d+(:\d+)?$/, '')
+        await window.api.revealInFinder(filePath, cwd)
+    }, [contextMenu.selectedText, cwd, closeContextMenu])
+
+    const handleOpenAsLink = useCallback(async () => {
+        let text = contextMenu.selectedText
+        closeContextMenu()
+
+        // Add https:// if no protocol
+        if (!/^https?:\/\//i.test(text)) {
+            text = `https://${text}`
+        }
+        await window.api.openExternal(text)
+    }, [contextMenu.selectedText, closeContextMenu])
+
+    // Close context menu on click outside
+    useEffect(() => {
+        const handleClickOutside = () => {
+            if (contextMenu.visible) {
+                closeContextMenu()
+            }
+        }
+
+        if (contextMenu.visible) {
+            document.addEventListener('click', handleClickOutside)
+            document.addEventListener('contextmenu', handleClickOutside)
+        }
+
+        return () => {
+            document.removeEventListener('click', handleClickOutside)
+            document.removeEventListener('contextmenu', handleClickOutside)
+        }
+    }, [contextMenu.visible, closeContextMenu])
+
 
     // 파일 드래그 앤 드롭 핸들러
     // 파일을 터미널로 드래그하면 경로가 입력됨
@@ -543,6 +637,38 @@ export function TerminalView({
             onDrop={handleDrop}
         >
             <div className="w-full h-full" ref={terminalRef} />
+
+            {/* Context Menu - rendered via Portal to avoid transform issues */}
+            {contextMenu.visible && createPortal(
+                <div
+                    className="fixed z-[9999] bg-gray-800 border border-gray-600 rounded-lg shadow-xl py-1 min-w-[180px]"
+                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2"
+                        onClick={handleOpenInEditor}
+                    >
+                        <Code size={14} />
+                        Open in Editor
+                    </button>
+                    <button
+                        className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2"
+                        onClick={handleRevealInFinder}
+                    >
+                        <FolderOpen size={14} />
+                        Reveal in Finder
+                    </button>
+                    <button
+                        className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2"
+                        onClick={handleOpenAsLink}
+                    >
+                        <ExternalLink size={14} />
+                        Open as Link
+                    </button>
+                </div>,
+                document.body
+            )}
 
             {/* Floating Scroll Buttons */}
             {(keyboardSettings?.showScrollButtons ?? true) && (

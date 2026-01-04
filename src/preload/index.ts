@@ -60,7 +60,7 @@ const api = {
 
     // Dialog
     selectDirectory: (): Promise<string | null> => ipcRenderer.invoke('select-directory'),
-    revealInFinder: (filePath: string): Promise<boolean> => ipcRenderer.invoke('reveal-in-finder', filePath),
+    revealInFinder: (filePath: string, baseCwd?: string): Promise<boolean> => ipcRenderer.invoke('reveal-in-finder', filePath, baseCwd),
     showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; detail?: string; buttons: string[]; icon?: string }): Promise<{ response: number }> => ipcRenderer.invoke('show-message-box', options),
     openExternal: (url: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('open-external', url),
 
@@ -69,6 +69,7 @@ const api = {
     resizeTerminal: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('terminal-resize', id, cols, rows),
     killTerminal: (id: string): Promise<void> => ipcRenderer.invoke('terminal-kill', id),
     hasRunningProcess: (id: string): Promise<boolean> => ipcRenderer.invoke('terminal-has-running-process', id),
+    getTerminalPreview: (id: string, lineCount?: number): Promise<string[]> => ipcRenderer.invoke('terminal-get-preview', id, lineCount ?? 5),
     writeTerminal: (id: string, data: string): void => ipcRenderer.send('terminal-input', id, data),
     onTerminalData: (id: string, callback: (data: string) => void): () => void => {
         const channel = `terminal-output-${id}`

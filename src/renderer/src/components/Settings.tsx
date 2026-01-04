@@ -783,6 +783,69 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                         </div>
                                     </div>
 
+                                    {/* Terminal Preview */}
+                                    <div className="mt-6 pt-6 border-t border-white/10">
+                                        <h3 className="text-sm font-semibold text-white mb-3">Terminal Preview</h3>
+                                        <div className="space-y-4">
+                                            {/* Enable/Disable Toggle */}
+                                            <div className="p-4 bg-black/20 border border-white/10 rounded-lg">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex-1">
+                                                            <p className="text-sm text-white">Show Preview on Hover</p>
+                                                            <p className="text-xs text-gray-400 mt-0.5">
+                                                                Show last few lines when hovering over sessions
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSettings(prev => ({
+                                                            ...prev,
+                                                            terminalPreview: {
+                                                                enabled: !(prev.terminalPreview?.enabled ?? true),
+                                                                lineCount: prev.terminalPreview?.lineCount ?? 5
+                                                            }
+                                                        }))}
+                                                        className={`relative w-11 h-6 rounded-full transition-colors ${
+                                                            (settings.terminalPreview?.enabled ?? true)
+                                                                ? 'bg-blue-600'
+                                                                : 'bg-gray-600'
+                                                        }`}
+                                                    >
+                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                            (settings.terminalPreview?.enabled ?? true)
+                                                                ? 'translate-x-6'
+                                                                : 'translate-x-1'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Line Count Selector */}
+                                            {(settings.terminalPreview?.enabled ?? true) && (
+                                                <div>
+                                                    <label className="block text-xs text-gray-400 mb-1">Preview Lines</label>
+                                                    <select
+                                                        value={settings.terminalPreview?.lineCount ?? 5}
+                                                        onChange={e => setSettings(prev => ({
+                                                            ...prev,
+                                                            terminalPreview: {
+                                                                enabled: prev.terminalPreview?.enabled ?? true,
+                                                                lineCount: parseInt(e.target.value)
+                                                            }
+                                                        }))}
+                                                        className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                    >
+                                                        <option value={3}>3 lines</option>
+                                                        <option value={5}>5 lines</option>
+                                                        <option value={7}>7 lines</option>
+                                                        <option value={10}>10 lines</option>
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     <div className="mt-6 pt-6 border-t border-white/10">
                                         <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
                                             <p className="text-xs text-blue-200">

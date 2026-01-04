@@ -19,6 +19,7 @@ interface SidebarProps {
     activeSessionId?: string
     sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
     hooksSettings?: HooksSettings
+    terminalPreview?: { enabled: boolean; lineCount: number }
     onOpenInEditor: (workspacePath: string) => void
     onOpenSettings: () => void
     settingsOpen?: boolean
@@ -51,6 +52,7 @@ export function Sidebar({
     activeSessionId,
     sessionStatuses,
     hooksSettings,
+    terminalPreview,
     onOpenInEditor,
     onOpenSettings,
     settingsOpen,
@@ -588,6 +590,7 @@ export function Sidebar({
                             activeSessionId={activeSessionId}
                             sessionStatuses={sessionStatuses}
                             hooksSettings={hooksSettings}
+                            terminalPreview={terminalPreview}
                             renamingSessionId={renamingSessionId}
                             fontSize={fontSize}
                             onToggleExpand={toggleExpand}
@@ -618,6 +621,7 @@ export function Sidebar({
                                 activeSessionId={activeSessionId}
                                 sessionStatuses={sessionStatuses}
                                 hooksSettings={hooksSettings}
+                                terminalPreview={terminalPreview}
                                 renamingSessionId={renamingSessionId}
                                 fontSize={fontSize}
                                 onToggleExpand={toggleExpand}
@@ -663,6 +667,7 @@ export function Sidebar({
                                     activeSessionId={activeSessionId}
                                     sessionStatuses={sessionStatuses}
                                     hooksSettings={hooksSettings}
+                                    terminalPreview={terminalPreview}
                                     renamingSessionId={renamingSessionId}
                                     fontSize={fontSize}
                                     onToggleExpand={toggleExpand}

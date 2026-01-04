@@ -22,7 +22,7 @@ declare global {
 
             // Dialog
             selectDirectory: () => Promise<string | null>
-            revealInFinder: (filePath: string) => Promise<boolean>
+            revealInFinder: (filePath: string, baseCwd?: string) => Promise<boolean>
             showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; detail?: string; buttons: string[]; icon?: string }) => Promise<{ response: number }>
             openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
 
@@ -68,6 +68,7 @@ declare global {
             resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
             killTerminal: (id: string) => Promise<void>
             hasRunningProcess: (id: string) => Promise<boolean>
+            getTerminalPreview: (id: string, lineCount?: number) => Promise<string[]>
             writeTerminal: (id: string, data: string) => void
             onTerminalData: (id: string, callback: (data: string) => void) => () => void
 

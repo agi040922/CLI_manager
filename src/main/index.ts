@@ -1229,9 +1229,28 @@ app.whenReady().then(async () => {
     })
 
     // Open in Finder (cross-platform: Finder/Explorer/File Manager)
-    // Uses openPath to open the folder directly, not showItemInFolder which selects the item in parent
-    ipcMain.handle('reveal-in-finder', async (_, filePath: string) => {
-        await shell.openPath(filePath)
+    // Shows the file selected in its parent folder
+    ipcMain.handle('reveal-in-finder', async (_, filePath: string, baseCwd?: string) => {
+        let resolvedPath = filePath
+
+        // Expand ~ to home directory
+        if (resolvedPath.startsWith('~/')) {
+            resolvedPath = path.join(os.homedir(), resolvedPath.slice(2))
+        } else if (resolvedPath === '~') {
+            resolvedPath = os.homedir()
+        }
+        // Handle relative paths
+        else if (baseCwd && !path.isAbsolute(resolvedPath)) {
+            resolvedPath = path.resolve(baseCwd, resolvedPath)
+        }
+
+        // Check if file exists
+        if (!existsSync(resolvedPath)) {
+            console.error('[reveal-in-finder] File not found:', resolvedPath)
+            return false
+        }
+
+        shell.showItemInFolder(resolvedPath)
         return true
     })
 
@@ -1659,17 +1678,23 @@ app.whenReady().then(async () => {
             let absolutePath = filePath
             let found = false
 
-            // Strategy 1: If absolute path, check if exists
-            if (path.isAbsolute(filePath)) {
+            // Strategy 0: Expand ~ to home directory
+            if (absolutePath.startsWith('~/')) {
+                absolutePath = path.join(os.homedir(), absolutePath.slice(2))
+            } else if (absolutePath === '~') {
+                absolutePath = os.homedir()
+            }
+
+            // Strategy 1: If absolute path (including expanded ~), check if exists
+            if (path.isAbsolute(absolutePath)) {
                 console.log('[open-file-in-editor] Path is absolute, checking if exists...')
-                console.log('[open-file-in-editor] File exists?', existsSync(filePath))
-                if (existsSync(filePath)) {
-                    absolutePath = filePath
+                console.log('[open-file-in-editor] File exists?', existsSync(absolutePath))
+                if (existsSync(absolutePath)) {
                     found = true
                     console.log('[open-file-in-editor] ✓ Found with Strategy 1 (absolute path)')
                 } else {
                     // Strategy 2: Treat as project-root relative (e.g., /jcon/api/... -> cwd/jcon/api/...)
-                    const cwdRelative = path.join(baseCwd, filePath)
+                    const cwdRelative = path.join(baseCwd, absolutePath)
                     console.log('[open-file-in-editor] Trying Strategy 2 (cwd relative):', cwdRelative)
                     console.log('[open-file-in-editor] File exists?', existsSync(cwdRelative))
                     if (existsSync(cwdRelative)) {
@@ -1680,7 +1705,7 @@ app.whenReady().then(async () => {
                 }
             } else {
                 // Strategy 3: Relative path from cwd
-                absolutePath = path.resolve(baseCwd, filePath)
+                absolutePath = path.resolve(baseCwd, absolutePath)
                 console.log('[open-file-in-editor] Trying Strategy 3 (resolve):', absolutePath)
                 found = existsSync(absolutePath)
                 console.log('[open-file-in-editor] File exists?', found)

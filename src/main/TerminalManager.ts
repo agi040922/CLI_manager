@@ -12,11 +12,140 @@ const FALLBACK_SHELLS = os.platform() === 'win32'
     ? ['powershell.exe', 'cmd.exe']
     : ['/bin/zsh', '/bin/bash', '/bin/sh']
 
+// ANSI escape sequence regex for stripping colors/formatting
+// Covers: CSI sequences, OSC sequences, DCS/PM/APC sequences, single-char escapes, carriage returns
+// Also handles terminal mode sequences like ?2026l, ?2026h
+const ANSI_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[PX^_].*?\x1b\\|\x1b\(B|\x1b[=>]|\x1b.|\r|\x07/g
+
 export class TerminalManager {
     private terminals: Map<string, any> = new Map()
+    // Output buffer for terminal preview (stores last N lines per terminal)
+    private outputBuffers: Map<string, string[]> = new Map()
+    private readonly PREVIEW_BUFFER_LINES = 10
 
     constructor() {
         this.setupIpc()
+    }
+
+    /**
+     * Strip ANSI escape sequences from text
+     */
+    private stripAnsi(text: string): string {
+        return text.replace(ANSI_REGEX, '')
+    }
+
+    /**
+     * Clean line by removing trailing separators
+     */
+    private cleanLine(line: string): string {
+        // Remove trailing box drawing characters and separators
+        return line.replace(/[─━─—_=]+\s*$/, '').trim()
+    }
+
+    /**
+     * Check if a line is meaningful content (not just decorators/separators)
+     */
+    private isMeaningfulLine(line: string): boolean {
+        const trimmed = line.trim()
+        if (!trimmed) return false
+
+        // Skip lines that are just separators (underscores, dashes, equals, dots)
+        if (/^[_\-=─━·.•─—]+$/.test(trimmed)) return false
+
+        // Skip lines containing mostly separators (more than 5 consecutive)
+        if (/[─━_\-=]{5,}/.test(trimmed)) return false
+
+        // Skip lines that are just whitespace or box drawing characters
+        if (/^[\s│┃|├┤└┘┌┐╭╮╯╰▮█▯░▒▓]+$/.test(trimmed)) return false
+
+        // Skip terminal mode artifacts
+        if (/^\?[\d]+[lh]$/.test(trimmed)) return false
+
+        // Skip prompt-only lines (>, $, %, #, etc.)
+        if (/^[>$%#›»❯➜→]\s*$/.test(trimmed)) return false
+
+        // Skip Claude Code / AI tool status bar messages (anywhere in line)
+        if (/bypass\s*permissions/i.test(trimmed)) return false
+        if (/shift\+tab\s*(to\s*)?cycle/i.test(trimmed)) return false
+        if (/MCP\s*server/i.test(trimmed)) return false
+        if (/\/mcp\s+(for\s+)?info/i.test(trimmed)) return false
+        if (/\/chrome\s+(for\s+)?info/i.test(trimmed)) return false
+        if (/enabled\s*·\s*\//i.test(trimmed)) return false
+        if (/for\s+info\s*$/i.test(trimmed)) return false
+
+        // Skip Claude Code splash/header info
+        if (/Claude\s*Code\s*v[\d.]+/i.test(trimmed)) return false
+        if (/Opus\s*[\d.]+\s*·/i.test(trimmed)) return false
+        if (/Sonnet\s*[\d.]+\s*·/i.test(trimmed)) return false
+        if (/Claude\s*(Max|Pro|Free)/i.test(trimmed)) return false
+        if (/^\*\s*[▮█▯░▒▓\s]+\*/.test(trimmed)) return false
+
+        // Skip fragment lines (likely partial UI elements)
+        if (/^cycle\)?$/i.test(trimmed)) return false
+        if (/^\d+\s*$/.test(trimmed)) return false  // Just numbers
+
+        // Skip very short lines (likely UI artifacts)
+        if (trimmed.length < 4) return false
+
+        return true
+    }
+
+    /**
+     * Append data to terminal's preview buffer
+     * Maintains a rolling buffer of the last N lines
+     */
+    private appendToBuffer(id: string, data: string): void {
+        let buffer = this.outputBuffers.get(id) || []
+
+        // Strip ANSI codes and split by newlines
+        const cleanData = this.stripAnsi(data)
+        const lines = cleanData.split('\n')
+
+        // Append new lines to buffer
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i]
+
+            // If first segment and buffer has content, append to last line
+            if (i === 0 && buffer.length > 0 && !data.startsWith('\n')) {
+                buffer[buffer.length - 1] += line
+            } else if (this.isMeaningfulLine(line)) {
+                // Clean the line (remove trailing separators)
+                const cleanedLine = this.cleanLine(line)
+                if (!cleanedLine || cleanedLine.length < 4) continue
+
+                // Skip duplicate lines (check against recent lines, not just last)
+                const isDuplicate = buffer.slice(-5).some(
+                    existing => existing === cleanedLine ||
+                    existing.includes(cleanedLine) ||
+                    cleanedLine.includes(existing)
+                )
+                if (!isDuplicate) {
+                    buffer.push(cleanedLine)
+                }
+            }
+        }
+
+        // Keep only last N lines
+        if (buffer.length > this.PREVIEW_BUFFER_LINES) {
+            buffer = buffer.slice(-this.PREVIEW_BUFFER_LINES)
+        }
+
+        this.outputBuffers.set(id, buffer)
+    }
+
+    /**
+     * Get preview lines for a terminal
+     */
+    getPreview(id: string, lineCount: number = 5): string[] {
+        const buffer = this.outputBuffers.get(id) || []
+        return buffer.slice(-lineCount)
+    }
+
+    /**
+     * Clear buffer when terminal is killed
+     */
+    private clearBuffer(id: string): void {
+        this.outputBuffers.delete(id)
     }
 
     /**
@@ -99,12 +228,18 @@ export class TerminalManager {
             if (ptyProcess) {
                 ptyProcess.kill()
                 this.terminals.delete(id)
+                this.clearBuffer(id)
             }
         })
 
         // Check if terminal has running child processes
         ipcMain.handle('terminal-has-running-process', (_, id: string): boolean => {
             return this.hasRunningProcess(id)
+        })
+
+        // Get terminal preview (last N lines)
+        ipcMain.handle('terminal-get-preview', (_, id: string, lineCount: number = 5): string[] => {
+            return this.getPreview(id, lineCount)
         })
     }
 
@@ -172,6 +307,7 @@ export class TerminalManager {
             }
         }
         this.terminals.clear()
+        this.outputBuffers.clear()
     }
 
     private createTerminal(id: string, cwd: string, cols: number = 80, rows: number = 30, requestedShell?: string) {
@@ -203,13 +339,10 @@ export class TerminalManager {
         })
 
         ptyProcess.onData((data: string) => {
+            // Store in preview buffer
+            this.appendToBuffer(id, data)
+
             // Send data to renderer
-            // We need a way to send to the specific window or all windows
-            // For now, we'll broadcast, but ideally we should target the sender
-            // But since we are in the main process, we can use webContents
-            // However, we don't have the sender webContents here easily without passing it
-            // So we will emit a global event that the renderer listens to
-            // But we need to filter by ID on the renderer side
             const windows = require('electron').BrowserWindow.getAllWindows()
             windows.forEach((win: any) => {
                 win.webContents.send(`terminal-output-${id}`, data)
