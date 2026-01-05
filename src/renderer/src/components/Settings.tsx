@@ -802,18 +802,18 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                         onClick={() => setSettings(prev => ({
                                                             ...prev,
                                                             terminalPreview: {
-                                                                enabled: !(prev.terminalPreview?.enabled ?? true),
+                                                                enabled: !(prev.terminalPreview?.enabled ?? false),
                                                                 lineCount: prev.terminalPreview?.lineCount ?? 5
                                                             }
                                                         }))}
                                                         className={`relative w-11 h-6 rounded-full transition-colors ${
-                                                            (settings.terminalPreview?.enabled ?? true)
+                                                            (settings.terminalPreview?.enabled ?? false)
                                                                 ? 'bg-blue-600'
                                                                 : 'bg-gray-600'
                                                         }`}
                                                     >
                                                         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                                                            (settings.terminalPreview?.enabled ?? true)
+                                                            (settings.terminalPreview?.enabled ?? false)
                                                                 ? 'translate-x-6'
                                                                 : 'translate-x-1'
                                                         }`} />
@@ -822,7 +822,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             </div>
 
                                             {/* Line Count Selector */}
-                                            {(settings.terminalPreview?.enabled ?? true) && (
+                                            {(settings.terminalPreview?.enabled ?? false) && (
                                                 <div>
                                                     <label className="block text-xs text-gray-400 mb-1">Preview Lines</label>
                                                     <select
@@ -830,7 +830,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                         onChange={e => setSettings(prev => ({
                                                             ...prev,
                                                             terminalPreview: {
-                                                                enabled: prev.terminalPreview?.enabled ?? true,
+                                                                enabled: prev.terminalPreview?.enabled ?? false,
                                                                 lineCount: parseInt(e.target.value)
                                                             }
                                                         }))}
@@ -976,7 +976,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                                 enabled: true,
                                                                 detectRunning: true,
                                                                 detectReady: true,
-                                                                detectError: true,
+                                                                detectError: false,
                                                                 showInSidebar: true,
                                                                 autoDismissSeconds: 5
                                                             }

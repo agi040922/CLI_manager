@@ -187,7 +187,7 @@ export interface UserSettings {
     }
     // Terminal Preview 설정 (hover 시 마지막 N줄 미리보기)
     terminalPreview?: {
-        enabled: boolean            // 미리보기 활성화 (기본값: true)
+        enabled: boolean            // 미리보기 활성화 (기본값: false)
         lineCount: number           // 표시할 줄 수 (기본값: 5, 최대 10)
     }
     // Hooks 설정 (Claude Code 세션 모니터링)

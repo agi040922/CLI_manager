@@ -95,7 +95,18 @@ const store = new Store<AppConfig>({
             },
             ignoredPorts: [],
             ignoredProcesses: [],
-            portActionLogs: []
+            portActionLogs: [],
+            hooks: {
+                enabled: true,
+                claudeCode: {
+                    enabled: true,
+                    detectRunning: true,
+                    detectReady: true,
+                    detectError: false,
+                    showInSidebar: true,
+                    autoDismissSeconds: 5
+                }
+            }
         }
     }
 }) as any

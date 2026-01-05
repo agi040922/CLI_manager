@@ -92,8 +92,8 @@ export function SessionItem({
     // Handle mouse enter - start hover timer
     const handleMouseEnter = useCallback(() => {
         // Don't show preview for active session or if disabled
-        // Default to enabled (true) if terminalPreview is undefined
-        if (isActive || !(terminalPreview?.enabled ?? true)) return
+        // Default to disabled (false) if terminalPreview is undefined
+        if (isActive || !(terminalPreview?.enabled ?? false)) return
 
         // Clear any existing linger timeout
         if (lingerTimeoutRef.current) {
