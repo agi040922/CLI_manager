@@ -14,7 +14,7 @@ interface SidebarProps {
     onRemoveWorkspace: (id: string) => void
     onAddSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string, sessionName?: string) => void
     onAddWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => void
-    onRemoveSession: (workspaceId: string, sessionId: string) => void
+    onRemoveSession: (workspaceId: string, sessionId: string, skipConfirm?: boolean) => Promise<void>
     onCreatePlayground: () => void
     activeSessionId?: string
     sessionStatuses?: Map<string, { status: SessionStatus, isClaudeCode: boolean }>
@@ -474,23 +474,55 @@ export function Sidebar({
     return (
         <>
             {/* Context Menus */}
-            {menuOpen && (
-                <WorkspaceContextMenu
-                    x={menuOpen.x}
-                    y={menuOpen.y}
-                    workspacePath={menuOpen.workspacePath}
-                    templates={customTemplates}
-                    onAddSession={(type, template) => {
-                        if (type === 'worktree') {
-                            setShowPrompt({ workspaceId: menuOpen.workspaceId })
-                        } else {
-                            onAddSession(menuOpen.workspaceId, 'regular', undefined, template?.command, template?.name)
-                        }
-                    }}
-                    onOpenSettings={onOpenSettings}
-                    onClose={() => setMenuOpen(null)}
-                />
-            )}
+            {menuOpen && (() => {
+                const workspace = workspaces.find(w => w.id === menuOpen.workspaceId)
+                return (
+                    <WorkspaceContextMenu
+                        x={menuOpen.x}
+                        y={menuOpen.y}
+                        workspacePath={menuOpen.workspacePath}
+                        sessions={workspace?.sessions || []}
+                        templates={customTemplates}
+                        onAddSession={(type, template) => {
+                            if (type === 'worktree') {
+                                setShowPrompt({ workspaceId: menuOpen.workspaceId })
+                            } else {
+                                onAddSession(menuOpen.workspaceId, 'regular', undefined, template?.command, template?.name)
+                            }
+                        }}
+                        onTerminateAll={async () => {
+                            if (!workspace) return
+
+                            // Check if any session has running processes
+                            const runningChecks = await Promise.all(
+                                workspace.sessions.map(async s => ({
+                                    id: s.id,
+                                    running: await window.api.hasRunningProcess(s.id)
+                                }))
+                            )
+                            const hasRunning = runningChecks.some(c => c.running)
+
+                            if (hasRunning) {
+                                const confirmed = await showConfirm(
+                                    'Terminate All Terminals',
+                                    'Some terminals have running processes. Are you sure you want to terminate all?'
+                                )
+                                if (!confirmed) return
+                            }
+
+                            // Copy session IDs first (avoid mutation during iteration)
+                            const sessionIds = workspace.sessions.map(s => s.id)
+
+                            // Remove all sessions sequentially (skipConfirm since we already confirmed)
+                            for (const sessionId of sessionIds) {
+                                await onRemoveSession(menuOpen.workspaceId, sessionId, true)
+                            }
+                        }}
+                        onOpenSettings={onOpenSettings}
+                        onClose={() => setMenuOpen(null)}
+                    />
+                )
+            })()}
 
             {worktreeMenuOpen && (
                 <WorktreeContextMenu

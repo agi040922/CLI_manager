@@ -15,7 +15,7 @@ interface WorktreeItemProps {
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
     onSelect: (workspace: Workspace, session: TerminalSession) => void
-    onRemoveSession: (workspaceId: string, sessionId: string) => void
+    onRemoveSession: (workspaceId: string, sessionId: string, skipConfirm?: boolean) => void
     onRemoveWorkspace: (id: string) => void
     onOpenInEditor: (workspacePath: string) => void
     onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void

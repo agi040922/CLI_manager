@@ -390,21 +390,23 @@ function App() {
         }
     }
 
-    const handleRemoveSession = async (workspaceId: string, sessionId: string) => {
-        // Check if there are running processes
-        const hasRunning = await window.api.hasRunningProcess(sessionId)
+    const handleRemoveSession = async (workspaceId: string, sessionId: string, skipConfirm?: boolean) => {
+        // Check if there are running processes (skip if already confirmed)
+        if (!skipConfirm) {
+            const hasRunning = await window.api.hasRunningProcess(sessionId)
 
-        if (hasRunning) {
-            // Ask for confirmation only if processes are running
-            const { response } = await window.api.showMessageBox({
-                type: 'warning',
-                title: 'Terminate Session',
-                message: 'Do you want to terminate running processes?',
-                buttons: ['Cancel', 'Terminate']
-            })
+            if (hasRunning) {
+                // Ask for confirmation only if processes are running
+                const { response } = await window.api.showMessageBox({
+                    type: 'warning',
+                    title: 'Terminate Session',
+                    message: 'Do you want to terminate running processes?',
+                    buttons: ['Cancel', 'Terminate']
+                })
 
-            // Cancel clicked
-            if (response === 0) return
+                // Cancel clicked
+                if (response === 0) return
+            }
         }
 
         // Kill the terminal process
@@ -638,6 +640,7 @@ function App() {
                                     visible={activeSession?.id === session.id}
                                     onSessionStatusChange={handleSessionStatusChange}
                                     fontSize={terminalFontSize}
+                                    fontFamily={settings.terminalFontFamily}
                                     initialCommand={session.initialCommand}
                                     shell={settings.defaultShell}
                                     keyboardSettings={settings.keyboard}

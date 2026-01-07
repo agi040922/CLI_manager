@@ -15,6 +15,7 @@ interface TerminalViewProps {
     visible: boolean
     onSessionStatusChange?: (sessionId: string, status: SessionStatus, isClaudeCode: boolean) => void
     fontSize?: number
+    fontFamily?: string  // User's preferred terminal font from settings
     initialCommand?: string
     shell?: string  // User's preferred shell from settings
     keyboardSettings?: {
@@ -24,8 +25,8 @@ interface TerminalViewProps {
     hooksSettings?: HooksSettings
 }
 
-// 터미널 폰트 패밀리 (고정값)
-const TERMINAL_FONT_FAMILY = 'Menlo, Monaco, "Courier New", monospace'
+// Default terminal font family (fallback when no custom font is set)
+const DEFAULT_TERMINAL_FONT_FAMILY = 'Menlo, Monaco, "Courier New", monospace'
 
 export function TerminalView({
     id,
@@ -33,11 +34,17 @@ export function TerminalView({
     visible,
     onSessionStatusChange,
     fontSize = 14,
+    fontFamily,
     initialCommand,
     shell,
     keyboardSettings,
     hooksSettings
 }: TerminalViewProps) {
+    // Compute effective font family with fallback
+    // Empty string means user selected "Custom" but didn't enter a value yet
+    const effectiveFontFamily = fontFamily && fontFamily.trim() !== ''
+        ? fontFamily
+        : DEFAULT_TERMINAL_FONT_FAMILY
     const terminalRef = useRef<HTMLDivElement>(null)
     const xtermRef = useRef<Terminal | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
@@ -296,12 +303,14 @@ export function TerminalView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, id])
 
-    // fontSize 변경 시 터미널 재생성 없이 동적으로 업데이트
+    // fontSize/fontFamily 변경 시 터미널 재생성 없이 동적으로 업데이트
     // IMPORTANT: visible은 의존성에서 제거 - visible 변경 시에는 visibility useEffect에서 처리함
     // visible을 의존성에 넣으면 세션 전환 시 scrollToBottom 없이 safeFit()이 먼저 호출되는 문제 발생
     useEffect(() => {
         if (xtermRef.current && fitAddonRef.current && isInitializedRef.current) {
             xtermRef.current.options.fontSize = fontSize
+            // fontFamily 동적 업데이트 (빈 문자열이면 기본 폰트 사용)
+            xtermRef.current.options.fontFamily = effectiveFontFamily
             // visible 상태일 때만 fit 호출 (display:none 상태에서는 크기 계산이 잘못됨)
             // 비활성 터미널은 visible이 true가 될 때 visibility useEffect에서 fit 호출됨
             if (visible) {
@@ -309,7 +318,7 @@ export function TerminalView({
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fontSize, id])  // visible 제거!
+    }, [fontSize, fontFamily, id])  // visible 제거! effectiveFontFamily는 fontFamily에서 파생됨
 
     useEffect(() => {
         if (!terminalRef.current) return
@@ -321,7 +330,7 @@ export function TerminalView({
                 cursor: '#ffffff',
                 selectionBackground: 'rgba(255, 255, 255, 0.3)'
             },
-            fontFamily: TERMINAL_FONT_FAMILY,
+            fontFamily: effectiveFontFamily,
             fontSize,
             allowProposedApi: true,
             cursorBlink: true,

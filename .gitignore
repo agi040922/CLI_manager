@@ -47,3 +47,4 @@ coverage/
 # Electron Builder output
 release/
 dist/
+.wrangler/

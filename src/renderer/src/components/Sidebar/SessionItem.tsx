@@ -37,7 +37,7 @@ interface SessionItemProps {
         lineCount: number
     }
     onSelect: (workspace: Workspace, session: TerminalSession) => void
-    onRemove: (workspaceId: string, sessionId: string) => void
+    onRemove: (workspaceId: string, sessionId: string, skipConfirm?: boolean) => void
     onRename: (workspaceId: string, sessionId: string, newName: string) => void
     isRenaming?: boolean
     onContextMenu: (e: React.MouseEvent, workspaceId: string, sessionId: string) => void

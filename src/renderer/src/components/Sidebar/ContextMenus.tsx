@@ -1,7 +1,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy, RefreshCw, FolderOpen } from 'lucide-react'
-import { Workspace, TerminalTemplate } from '../../../../shared/types'
+import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy, RefreshCw, FolderOpen, SquareX } from 'lucide-react'
+import { Workspace, TerminalTemplate, TerminalSession } from '../../../../shared/types'
 import { getTemplateIcon } from '../../constants/icons'
 import { MENU_Z_INDEX } from '../../constants/styles'
 
@@ -9,8 +9,10 @@ interface WorkspaceContextMenuProps {
     x: number
     y: number
     workspacePath: string
+    sessions: TerminalSession[]
     templates: TerminalTemplate[]
     onAddSession: (type: 'regular' | 'worktree', template?: TerminalTemplate) => void
+    onTerminateAll: () => void
     onOpenSettings: () => void
     onClose: () => void
 }
@@ -23,8 +25,10 @@ export function WorkspaceContextMenu({
     x,
     y,
     workspacePath,
+    sessions,
     templates,
     onAddSession,
+    onTerminateAll,
     onOpenSettings,
     onClose
 }: WorkspaceContextMenuProps) {
@@ -71,6 +75,21 @@ export function WorkspaceContextMenu({
                 <FolderOpen size={12} className="text-gray-400 shrink-0" />
                 <span className="truncate">Reveal in Finder</span>
             </button>
+
+            {/* Terminate All Terminals */}
+            {sessions.length > 0 && (
+                <button
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors flex items-center gap-2"
+                    onClick={() => {
+                        onTerminateAll()
+                        onClose()
+                    }}
+                    title={`Terminate all ${sessions.length} terminal(s)`}
+                >
+                    <SquareX size={12} className="text-red-400 shrink-0" />
+                    <span className="truncate">Terminate All ({sessions.length})</span>
+                </button>
+            )}
 
             <div className="border-t border-white/10 my-0.5"></div>
 

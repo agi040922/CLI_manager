@@ -780,6 +780,53 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                     Shell used for new terminal sessions. Changes apply to new terminals only.
                                                 </p>
                                             </div>
+
+                                            {/* Terminal Font Family */}
+                                            <div>
+                                                <label className="block text-xs text-gray-400 mb-1">Terminal Font</label>
+                                                <p className="text-xs text-gray-500 mb-2">
+                                                    Select a Nerd Font for Powerlevel10k or Oh My Zsh themes with icons
+                                                </p>
+                                                <select
+                                                    value={settings.terminalFontFamily || ''}
+                                                    onChange={e => {
+                                                        const value = e.target.value
+                                                        if (value === 'custom') {
+                                                            // Show custom input
+                                                            setSettings(prev => ({ ...prev, terminalFontFamily: '' }))
+                                                        } else {
+                                                            setSettings(prev => ({ ...prev, terminalFontFamily: value || undefined }))
+                                                        }
+                                                    }}
+                                                    className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="">Default (Menlo, Monaco)</option>
+                                                    <option value="MesloLGS NF">MesloLGS NF (Powerlevel10k)</option>
+                                                    <option value="MesloLGM Nerd Font">MesloLGM Nerd Font</option>
+                                                    <option value="FiraCode Nerd Font">FiraCode Nerd Font</option>
+                                                    <option value="JetBrainsMono Nerd Font">JetBrainsMono Nerd Font</option>
+                                                    <option value="Hack Nerd Font">Hack Nerd Font</option>
+                                                    <option value="SauceCodePro Nerd Font">SauceCodePro Nerd Font</option>
+                                                    <option value="UbuntuMono Nerd Font">UbuntuMono Nerd Font</option>
+                                                    <option value="D2Coding">D2Coding</option>
+                                                    <option value="custom">Custom font...</option>
+                                                </select>
+                                                {settings.terminalFontFamily === '' && (
+                                                    <div className="mt-2">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Enter font name (e.g., 'Cascadia Code NF')"
+                                                            onChange={e => setSettings(prev => ({ ...prev, terminalFontFamily: e.target.value || undefined }))}
+                                                            className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                                        />
+                                                    </div>
+                                                )}
+                                                <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded">
+                                                    <p className="text-xs text-blue-200">
+                                                        <strong>Tip:</strong> Install a Nerd Font first. For Powerlevel10k, download MesloLGS NF from <span className="text-blue-300">github.com/romkatv/powerlevel10k#fonts</span>
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 

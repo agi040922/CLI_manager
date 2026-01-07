@@ -147,6 +147,7 @@ export interface UserSettings {
     theme: 'dark' | 'light'
     fontSize: number  // UI 요소(사이드바 파일/폴더명 등)에만 적용
     fontFamily?: string  // deprecated - 사용 안 함
+    terminalFontFamily?: string  // Terminal font (e.g., 'MesloLGS NF', 'FiraCode Nerd Font')
     defaultShell: string
     defaultEditor: EditorType
     customEditorPath?: string  // Custom editor command or path
