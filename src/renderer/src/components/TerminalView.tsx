@@ -126,7 +126,7 @@ export function TerminalView({
      * 문제 해결:
      * - 스크롤 중 ResizeObserver 트리거로 인한 viewport 충돌 방지
      * - 여러 useEffect에서 동시에 fit() 호출 시 race condition 방지
-     * - scrollToBottom 시 xterm.js API와 DOM viewport 둘 다 명시적으로 동기화
+     * - fit() 후 scrollLines(0)로 내부 스크롤 상태 동기화하여 스크롤 갇힘 방지
      */
     // 마지막으로 PTY에 전달한 터미널 크기 (중복 호출 방지)
     const lastPtySizeRef = useRef<{ cols: number; rows: number } | null>(null)
@@ -178,15 +178,17 @@ export function TerminalView({
                     // fit()으로 rows가 변경되면 xterm.js가 내부적으로 버퍼를 재계산하고
                     // 스크롤 위치를 리셋할 수 있음. 충분한 딜레이 후 scrollToBottom() 호출
                     setTimeout(() => {
-                        if (xtermRef.current && options?.scrollToBottom) {
-                            // xterm.js API로 맨 아래로 이동
-                            xtermRef.current.scrollToBottom()
+                        if (xtermRef.current) {
+                            // 스크롤 상태 동기화
+                            xtermRef.current.scrollLines(0)
 
-                            // DOM viewport도 맨 아래로 동기화
-                            // xterm.js 내부 상태와 DOM 스크롤바 위치를 명시적으로 일치시킴
-                            const viewport = terminalRef.current?.querySelector('.xterm-viewport') as HTMLElement
-                            if (viewport) {
-                                viewport.scrollTop = viewport.scrollHeight
+                            if (options?.scrollToBottom) {
+                                xtermRef.current.scrollToBottom()
+
+                                // xterm.js와 DOM 스크롤 강제 동기화
+                                // scrollLines로 xterm.js 내부 스크롤 이벤트를 트리거
+                                xtermRef.current.scrollLines(1)
+                                xtermRef.current.scrollLines(-1)
                             }
                         }
                     }, 50)
