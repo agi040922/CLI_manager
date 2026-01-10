@@ -321,7 +321,13 @@ export class TerminalManager {
         const shell = this.resolveShell(requestedShell)
         console.log(`Creating terminal with shell: ${shell}`)
 
-        const ptyProcess = pty.spawn(shell, [], {
+        // Use login shell on Unix-like systems to load full PATH from .zprofile/.bash_profile
+        // This fixes "command not found" errors for brew, claude, direnv, etc.
+        // when app is launched from Finder/Spotlight (which doesn't inherit shell PATH)
+        // Windows shells (PowerShell, cmd) don't use --login flag
+        const shellArgs = os.platform() === 'win32' ? [] : ['--login']
+
+        const ptyProcess = pty.spawn(shell, shellArgs, {
             name: 'xterm-256color',
             cols,
             rows,
