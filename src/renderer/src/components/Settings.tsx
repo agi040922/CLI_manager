@@ -1643,7 +1643,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                         {licenseInfo?.planType === 'free' && (
                                             <div className="mt-4">
                                                 <button
-                                                    onClick={() => window.open('https://solhun.com', '_blank')}
+                                                    onClick={() => window.api.openExternal('https://www.solhun.com/pricing')}
                                                     className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
                                                 >
                                                     <Crown size={16} />
@@ -1693,6 +1693,15 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             </div>
                                             <p className="text-xs text-gray-500 mt-2">
                                                 Having trouble? Contact <span className="text-gray-400">solhun.jeong@gmail.com</span>
+                                            </p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                <button
+                                                    onClick={() => window.api.openExternal('https://www.solhun.com/pricing')}
+                                                    className="text-purple-400 hover:text-purple-300 transition-colors inline-flex items-center gap-1"
+                                                >
+                                                    View pricing & features
+                                                    <ExternalLink size={10} />
+                                                </button>
                                             </p>
                                         </div>
 

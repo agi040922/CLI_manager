@@ -261,6 +261,47 @@ exec('/bin/zsh -l -c "code ."')
 - Renderer는 Vite + React HMR 지원
 - Main/Preload는 CommonJS 모듈 시스템 사용 (`type: "commonjs"`)
 
+## Premium Features (Licensing)
+
+### Plan Limits
+
+플랜별 제한은 `src/shared/types.ts`의 `PLAN_LIMITS`에서 정의합니다.
+
+| Feature | Free | Pro |
+|---------|------|-----|
+| Workspaces | 2 | Unlimited |
+| Sessions/Workspace | 5 | Unlimited |
+| Templates | 3 | Unlimited |
+| Git Worktree | ❌ | ✅ |
+| Split View | ❌ | ✅ |
+
+### Adding New Premium Feature
+
+새 프리미엄 기능 추가 시 아래 순서를 따릅니다:
+
+1. **Type 정의** - `src/shared/types.ts`
+   - `FeatureLimits` 인터페이스에 필드 추가 (boolean 또는 number)
+   - `PLAN_LIMITS`에서 플랜별 값 설정 (Free: 제한, Pro: -1 또는 true)
+
+2. **체크 메서드** - `src/main/LicenseManager.ts`
+   - `canUseXxx()` 메서드 추가 (기존 패턴 참고)
+
+3. **IPC Handler** - `src/main/index.ts`
+   - 해당 기능 호출 시 체크 메서드 먼저 실행
+   - 제한 초과 시 `{ success: false, errorType: 'UPGRADE_REQUIRED' }` 반환
+
+4. **Renderer 처리** - `src/renderer/src/App.tsx`
+   - `UPGRADE_REQUIRED` 에러 시 업그레이드 다이얼로그 표시
+
+5. **UI 동기화** - `LicenseVerification/index.tsx`
+   - Free plan 설명 텍스트가 `PLAN_LIMITS.free`와 일치하는지 확인
+
+### Notes
+
+- `-1` = Unlimited
+- 제한 초과 에러는 항상 `errorType: 'UPGRADE_REQUIRED'` 사용
+- Upgrade URL: `https://solhun.com`
+
 ## 문제 해결 접근 방식
 
 - 문제가 보고되면 **바로 코드 수정하지 않는다**

@@ -7,7 +7,7 @@ interface LicenseVerificationProps {
 }
 
 // License purchase URL
-const LICENSE_PURCHASE_URL = "https://solhun.com";
+const LICENSE_PURCHASE_URL = "https://www.solhun.com/pricing";
 
 export const LicenseVerification: React.FC<LicenseVerificationProps> = ({
   onVerify,
@@ -104,7 +104,7 @@ export const LicenseVerification: React.FC<LicenseVerificationProps> = ({
 
   const handleGetLicense = () => {
     // Open license purchase URL in external browser
-    window.open(LICENSE_PURCHASE_URL, "_blank");
+    window.api.openExternal(LICENSE_PURCHASE_URL);
   };
 
   // Show loading while checking existing license
@@ -211,7 +211,7 @@ export const LicenseVerification: React.FC<LicenseVerificationProps> = ({
           {/* Free plan features */}
           <div className="mt-3 px-2 py-1.5 bg-white/5 rounded border border-white/5">
             <p className="text-[10px] text-gray-500">
-              Free: 2 workspaces, 3 sessions, 3 templates, GitHub, Port monitoring
+              Free: 2 workspaces, 5 sessions, 3 templates, GitHub, Port monitoring
             </p>
           </div>
 

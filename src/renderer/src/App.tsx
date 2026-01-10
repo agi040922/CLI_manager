@@ -139,8 +139,10 @@ function App() {
                 if (!loadedSettings.hasCompletedOnboarding) {
                     setShowOnboarding(true)
                 }
-                // License screen removed - users start with Free Plan by default
-                // They can upgrade via Settings > License or when hitting feature limits
+                // Show license verification for first-time users
+                if (!loadedSettings.licenseScreenCompleted) {
+                    setShowLicenseVerification(true)
+                }
             }
         }).catch(err => {
             console.error('Failed to load settings:', err)
@@ -346,7 +348,7 @@ function App() {
     }
 
     // Handle drop on terminal area to add to split view
-    const handleTerminalAreaDrop = (e: React.DragEvent) => {
+    const handleTerminalAreaDrop = async (e: React.DragEvent) => {
         e.preventDefault()
         setDragOverZone(null)
 
@@ -358,6 +360,20 @@ function App() {
 
         // Max 4 terminals in split
         if (splitLayout && splitLayout.sessionIds.length >= 4) return
+
+        // Check license for new split view (not when adding to existing split)
+        if (!splitLayout && !licenseInfo.limits.splitViewEnabled) {
+            const { response } = await window.api.showMessageBox({
+                type: 'info',
+                title: 'Upgrade to Pro',
+                message: 'Split View is a Pro feature. Upgrade to unlock split terminal view.',
+                buttons: ['Later', 'Upgrade']
+            })
+            if (response === 1) {
+                window.api.openExternal('https://www.solhun.com/pricing')
+            }
+            return
+        }
 
         if (splitLayout) {
             // Add to existing split

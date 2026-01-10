@@ -204,6 +204,20 @@ export class LicenseManager {
         return { allowed: true }
     }
 
+    // Check if split view feature is available
+    canUseSplitView(): { allowed: boolean; reason?: string } {
+        const info = this.getLicenseInfo()
+
+        if (!info.limits.splitViewEnabled) {
+            return {
+                allowed: false,
+                reason: 'Split View is a Pro feature. Upgrade to unlock split terminal view.'
+            }
+        }
+
+        return { allowed: true }
+    }
+
     // Activate license with Lemon Squeezy
     async activate(licenseKey: string): Promise<IPCResult<LicenseData>> {
         try {

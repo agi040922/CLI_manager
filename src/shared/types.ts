@@ -50,6 +50,7 @@ export interface FeatureLimits {
     maxSessionsPerWorkspace: number
     maxTemplates: number
     worktreeEnabled: boolean
+    splitViewEnabled: boolean
     githubIntegrationEnabled: boolean
     portMonitoringEnabled: boolean
 }
@@ -57,10 +58,11 @@ export interface FeatureLimits {
 // Plan limits configuration
 export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
     free: {
-        maxWorkspaces: 3,
+        maxWorkspaces: 2,
         maxSessionsPerWorkspace: 5,
         maxTemplates: 3,
         worktreeEnabled: false,
+        splitViewEnabled: false,
         githubIntegrationEnabled: true,  // GitHub is available for free
         portMonitoringEnabled: true,
     },
@@ -69,6 +71,7 @@ export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
         maxSessionsPerWorkspace: -1,
         maxTemplates: -1,
         worktreeEnabled: true,
+        splitViewEnabled: true,
         githubIntegrationEnabled: true,
         portMonitoringEnabled: true,
     },
@@ -77,6 +80,7 @@ export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
         maxSessionsPerWorkspace: -1,
         maxTemplates: -1,
         worktreeEnabled: true,
+        splitViewEnabled: true,
         githubIntegrationEnabled: true,
         portMonitoringEnabled: true,
     },
@@ -85,6 +89,7 @@ export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
         maxSessionsPerWorkspace: -1,
         maxTemplates: -1,
         worktreeEnabled: true,
+        splitViewEnabled: true,
         githubIntegrationEnabled: true,
         portMonitoringEnabled: true,
     },
