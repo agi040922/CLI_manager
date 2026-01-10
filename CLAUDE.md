@@ -261,6 +261,16 @@ exec('/bin/zsh -l -c "code ."')
 - Renderer는 Vite + React HMR 지원
 - Main/Preload는 CommonJS 모듈 시스템 사용 (`type: "commonjs"`)
 
+## 문제 해결 접근 방식
+
+- 문제가 보고되면 **바로 코드 수정하지 않는다**
+- **ultrathink**를 사용해 깊이 분석한다:
+  1. 현재 코드가 어떻게 동작하는지
+  2. 왜 문제가 발생하는지 (근본 원인)
+  3. 관련된 코드 흐름 전체 파악
+  4. 어떤 부분이 영향받는지 (사이드 이펙트)
+- 분석 완료 후 수정 방안을 제안하고 **컨펌을 받은 뒤** 코드 수정
+
 ## Development Guidelines
 
 ### Language Policy

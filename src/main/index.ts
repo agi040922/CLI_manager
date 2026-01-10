@@ -128,6 +128,9 @@ let tray: Tray | null = null
 let isQuitting = false  // True when user confirms to quit completely
 let isBackgroundMode = false  // True when running in background (window hidden)
 
+// Main window reference for IPC communication
+let mainWindow: BrowserWindow | null = null
+
 // Validate if a path exists and is accessible
 function isValidPath(dirPath: string): boolean {
     try {
@@ -245,7 +248,7 @@ function ensureHomeWorkspace(): Workspace | null {
 
 function createWindow(): void {
     // Create the browser window.
-    const mainWindow = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
         show: false,
@@ -265,7 +268,7 @@ function createWindow(): void {
     })
 
     mainWindow.on('ready-to-show', () => {
-        mainWindow.show()
+        mainWindow?.show()
     })
 
     // Cmd+/- 기본 줌 완전 비활성화 (터미널 폰트만 조정)
@@ -283,7 +286,7 @@ function createWindow(): void {
             // 기본 줌 동작 방지
             event.preventDefault()
             // 렌더러로 IPC 전송 (터미널 폰트 크기 조정)
-            mainWindow.webContents.send('terminal-zoom', input.key)
+            mainWindow?.webContents.send('terminal-zoom', input.key)
         }
     })
 
@@ -298,6 +301,80 @@ function createWindow(): void {
         mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
     } else {
         mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    }
+}
+
+// Grid window reference for sync
+let gridWindow: BrowserWindow | null = null
+
+// Create fullscreen terminal window for split view
+function createFullscreenTerminalWindow(sessionIds: string[]): void {
+    // Close existing grid window if any
+    if (gridWindow && !gridWindow.isDestroyed()) {
+        gridWindow.close()
+    }
+
+    const fullscreenWindow = new BrowserWindow({
+        width: 1600,
+        height: 900,
+        show: false,
+        autoHideMenuBar: true,
+        titleBarStyle: 'hiddenInset',
+        vibrancy: 'under-window',
+        visualEffectState: 'active',
+        trafficLightPosition: { x: 15, y: 10 },
+        icon,
+        webPreferences: {
+            preload: join(__dirname, '../preload/index.js'),
+            sandbox: false,
+            contextIsolation: true,
+            nodeIntegration: false,
+            zoomFactor: 1
+        }
+    })
+
+    // Store reference for sync
+    gridWindow = fullscreenWindow
+
+    fullscreenWindow.on('ready-to-show', () => {
+        fullscreenWindow.show()
+        // Notify main window that grid view is open
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('grid-view-state-changed', true, sessionIds)
+        }
+    })
+
+    // Clear reference when closed
+    fullscreenWindow.on('closed', () => {
+        gridWindow = null
+        // Notify main window that grid view is closed
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('grid-view-state-changed', false, [])
+        }
+    })
+
+    // Disable zoom for fullscreen window
+    fullscreenWindow.webContents.setZoomFactor(1)
+    fullscreenWindow.webContents.setZoomLevel(0)
+    fullscreenWindow.webContents.setVisualZoomLevelLimits(1, 1)
+
+    // Handle terminal zoom for this window
+    fullscreenWindow.webContents.on('before-input-event', (event, input) => {
+        const isModifier = input.meta || input.control
+        if (isModifier && (input.key === '=' || input.key === '+' || input.key === '-' || input.key === '0')) {
+            event.preventDefault()
+            fullscreenWindow.webContents.send('terminal-zoom', input.key)
+        }
+    })
+
+    // Load with fullscreen mode query parameters
+    const sessionIdsParam = sessionIds.join(',')
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+        fullscreenWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?mode=fullscreen&sessions=${sessionIdsParam}`)
+    } else {
+        fullscreenWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+            query: { mode: 'fullscreen', sessions: sessionIdsParam }
+        })
     }
 }
 
@@ -334,6 +411,25 @@ app.whenReady().then(async () => {
     })
 
     // IPC Handlers
+
+    // Open fullscreen terminal window
+    ipcMain.handle('open-fullscreen-terminal', (_event, sessionIds: string[]) => {
+        if (sessionIds && sessionIds.length > 0) {
+            createFullscreenTerminalWindow(sessionIds)
+            return true
+        }
+        return false
+    })
+
+    // Sync grid window sessions (one-way: main → grid)
+    ipcMain.handle('sync-grid-sessions', (_event, sessionIds: string[]) => {
+        if (gridWindow && !gridWindow.isDestroyed()) {
+            gridWindow.webContents.send('grid-sessions-updated', sessionIds)
+            return true
+        }
+        return false
+    })
+
     ipcMain.handle('get-workspaces', () => {
         // Ensure home workspace exists and is first
         ensureHomeWorkspace()
@@ -612,6 +708,23 @@ app.whenReady().then(async () => {
             w.id === workspaceId ? workspace : w
         ))
 
+        return true
+    })
+
+    // Workspace order change handler
+    ipcMain.handle('reorder-workspaces', (_, workspaceIds: string[]) => {
+        const workspaces = store.get('workspaces') as Workspace[]
+
+        // Reorder workspaces according to workspaceIds order
+        const reorderedWorkspaces = workspaceIds
+            .map(id => workspaces.find(w => w.id === id))
+            .filter((w): w is Workspace => w !== undefined)
+
+        // Add any workspaces that weren't in the list (Home, Playground, Worktrees)
+        const remainingWorkspaces = workspaces.filter(w => !workspaceIds.includes(w.id))
+        const finalWorkspaces = [...reorderedWorkspaces, ...remainingWorkspaces]
+
+        store.set('workspaces', finalWorkspaces)
         return true
     })
 

@@ -2,7 +2,7 @@ import React from 'react'
 import { Folder, FolderOpen, Plus, Trash2, ChevronRight, ChevronDown, GitBranch, Home } from 'lucide-react'
 import clsx from 'clsx'
 import { Reorder } from 'framer-motion'
-import { Workspace, TerminalSession, SessionStatus, HooksSettings } from '../../../../shared/types'
+import { Workspace, TerminalSession, SessionStatus, HooksSettings, SplitTerminalLayout } from '../../../../shared/types'
 import { SessionItem } from './SessionItem'
 import { WorktreeItem } from './WorktreeItem'
 
@@ -29,6 +29,10 @@ interface WorkspaceItemProps {
     onSessionContextMenu: (e: React.MouseEvent, workspaceId: string, sessionId: string) => void
     onRenameCancel: () => void
     onReorderSessions: (workspaceId: string, sessions: TerminalSession[]) => void
+    // Split view props
+    splitLayout?: SplitTerminalLayout | null
+    onDragStartSession?: (sessionId: string) => void
+    onDragEndSession?: () => void
 }
 
 /**
@@ -57,7 +61,10 @@ export function WorkspaceItem({
     renamingSessionId,
     onSessionContextMenu,
     onRenameCancel,
-    onReorderSessions
+    onReorderSessions,
+    splitLayout,
+    onDragStartSession,
+    onDragEndSession
 }: WorkspaceItemProps) {
     return (
         <div>
@@ -172,6 +179,9 @@ export function WorkspaceItem({
                                         onRename={onRenameSession}
                                         onContextMenu={onSessionContextMenu}
                                         onRenameCancel={onRenameCancel}
+                                        isInSplit={splitLayout?.sessionIds.includes(session.id)}
+                                        onDragStartSession={onDragStartSession}
+                                        onDragEndSession={onDragEndSession}
                                     />
                                 )
                             })}

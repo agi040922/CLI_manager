@@ -13,6 +13,7 @@ declare global {
             removeSession: (workspaceId: string, sessionId: string) => Promise<boolean>
             renameSession: (workspaceId: string, sessionId: string, newName: string) => Promise<boolean>
             reorderSessions: (workspaceId: string, sessionIds: string[]) => Promise<boolean>
+            reorderWorkspaces: (workspaceIds: string[]) => Promise<boolean>
             createPlayground: () => Promise<Workspace | null>
 
             // Settings
@@ -29,6 +30,12 @@ declare global {
             // Templates
             getTemplates: () => Promise<any[]>
             saveTemplates: (templates: any[]) => Promise<boolean>
+
+            // Split Terminal View
+            openFullscreenTerminal: (sessionIds: string[]) => Promise<boolean>
+            syncGridSessions: (sessionIds: string[]) => Promise<boolean>
+            onGridSessionsUpdated: (callback: (sessionIds: string[]) => void) => () => void
+            onGridViewStateChanged: (callback: (isOpen: boolean, sessionIds: string[]) => void) => () => void
 
             // Git
             getGitStatus: (workspacePath: string) => Promise<any>

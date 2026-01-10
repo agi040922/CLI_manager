@@ -12,6 +12,7 @@ const api = {
     removeSession: (workspaceId: string, sessionId: string): Promise<boolean> => ipcRenderer.invoke('remove-session', workspaceId, sessionId),
     renameSession: (workspaceId: string, sessionId: string, newName: string): Promise<boolean> => ipcRenderer.invoke('rename-session', workspaceId, sessionId, newName),
     reorderSessions: (workspaceId: string, sessionIds: string[]): Promise<boolean> => ipcRenderer.invoke('reorder-sessions', workspaceId, sessionIds),
+    reorderWorkspaces: (workspaceIds: string[]): Promise<boolean> => ipcRenderer.invoke('reorder-workspaces', workspaceIds),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
 
     // Settings
@@ -24,6 +25,20 @@ const api = {
     // Templates
     getTemplates: (): Promise<any[]> => ipcRenderer.invoke('get-templates'),
     saveTemplates: (templates: any[]): Promise<boolean> => ipcRenderer.invoke('save-templates', templates),
+
+    // Split Terminal View
+    openFullscreenTerminal: (sessionIds: string[]): Promise<boolean> => ipcRenderer.invoke('open-fullscreen-terminal', sessionIds),
+    syncGridSessions: (sessionIds: string[]): Promise<boolean> => ipcRenderer.invoke('sync-grid-sessions', sessionIds),
+    onGridSessionsUpdated: (callback: (sessionIds: string[]) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, sessionIds: string[]) => callback(sessionIds)
+        ipcRenderer.on('grid-sessions-updated', handler)
+        return () => ipcRenderer.removeListener('grid-sessions-updated', handler)
+    },
+    onGridViewStateChanged: (callback: (isOpen: boolean, sessionIds: string[]) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, isOpen: boolean, sessionIds: string[]) => callback(isOpen, sessionIds)
+        ipcRenderer.on('grid-view-state-changed', handler)
+        return () => ipcRenderer.removeListener('grid-view-state-changed', handler)
+    },
 
     // Git
     getGitStatus: (workspacePath: string): Promise<any> => ipcRenderer.invoke('get-git-status', workspacePath),

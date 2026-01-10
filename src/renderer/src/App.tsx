@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Sidebar } from './components/Sidebar/index'
 import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
@@ -6,21 +6,58 @@ import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
 import { FileSearch } from './components/FileSearch'
 import { ConfirmationModal } from './components/Sidebar/Modals'
-import { Workspace, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus } from '../../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus, SplitTerminalLayout } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
-import { PanelLeft, Search } from 'lucide-react'
+import { PanelLeft, Search, LayoutGrid } from 'lucide-react'
+import { SplitTerminalHeader } from './components/SplitTerminalHeader'
+import { FullscreenTerminalView } from './components/FullscreenTerminalView'
 import { Onboarding } from './components/Onboarding'
 import { LicenseVerification } from './components/LicenseVerification'
 import { UpdateNotification, UpdateStatus } from './components/UpdateNotification'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+    // Workspace display order (only affects Sidebar, not terminal rendering)
+    const [workspaceOrder, setWorkspaceOrder] = useState<string[]>([])
     const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null)
     const [activeSession, setActiveSession] = useState<TerminalSession | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [gitPanelOpen, setGitPanelOpen] = useState(false)
     const [fileSearchOpen, setFileSearchOpen] = useState(false)
     const [fileSearchMode, setFileSearchMode] = useState<'files' | 'content'>('files')
+
+    // Split terminal view state
+    const [splitLayout, setSplitLayout] = useState<SplitTerminalLayout | null>(null)
+    const [isDraggingSession, setIsDraggingSession] = useState(false)
+    const [dragOverZone, setDragOverZone] = useState<'split' | null>(null)
+    const [activeSplitIndex, setActiveSplitIndex] = useState<number>(0) // Which pane is active in split view
+
+    // Fullscreen terminal mode (for separate window)
+    const [isFullscreenMode, setIsFullscreenMode] = useState(false)
+    const [fullscreenSessionIds, setFullscreenSessionIds] = useState<string[]>([])
+
+    // Grid view state (sessions currently open in grid window)
+    const [gridViewSessionIds, setGridViewSessionIds] = useState<string[]>([])
+
+    // Check URL parameters for fullscreen mode
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('mode') === 'fullscreen') {
+            setIsFullscreenMode(true)
+            const sessions = params.get('sessions')
+            if (sessions) {
+                setFullscreenSessionIds(sessions.split(','))
+            }
+        }
+    }, [])
+
+    // Listen for grid view state changes
+    useEffect(() => {
+        const cleanup = window.api.onGridViewStateChanged((isOpen, sessionIds) => {
+            setGridViewSessionIds(isOpen ? sessionIds : [])
+        })
+        return cleanup
+    }, [])
     // Session status tracking for Claude Code hooks (claude-squad style)
     const [sessionStatuses, setSessionStatuses] = useState<Map<string, { status: SessionStatus, isClaudeCode: boolean }>>(new Map())
     const [settings, setSettings] = useState<UserSettings>({
@@ -88,7 +125,14 @@ function App() {
 
     // Load workspaces, settings, and license info on mount
     useEffect(() => {
-        window.api.getWorkspaces().then(setWorkspaces)
+        window.api.getWorkspaces().then(loadedWorkspaces => {
+            setWorkspaces(loadedWorkspaces)
+            // Initialize workspace order from loaded workspaces (regular workspaces only)
+            const regularIds = loadedWorkspaces
+                .filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome)
+                .map(w => w.id)
+            setWorkspaceOrder(regularIds)
+        })
         window.api.getSettings().then(loadedSettings => {
             if (loadedSettings) {
                 setSettings(loadedSettings)
@@ -237,6 +281,33 @@ function App() {
     }
 
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
+        // If in split view, replace the active pane's session
+        if (splitLayout && splitLayout.sessionIds.length > 0) {
+            const sessionIds = [...splitLayout.sessionIds]
+
+            // If the session is already in split view, just set it as active
+            const existingIndex = sessionIds.indexOf(session.id)
+            if (existingIndex >= 0) {
+                setActiveSplitIndex(existingIndex)
+            } else {
+                // Replace the active pane's session
+                sessionIds[activeSplitIndex] = session.id
+                setSplitLayout({ ...splitLayout, sessionIds })
+            }
+
+            // Reset status for this session
+            setSessionStatuses(prev => {
+                const next = new Map(prev)
+                const current = next.get(session.id)
+                if (current) {
+                    next.set(session.id, { ...current, status: 'idle' })
+                }
+                return next
+            })
+            return
+        }
+
+        // Single view mode
         setActiveWorkspace(workspace)
         setActiveSession(session)
         // 세션 선택 시 상태 초기화 (사용자가 확인했으므로 idle로 리셋)
@@ -259,12 +330,167 @@ function App() {
         })
     }
 
+    // ============================================
+    // Split Terminal View Handlers
+    // ============================================
+
+    // Handle drag over the terminal area for split view
+    const handleTerminalAreaDragOver = (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes('application/x-session-id')) return
+        e.preventDefault()
+        setDragOverZone('split')
+    }
+
+    const handleTerminalAreaDragLeave = () => {
+        setDragOverZone(null)
+    }
+
+    // Handle drop on terminal area to add to split view
+    const handleTerminalAreaDrop = (e: React.DragEvent) => {
+        e.preventDefault()
+        setDragOverZone(null)
+
+        const sessionId = e.dataTransfer.getData('application/x-session-id')
+        if (!sessionId) return
+
+        // Don't add if already in split
+        if (splitLayout?.sessionIds.includes(sessionId)) return
+
+        // Max 4 terminals in split
+        if (splitLayout && splitLayout.sessionIds.length >= 4) return
+
+        if (splitLayout) {
+            // Add to existing split
+            setSplitLayout({
+                ...splitLayout,
+                sessionIds: [...splitLayout.sessionIds, sessionId],
+                sizes: undefined // Reset sizes to auto-calculate
+            })
+        } else if (activeSession) {
+            // Start new split: current active session + dropped session
+            setSplitLayout({
+                sessionIds: [activeSession.id, sessionId]
+            })
+            setActiveSession(null)
+        } else {
+            // No active session, just add to split
+            setSplitLayout({
+                sessionIds: [sessionId]
+            })
+        }
+    }
+
+    // Handle removing a session from split view
+    const handleRemoveFromSplit = (sessionId: string) => {
+        if (!splitLayout) return
+
+        const removedIndex = splitLayout.sessionIds.indexOf(sessionId)
+        const newSessionIds = splitLayout.sessionIds.filter(id => id !== sessionId)
+
+        if (newSessionIds.length <= 1) {
+            // Return to single view mode
+            if (newSessionIds.length === 1) {
+                // Find the remaining session and make it active
+                for (const workspace of workspaces) {
+                    const session = workspace.sessions?.find(s => s.id === newSessionIds[0])
+                    if (session) {
+                        setActiveWorkspace(workspace)
+                        setActiveSession(session)
+                        break
+                    }
+                }
+            }
+            setSplitLayout(null)
+            setActiveSplitIndex(0)
+        } else {
+            // Update split layout
+            setSplitLayout({
+                ...splitLayout,
+                sessionIds: newSessionIds,
+                sizes: undefined // Reset sizes
+            })
+            // Adjust active index if needed
+            if (activeSplitIndex >= newSessionIds.length) {
+                setActiveSplitIndex(newSessionIds.length - 1)
+            } else if (removedIndex <= activeSplitIndex && activeSplitIndex > 0) {
+                setActiveSplitIndex(activeSplitIndex - 1)
+            }
+        }
+    }
+
+    // Handle layout change (resize)
+    const handleSplitLayoutChange = (layout: SplitTerminalLayout) => {
+        setSplitLayout(layout)
+    }
+
+    // Handle reorder within split view
+    const handleSplitReorder = (fromSessionId: string, toSessionId: string) => {
+        if (!splitLayout) return
+
+        const sessionIds = [...splitLayout.sessionIds]
+        const fromIndex = sessionIds.indexOf(fromSessionId)
+        const toIndex = sessionIds.indexOf(toSessionId)
+
+        if (fromIndex === -1 || toIndex === -1) return
+
+        // Swap positions
+        sessionIds[fromIndex] = toSessionId
+        sessionIds[toIndex] = fromSessionId
+
+        setSplitLayout({
+            ...splitLayout,
+            sessionIds
+        })
+    }
+
+    // Sync split layout to Grid Window (one-way: main → grid)
+    useEffect(() => {
+        if (splitLayout && splitLayout.sessionIds.length > 0) {
+            window.api.syncGridSessions(splitLayout.sessionIds)
+        }
+    }, [splitLayout?.sessionIds.join(',')])
+
+    // Handle drag start from sidebar
+    const handleSidebarDragStart = (sessionId: string) => {
+        setIsDraggingSession(true)
+    }
+
+    const handleSidebarDragEnd = () => {
+        setIsDraggingSession(false)
+        setDragOverZone(null)
+    }
+
+    // Handle opening search for a specific workspace (from split pane)
+    const handleOpenSearchForWorkspace = (workspacePath: string) => {
+        // Find workspace by path
+        const workspace = workspaces.find(w => w.path === workspacePath)
+        if (workspace) {
+            setActiveWorkspace(workspace)
+            setFileSearchOpen(true)
+        }
+    }
+
+    // Handle opening git panel for a specific workspace (from split pane)
+    const handleOpenGitForWorkspace = (workspacePath: string) => {
+        // Find workspace by path and set as active
+        const workspace = workspaces.find(w => w.path === workspacePath)
+        if (workspace) {
+            setActiveWorkspace(workspace)
+            setGitPanelOpen(true)
+        }
+    }
+
     const handleAddWorkspace = async () => {
         const result = await window.api.addWorkspace()
         if (!result) return // User cancelled dialog
 
         if (result.success && result.data) {
             setWorkspaces(prev => [...prev, result.data!])
+            // Add to workspace order if it's a regular workspace
+            const newWorkspace = result.data
+            if (!newWorkspace.isPlayground && !newWorkspace.parentWorkspaceId && !newWorkspace.isHome) {
+                setWorkspaceOrder(prev => [...prev, newWorkspace.id])
+            }
         } else if (result.errorType === 'UPGRADE_REQUIRED') {
             const { response } = await window.api.showMessageBox({
                 type: 'info',
@@ -289,6 +515,8 @@ function App() {
             onConfirm: async () => {
                 await window.api.removeWorkspace(id)
                 setWorkspaces(prev => prev.filter(w => w.id !== id))
+                // Remove from workspace order as well
+                setWorkspaceOrder(prev => prev.filter(wid => wid !== id))
                 if (activeWorkspace?.id === id) {
                     setActiveWorkspace(null)
                     setActiveSession(null)
@@ -335,6 +563,42 @@ function App() {
 
         // 2. 서버에 순서 저장
         await window.api.reorderSessions(workspaceId, sessionIds)
+    }
+
+    // Sorted workspaces for Sidebar display (does NOT affect terminal rendering)
+    // This keeps workspace array stable while only changing display order
+    const sortedWorkspaces = useMemo(() => {
+        const homeWorkspace = workspaces.find(w => w.isHome)
+        const playgroundWorkspaces = workspaces.filter(w => w.isPlayground)
+        const worktreeWorkspaces = workspaces.filter(w => w.parentWorkspaceId)
+
+        // Sort regular workspaces by workspaceOrder
+        const regularWorkspaces = workspaceOrder
+            .map(id => workspaces.find(w => w.id === id))
+            .filter((w): w is Workspace => w !== undefined)
+
+        // Add any new regular workspaces not in order yet
+        const regularInWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome)
+        const newRegular = regularInWorkspaces.filter(w => !workspaceOrder.includes(w.id))
+
+        return [
+            ...(homeWorkspace ? [homeWorkspace] : []),
+            ...regularWorkspaces,
+            ...newRegular,
+            ...worktreeWorkspaces,
+            ...playgroundWorkspaces
+        ]
+    }, [workspaces, workspaceOrder])
+
+    // Workspace order change handler - only changes display order, NOT workspaces array
+    const handleReorderWorkspaces = async (newWorkspaces: Workspace[]) => {
+        const newOrder = newWorkspaces.map(w => w.id)
+
+        // Only update display order, workspaces array stays unchanged
+        setWorkspaceOrder(newOrder)
+
+        // Save order to store
+        await window.api.reorderWorkspaces(newOrder)
     }
 
     const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string, initialCommand?: string, sessionName?: string) => {
@@ -536,14 +800,28 @@ function App() {
         setSettingsOpen(true)
     }
 
+    // Fullscreen mode renders only terminals
+    if (isFullscreenMode) {
+        return (
+            <FullscreenTerminalView
+                sessionIds={fullscreenSessionIds}
+                terminalFontSize={terminalFontSize}
+                terminalFontFamily={settings.terminalFontFamily}
+                shell={settings.defaultShell}
+                keyboardSettings={settings.keyboard}
+                hooksSettings={settings.hooks}
+            />
+        )
+    }
+
     return (
         <div className="flex h-screen w-screen bg-transparent">
             {showLicenseVerification && <LicenseVerification onVerify={handleLicenseVerify} />}
             {!showLicenseVerification && showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
-            
+
             {isSidebarOpen && (
                 <Sidebar
-                    workspaces={workspaces}
+                    workspaces={sortedWorkspaces}
                     onSelect={handleSelect}
                     onAddWorkspace={handleAddWorkspace}
                     onRemoveWorkspace={handleRemoveWorkspace}
@@ -560,106 +838,330 @@ function App() {
                     settingsOpen={settingsOpen}
                     onRenameSession={handleRenameSession}
                     onReorderSessions={handleReorderSessions}
+                    onReorderWorkspaces={handleReorderWorkspaces}
                     width={sidebarWidth}
                     setWidth={setSidebarWidth}
                     onClose={() => setIsSidebarOpen(false)}
                     fontSize={settings.fontSize}
+                    splitLayout={splitLayout}
+                    onDragStartSession={handleSidebarDragStart}
+                    onDragEndSession={handleSidebarDragEnd}
                 />
             )}
             <div className="flex-1 glass-panel m-2 ml-0 rounded-lg overflow-hidden flex flex-col">
-                <div className="h-10 border-b border-white/10 flex items-center px-4 draggable justify-between relative z-10">
+                {/* Header - minimized in split view */}
+                <div className={`${splitLayout ? 'h-6' : 'h-10'} border-b border-white/10 flex items-center px-4 draggable justify-between relative z-10 transition-all`}>
                     <div className="flex items-center gap-2">
                         {!isSidebarOpen && (
                             <button
                                 onClick={() => setIsSidebarOpen(true)}
-                                className="p-1.5 hover:bg-white/10 rounded transition-colors no-drag text-gray-400"
+                                className={`${splitLayout ? 'p-0.5' : 'p-1.5'} hover:bg-white/10 rounded transition-colors no-drag text-gray-400`}
                                 title="Open Sidebar"
                             >
-                                <PanelLeft size={16} />
+                                <PanelLeft size={splitLayout ? 14 : 16} />
                             </button>
                         )}
-                        <span
-                            className="text-gray-400"
-                            style={{ fontSize: `${settings.fontSize}px` }}
-                        >
-                            {activeWorkspace ? activeWorkspace.name : 'Select a workspace to get started'}
-                        </span>
+                        {/* Show workspace name only in single view */}
+                        {!splitLayout && (
+                            <span
+                                className="text-gray-400"
+                                style={{ fontSize: `${settings.fontSize}px` }}
+                            >
+                                {activeWorkspace ? activeWorkspace.name : 'Select a workspace to get started'}
+                            </span>
+                        )}
                     </div>
                     <div className="flex items-center gap-2 no-drag">
-                        <button
-                            onClick={() => {
-                                if (activeWorkspace) {
-                                    setFileSearchOpen(true)
-                                }
-                            }}
-                            className="p-2 hover:bg-white/10 rounded transition-colors no-drag disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Search Files (Cmd+P)"
-                            disabled={!activeWorkspace}
-                        >
-                            <Search size={16} className="text-gray-400" />
-                        </button>
-                        <button
-                            onClick={() => setGitPanelOpen(true)}
-                            className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
-                            title="Source Control"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-                                <line x1="6" y1="3" x2="6" y2="15"></line>
-                                <circle cx="18" cy="6" r="3"></circle>
-                                <circle cx="6" cy="18" r="3"></circle>
-                                <path d="M18 9a9 9 0 0 1-9 9"></path>
-                            </svg>
-                        </button>
-                        <button
-                            onClick={() => handleOpenSettings('general')}
-                            className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
-                            title="Settings"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-                                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-                                <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                        </button>
+                        {/* Single view buttons - hidden in split view (each pane has its own) */}
+                        {!splitLayout && (
+                            <>
+                                <button
+                                    onClick={() => {
+                                        if (activeWorkspace) {
+                                            setFileSearchOpen(true)
+                                        }
+                                    }}
+                                    className="p-2 hover:bg-white/10 rounded transition-colors no-drag disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Search Files (Cmd+P)"
+                                    disabled={!activeWorkspace}
+                                >
+                                    <Search size={16} className="text-gray-400" />
+                                </button>
+                                <button
+                                    onClick={() => setGitPanelOpen(true)}
+                                    className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
+                                    title="Source Control"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                                        <line x1="6" y1="3" x2="6" y2="15"></line>
+                                        <circle cx="18" cy="6" r="3"></circle>
+                                        <circle cx="6" cy="18" r="3"></circle>
+                                        <path d="M18 9a9 9 0 0 1-9 9"></path>
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => handleOpenSettings('general')}
+                                    className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
+                                    title="Settings"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
+                            </>
+                        )}
+                        {/* Grid button removed - each split pane has its own */}
                     </div>
                 </div>
-                <div className="flex-1 pt-4 px-4 pb-0 relative overflow-hidden min-h-0">
-                    {/* Render ALL sessions but hide inactive ones to keep them alive */}
-                    {workspaces.map(workspace => (
-                        workspace.sessions?.map(session => (
+                <div className="flex-1 pt-4 px-4 pb-0 flex flex-col overflow-hidden min-h-0">
+                    {/* Terminal container with relative positioning for absolute children */}
+                    <div
+                        className="flex-1 relative overflow-hidden"
+                        onDragOver={handleTerminalAreaDragOver}
+                        onDragLeave={handleTerminalAreaDragLeave}
+                        onDrop={handleTerminalAreaDrop}
+                    >
+                        {/* Drop zone - always present when dragging to capture events above terminal */}
+                        {isDraggingSession && (
                             <div
-                                key={session.id}
-                                style={{
-                                    display: activeSession?.id === session.id ? 'block' : 'none',
-                                    height: '100%',
-                                    width: '100%'
+                                className={`absolute inset-0 z-30 rounded-lg flex items-center justify-center transition-colors ${
+                                    dragOverZone === 'split'
+                                        ? 'bg-blue-500/10 border-2 border-dashed border-blue-500/50'
+                                        : 'bg-transparent'
+                                }`}
+                                onDragOver={(e) => {
+                                    if (!e.dataTransfer.types.includes('application/x-session-id')) return
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setDragOverZone('split')
+                                }}
+                                onDragLeave={(e) => {
+                                    e.stopPropagation()
+                                    setDragOverZone(null)
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    handleTerminalAreaDrop(e)
                                 }}
                             >
-                                <TerminalView
-                                    id={session.id}
-                                    cwd={session.cwd}
-                                    visible={activeSession?.id === session.id}
-                                    onSessionStatusChange={handleSessionStatusChange}
-                                    fontSize={terminalFontSize}
-                                    fontFamily={settings.terminalFontFamily}
-                                    initialCommand={session.initialCommand}
-                                    shell={settings.defaultShell}
-                                    keyboardSettings={settings.keyboard}
-                                    hooksSettings={settings.hooks}
-                                />
+                                {dragOverZone === 'split' && (
+                                    <div className="bg-blue-500/20 px-4 py-2 rounded-lg pointer-events-none">
+                                        <span className="text-blue-300 text-sm font-medium">
+                                            {splitLayout
+                                                ? `Add to split view (${splitLayout.sessionIds.length}/4)`
+                                                : 'Create split view'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
-                        ))
+                        )}
+
+                        {/* Split View Headers Only - z-20 to be above terminals */}
+                        {splitLayout && splitLayout.sessionIds.length > 0 && (
+                            <div className={`absolute inset-0 z-20 grid gap-2 pb-2 pointer-events-none ${
+                                splitLayout.sessionIds.length === 2 ? 'grid-cols-2 grid-rows-1' :
+                                splitLayout.sessionIds.length === 3 ? 'grid-cols-2 grid-rows-2' :
+                                splitLayout.sessionIds.length === 4 ? 'grid-cols-2 grid-rows-2' :
+                                'grid-cols-1 grid-rows-1'
+                            }`}>
+                                {splitLayout.sessionIds.map((sessionId, index) => {
+                                    // Find session and workspace for header
+                                    let foundSession: TerminalSession | undefined
+                                    let foundWorkspace: Workspace | undefined
+                                    for (const ws of workspaces) {
+                                        const sess = ws.sessions?.find(s => s.id === sessionId)
+                                        if (sess) {
+                                            foundSession = sess
+                                            foundWorkspace = ws
+                                            break
+                                        }
+                                    }
+                                    if (!foundSession) return null
+
+                                    // For 3 terminals, make the third one span both columns
+                                    const isThirdInThreeLayout = splitLayout.sessionIds.length === 3 && index === 2
+                                    const gridClass = isThirdInThreeLayout ? 'col-span-2' : ''
+
+                                    return (
+                                        <div
+                                            key={sessionId}
+                                            className={`flex flex-col border border-white/10 rounded-lg overflow-hidden pointer-events-none ${gridClass}`}
+                                        >
+                                            {/* Header only - clickable */}
+                                            <div className="pointer-events-auto">
+                                                <SplitTerminalHeader
+                                                    session={foundSession}
+                                                    workspace={foundWorkspace}
+                                                    isActive={index === activeSplitIndex}
+                                                    onRemove={handleRemoveFromSplit}
+                                                    onOpenSearch={handleOpenSearchForWorkspace}
+                                                    onOpenGit={handleOpenGitForWorkspace}
+                                                    onOpenSettings={() => handleOpenSettings('general')}
+                                                    onOpenFullscreen={() => {
+                                                        if (splitLayout) {
+                                                            window.api.openFullscreenTerminal(splitLayout.sessionIds)
+                                                        }
+                                                    }}
+                                                    onPaneClick={() => setActiveSplitIndex(index)}
+                                                    onReorder={handleSplitReorder}
+                                                />
+                                            </div>
+                                            {/* Terminal placeholder - clicks pass through to terminal below */}
+                                            <div className="flex-1" data-terminal-slot={sessionId} />
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+
+                    {/* ALL terminals - ALWAYS rendered to prevent unmount/remount */}
+                    {workspaces.map(workspace => (
+                        workspace.sessions?.map(session => {
+                            const splitIndex = splitLayout?.sessionIds.indexOf(session.id) ?? -1
+                            const isInSplit = splitIndex >= 0
+                            const isActive = activeSession?.id === session.id
+                            // Visible if: in split view, OR (no split and is active session)
+                            const isVisible = isInSplit || (!splitLayout && isActive)
+
+                            // Calculate position for split view
+                            // Uses top/bottom positioning instead of height for responsive vertical resize
+                            const getSplitStyle = (): React.CSSProperties => {
+                                if (!isInSplit || !splitLayout) {
+                                    // Single view: absolute positioning with top/bottom for responsive height
+                                    return {
+                                        display: isVisible ? 'block' : 'none',
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0
+                                    }
+                                }
+
+                                const count = splitLayout.sessionIds.length
+                                const idx = splitIndex
+
+                                // Calculate grid position with padding for breathing room
+                                const gap = 8 // gap between terminals (gap-2)
+                                const headerHeight = 32 // h-8 = 32px
+                                const bottomPadding = 8 // extra space at bottom
+
+                                // Use top/bottom for vertical positioning (responsive to parent height)
+                                // Use left/right for horizontal positioning (responsive to parent width)
+                                let top = '0px'
+                                let bottom = `${bottomPadding}px`
+                                let left = '0px'
+                                let right = '0px'
+
+                                if (count === 2) {
+                                    // Side by side: each takes half width
+                                    if (idx === 0) {
+                                        right = `calc(50% + ${gap / 2}px)`
+                                    } else {
+                                        left = `calc(50% + ${gap / 2}px)`
+                                    }
+                                } else if (count === 3) {
+                                    if (idx < 2) {
+                                        // Top row: two terminals side by side
+                                        bottom = `calc(50% + ${gap / 2}px)`
+                                        if (idx === 0) {
+                                            right = `calc(50% + ${gap / 2}px)`
+                                        } else {
+                                            left = `calc(50% + ${gap / 2}px)`
+                                        }
+                                    } else {
+                                        // Bottom row (spans full width)
+                                        top = `calc(50% + ${gap / 2}px)`
+                                        bottom = `${bottomPadding}px`
+                                    }
+                                } else if (count === 4) {
+                                    // 2x2 grid
+                                    if (idx < 2) {
+                                        // Top row
+                                        bottom = `calc(50% + ${gap / 2}px)`
+                                    } else {
+                                        // Bottom row
+                                        top = `calc(50% + ${gap / 2}px)`
+                                        bottom = `${bottomPadding}px`
+                                    }
+                                    if (idx % 2 === 0) {
+                                        // Left column
+                                        right = `calc(50% + ${gap / 2}px)`
+                                    } else {
+                                        // Right column
+                                        left = `calc(50% + ${gap / 2}px)`
+                                    }
+                                }
+
+                                return {
+                                    position: 'absolute',
+                                    top,
+                                    bottom,
+                                    left,
+                                    right,
+                                    paddingTop: `${headerHeight}px`, // Account for header
+                                    display: 'block'
+                                }
+                            }
+
+                            // Check if this session is in grid view
+                            const isInGridView = gridViewSessionIds.includes(session.id)
+
+                            return (
+                                <div
+                                    key={session.id}
+                                    style={getSplitStyle()}
+                                >
+                                    <div className="h-full w-full relative">
+                                        {/* Show overlay when session is in grid view */}
+                                        {isInGridView && isVisible && (
+                                            <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center gap-4">
+                                                <LayoutGrid size={48} className="text-gray-500" />
+                                                <p className="text-gray-400 text-sm">Viewing in Grid Window</p>
+                                                <p className="text-gray-500 text-xs">Close Grid Window to view here</p>
+                                            </div>
+                                        )}
+                                        <TerminalView
+                                            id={session.id}
+                                            cwd={session.cwd}
+                                            visible={isVisible && !isInGridView}
+                                            onSessionStatusChange={handleSessionStatusChange}
+                                            onFocus={(sessionId) => {
+                                                // Update active split pane when terminal gains focus
+                                                if (splitLayout) {
+                                                    const index = splitLayout.sessionIds.indexOf(sessionId)
+                                                    if (index >= 0) {
+                                                        setActiveSplitIndex(index)
+                                                    }
+                                                }
+                                            }}
+                                            fontSize={terminalFontSize}
+                                            fontFamily={settings.terminalFontFamily}
+                                            initialCommand={session.initialCommand}
+                                            shell={settings.defaultShell}
+                                            keyboardSettings={settings.keyboard}
+                                            hooksSettings={settings.hooks}
+                                            disablePtyResize={isInGridView}
+                                        />
+                                    </div>
+                                </div>
+                            )
+                        })
                     ))}
 
-                    {!activeSession && (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded mb-4">
-                                <p className="text-xs text-blue-200">
-                                    <strong>Tip:</strong> If the terminal seems frozen, try pressing Enter
-                                </p>
+                        {!activeSession && !splitLayout && (
+                            <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded mb-4">
+                                    <p className="text-xs text-blue-200">
+                                        <strong>Tip:</strong> If the terminal seems frozen, try pressing Enter
+                                    </p>
+                                </div>
+                                please select a terminal
                             </div>
-                            please select a terminal
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
                 <StatusBar 
                     portFilter={settings.portFilter} 

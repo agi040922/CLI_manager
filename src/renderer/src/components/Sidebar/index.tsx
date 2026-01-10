@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, PanelLeftClose } from 'lucide-react'
-import { Workspace, TerminalSession, SessionStatus, HooksSettings } from '../../../../shared/types'
+import { Reorder } from 'framer-motion'
+import { Workspace, TerminalSession, SessionStatus, HooksSettings, SplitTerminalLayout } from '../../../../shared/types'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
@@ -25,10 +26,15 @@ interface SidebarProps {
     settingsOpen?: boolean
     onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void
     onReorderSessions: (workspaceId: string, sessions: TerminalSession[]) => void
+    onReorderWorkspaces: (workspaces: Workspace[]) => void
     width: number
     setWidth: (width: number) => void
     onClose: () => void
     fontSize?: number  // Sidebar font size for workspace/session names
+    // Split view props
+    splitLayout?: SplitTerminalLayout | null
+    onDragStartSession?: (sessionId: string) => void
+    onDragEndSession?: () => void
 }
 
 /**
@@ -58,10 +64,14 @@ export function Sidebar({
     settingsOpen,
     onRenameSession,
     onReorderSessions,
+    onReorderWorkspaces,
     width,
     setWidth,
     onClose,
-    fontSize = 14
+    fontSize = 14,
+    splitLayout,
+    onDragStartSession,
+    onDragEndSession
 }: SidebarProps) {
     // 커스텀 훅으로 상태 관리
     const customTemplates = useTemplates(settingsOpen)
@@ -83,6 +93,9 @@ export function Sidebar({
 
     // Track previous workspace IDs for detecting new additions
     const prevWorkspaceIdsRef = useRef<Set<string>>(new Set())
+
+    // Track workspace drag state to prevent toggle on drag
+    const isDraggingWorkspaceRef = useRef(false)
 
     // Vertical resizing logic (Playground section height)
     const [playgroundHeight, setPlaygroundHeight] = useState(() => {
@@ -225,6 +238,9 @@ export function Sidebar({
     }, [])
 
     const toggleExpand = (id: string) => {
+        // Ignore toggle if workspace is being dragged
+        if (isDraggingWorkspaceRef.current) return
+
         setExpanded(prev => {
             const next = new Set(prev)
             next.has(id) ? next.delete(id) : next.add(id)
@@ -636,40 +652,67 @@ export function Sidebar({
                             onRenameSession={handleRenameSubmit}
                             onRenameCancel={() => setRenamingSessionId(null)}
                             onReorderSessions={onReorderSessions}
+                            splitLayout={splitLayout}
+                            onDragStartSession={onDragStartSession}
+                            onDragEndSession={onDragEndSession}
                         />
                     )}
 
-                    {/* Regular workspaces */}
-                    {regularWorkspaces.map(workspace => {
-                        const childWorktrees = workspaces.filter(w => w.parentWorkspaceId === workspace.id)
-                        return (
-                            <WorkspaceItem
-                                key={workspace.id}
-                                workspace={workspace}
-                                childWorktrees={childWorktrees}
-                                expanded={expanded.has(workspace.id)}
-                                expandedSet={expanded}
-                                branchInfo={workspaceBranches.get(workspace.id)}
-                                activeSessionId={activeSessionId}
-                                sessionStatuses={sessionStatuses}
-                                hooksSettings={hooksSettings}
-                                terminalPreview={terminalPreview}
-                                renamingSessionId={renamingSessionId}
-                                fontSize={fontSize}
-                                onToggleExpand={toggleExpand}
-                                onContextMenu={handleContextMenu}
-                                onSessionContextMenu={handleSessionContextMenu}
-                                onBranchClick={handleBranchClick}
-                                onSelect={onSelect}
-                                onRemoveSession={onRemoveSession}
-                                onRemoveWorkspace={onRemoveWorkspace}
-                                onOpenInEditor={onOpenInEditor}
-                                onRenameSession={handleRenameSubmit}
-                                onRenameCancel={() => setRenamingSessionId(null)}
-                                onReorderSessions={onReorderSessions}
-                            />
-                        )
-                    })}
+                    {/* Regular workspaces - drag & drop reorder supported */}
+                    <Reorder.Group
+                        axis="y"
+                        values={regularWorkspaces}
+                        onReorder={onReorderWorkspaces}
+                        className="space-y-0.5"
+                    >
+                        {regularWorkspaces.map(workspace => {
+                            const childWorktrees = workspaces.filter(w => w.parentWorkspaceId === workspace.id)
+                            return (
+                                <Reorder.Item
+                                    key={workspace.id}
+                                    value={workspace}
+                                    transition={{ layout: { duration: 0 } }}
+                                    onDragStart={() => {
+                                        isDraggingWorkspaceRef.current = true
+                                    }}
+                                    onDragEnd={() => {
+                                        // Delay reset so click event is ignored first
+                                        setTimeout(() => {
+                                            isDraggingWorkspaceRef.current = false
+                                        }, 0)
+                                    }}
+                                >
+                                    <WorkspaceItem
+                                        workspace={workspace}
+                                        childWorktrees={childWorktrees}
+                                        expanded={expanded.has(workspace.id)}
+                                        expandedSet={expanded}
+                                        branchInfo={workspaceBranches.get(workspace.id)}
+                                        activeSessionId={activeSessionId}
+                                        sessionStatuses={sessionStatuses}
+                                        hooksSettings={hooksSettings}
+                                        terminalPreview={terminalPreview}
+                                        renamingSessionId={renamingSessionId}
+                                        fontSize={fontSize}
+                                        onToggleExpand={toggleExpand}
+                                        onContextMenu={handleContextMenu}
+                                        onSessionContextMenu={handleSessionContextMenu}
+                                        onBranchClick={handleBranchClick}
+                                        onSelect={onSelect}
+                                        onRemoveSession={onRemoveSession}
+                                        onRemoveWorkspace={onRemoveWorkspace}
+                                        onOpenInEditor={onOpenInEditor}
+                                        onRenameSession={handleRenameSubmit}
+                                        onRenameCancel={() => setRenamingSessionId(null)}
+                                        onReorderSessions={onReorderSessions}
+                                        splitLayout={splitLayout}
+                                        onDragStartSession={onDragStartSession}
+                                        onDragEndSession={onDragEndSession}
+                                    />
+                                </Reorder.Item>
+                            )
+                        })}
+                    </Reorder.Group>
                 </div>
 
                 {/* Playground Section with Resizable Height */}
@@ -713,6 +756,9 @@ export function Sidebar({
                                     onRenameSession={handleRenameSubmit}
                                     onRenameCancel={() => setRenamingSessionId(null)}
                                     onReorderSessions={onReorderSessions}
+                                    splitLayout={splitLayout}
+                                    onDragStartSession={onDragStartSession}
+                                    onDragEndSession={onDragEndSession}
                                 />
                             ))}
                         </div>

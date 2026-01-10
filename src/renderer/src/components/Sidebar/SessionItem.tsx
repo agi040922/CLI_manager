@@ -42,6 +42,10 @@ interface SessionItemProps {
     isRenaming?: boolean
     onContextMenu: (e: React.MouseEvent, workspaceId: string, sessionId: string) => void
     onRenameCancel: () => void
+    // Split view props
+    isInSplit?: boolean
+    onDragStartSession?: (sessionId: string) => void
+    onDragEndSession?: () => void
 }
 
 /**
@@ -63,7 +67,10 @@ export function SessionItem({
     onRename,
     isRenaming,
     onContextMenu,
-    onRenameCancel
+    onRenameCancel,
+    isInSplit,
+    onDragStartSession,
+    onDragEndSession
 }: SessionItemProps) {
     const [tempName, setTempName] = useState(session.name)
     const [previewLines, setPreviewLines] = useState<string[] | null>(null)
@@ -174,7 +181,21 @@ export function SessionItem({
     }
 
     return (
-        <div className="relative" ref={itemRef}>
+        <div
+            className="relative"
+            ref={itemRef}
+            draggable
+            onDragStart={(e) => {
+                // HTML5 drag for split view (entire item can be dragged to terminal area)
+                e.dataTransfer.setData('application/x-session-id', session.id)
+                e.dataTransfer.setData('application/x-workspace-id', workspace.id)
+                e.dataTransfer.effectAllowed = 'move'
+                onDragStartSession?.(session.id)
+            }}
+            onDragEnd={() => {
+                onDragEndSession?.()
+            }}
+        >
             <Reorder.Item
                 value={session}
                 dragListener={false}
@@ -195,9 +216,28 @@ export function SessionItem({
                     // Note: backgroundColor 제거 - 드래그 종료 후에도 색상이 유지되는 버그 방지
                 }}
             >
-                {/* 드래그 핸들 */}
+                {/* Split indicator */}
+                {isInSplit && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" title="In split view" />
+                )}
+
+                {/* 드래그 핸들 - framer-motion drag only for reorder within workspace */}
                 <div
-                    onPointerDown={(e) => dragControls.start(e)}
+                    draggable={false}
+                    onDragStart={(e) => {
+                        // Prevent HTML5 drag on handle - let framer-motion handle it
+                        e.preventDefault()
+                        e.stopPropagation()
+                    }}
+                    onPointerDown={(e) => {
+                        // framer-motion drag for reorder within workspace
+                        // Only start if left-click
+                        if (e.button === 0) {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            dragControls.start(e)
+                        }
+                    }}
                     className="cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity shrink-0"
                     title="Drag to reorder"
                 >

@@ -224,3 +224,18 @@ export interface PortInfo {
     command: string
     cwd?: string
 }
+
+// ============================================
+// Split Terminal View Types
+// ============================================
+
+// Layout for split terminal view (max 4 terminals)
+export interface SplitTerminalLayout {
+    sessionIds: string[]    // Session IDs to display in split view (max 4)
+    sizes?: number[]        // Optional custom sizes as percentages (e.g., [50, 50])
+}
+
+// Layout for fullscreen terminal window (max 6 terminals)
+export interface FullscreenTerminalLayout {
+    sessionIds: string[]    // Session IDs to display (max 6)
+}
