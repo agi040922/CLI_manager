@@ -421,10 +421,14 @@ app.whenReady().then(async () => {
         return false
     })
 
-    // Sync grid window sessions (one-way: main → grid)
+    // Sync grid window sessions (main ↔ grid, both windows stay in sync)
     ipcMain.handle('sync-grid-sessions', (_event, sessionIds: string[]) => {
         if (gridWindow && !gridWindow.isDestroyed()) {
             gridWindow.webContents.send('grid-sessions-updated', sessionIds)
+            // Also update main window's gridViewSessionIds to stay in sync
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('grid-view-state-changed', true, sessionIds)
+            }
             return true
         }
         return false

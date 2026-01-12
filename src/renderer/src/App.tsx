@@ -19,6 +19,8 @@ function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
     // Workspace display order (only affects Sidebar, not terminal rendering)
     const [workspaceOrder, setWorkspaceOrder] = useState<string[]>([])
+    // Session display order per workspace (only affects Sidebar, not terminal rendering)
+    const [sessionOrders, setSessionOrders] = useState<Map<string, string[]>>(new Map())
     const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null)
     const [activeSession, setActiveSession] = useState<TerminalSession | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -132,6 +134,14 @@ function App() {
                 .filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome)
                 .map(w => w.id)
             setWorkspaceOrder(regularIds)
+            // Initialize session orders from loaded workspaces
+            const initialSessionOrders = new Map<string, string[]>()
+            loadedWorkspaces.forEach(w => {
+                if (w.sessions && w.sessions.length > 0) {
+                    initialSessionOrders.set(w.id, w.sessions.map(s => s.id))
+                }
+            })
+            setSessionOrders(initialSessionOrders)
         })
         window.api.getSettings().then(loadedSettings => {
             if (loadedSettings) {
@@ -533,6 +543,12 @@ function App() {
                 setWorkspaces(prev => prev.filter(w => w.id !== id))
                 // Remove from workspace order as well
                 setWorkspaceOrder(prev => prev.filter(wid => wid !== id))
+                // Remove from session orders as well
+                setSessionOrders(prev => {
+                    const next = new Map(prev)
+                    next.delete(id)
+                    return next
+                })
                 if (activeWorkspace?.id === id) {
                     setActiveWorkspace(null)
                     setActiveSession(null)
@@ -559,23 +575,16 @@ function App() {
     }
 
     // 세션 순서 변경 핸들러
+    // Note: workspaces 상태를 변경하지 않고 sessionOrders만 변경하여 터미널 재렌더링 방지
     const handleReorderSessions = async (workspaceId: string, sessions: TerminalSession[]) => {
-        // 1. UI 즉시 업데이트 (반응성 향상)
-        // Note: Reorder.Group에서 전달받은 sessions 배열을 그대로 사용하면
-        // 객체 참조가 달라져서 TerminalView가 재마운트될 수 있음
-        // 따라서 sessionIds만 추출해서 원본 세션 객체를 재정렬
         const sessionIds = sessions.map(s => s.id)
 
-        setWorkspaces(prev => prev.map(w => {
-            if (w.id === workspaceId) {
-                // 원본 세션 객체를 새 순서대로 재정렬
-                const reorderedSessions = sessionIds
-                    .map(id => w.sessions.find(s => s.id === id))
-                    .filter((s): s is TerminalSession => s !== undefined)
-                return { ...w, sessions: reorderedSessions }
-            }
-            return w
-        }))
+        // 1. sessionOrders만 업데이트 (workspaces는 건드리지 않음 → 터미널 영향 없음)
+        setSessionOrders(prev => {
+            const next = new Map(prev)
+            next.set(workspaceId, sessionIds)
+            return next
+        })
 
         // 2. 서버에 순서 저장
         await window.api.reorderSessions(workspaceId, sessionIds)
@@ -583,7 +592,23 @@ function App() {
 
     // Sorted workspaces for Sidebar display (does NOT affect terminal rendering)
     // This keeps workspace array stable while only changing display order
+    // Also sorts sessions within each workspace according to sessionOrders
     const sortedWorkspaces = useMemo(() => {
+        // Helper function to sort sessions within a workspace
+        const sortSessions = (workspace: Workspace): Workspace => {
+            const order = sessionOrders.get(workspace.id)
+            if (!order || !workspace.sessions) return workspace
+
+            const sortedSessions = order
+                .map(id => workspace.sessions.find(s => s.id === id))
+                .filter((s): s is TerminalSession => s !== undefined)
+
+            // Add any new sessions not in order yet
+            const newSessions = workspace.sessions.filter(s => !order.includes(s.id))
+
+            return { ...workspace, sessions: [...sortedSessions, ...newSessions] }
+        }
+
         const homeWorkspace = workspaces.find(w => w.isHome)
         const playgroundWorkspaces = workspaces.filter(w => w.isPlayground)
         const worktreeWorkspaces = workspaces.filter(w => w.parentWorkspaceId)
@@ -597,14 +622,15 @@ function App() {
         const regularInWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome)
         const newRegular = regularInWorkspaces.filter(w => !workspaceOrder.includes(w.id))
 
+        // Apply session sorting to all workspaces
         return [
-            ...(homeWorkspace ? [homeWorkspace] : []),
-            ...regularWorkspaces,
-            ...newRegular,
-            ...worktreeWorkspaces,
-            ...playgroundWorkspaces
+            ...(homeWorkspace ? [sortSessions(homeWorkspace)] : []),
+            ...regularWorkspaces.map(sortSessions),
+            ...newRegular.map(sortSessions),
+            ...worktreeWorkspaces.map(sortSessions),
+            ...playgroundWorkspaces.map(sortSessions)
         ]
-    }, [workspaces, workspaceOrder])
+    }, [workspaces, workspaceOrder, sessionOrders])
 
     // Workspace order change handler - only changes display order, NOT workspaces array
     const handleReorderWorkspaces = async (newWorkspaces: Workspace[]) => {
@@ -622,12 +648,20 @@ function App() {
         if (!result) return
 
         if (result.success && result.data) {
+            const newSession = result.data
             setWorkspaces(prev => prev.map(w => {
                 if (w.id === workspaceId) {
-                    return { ...w, sessions: [...w.sessions, result.data!] }
+                    return { ...w, sessions: [...w.sessions, newSession] }
                 }
                 return w
             }))
+            // Update sessionOrders to include new session
+            setSessionOrders(prev => {
+                const next = new Map(prev)
+                const currentOrder = next.get(workspaceId) || []
+                next.set(workspaceId, [...currentOrder, newSession.id])
+                return next
+            })
         } else if (result.errorType === 'UPGRADE_REQUIRED') {
             const { response } = await window.api.showMessageBox({
                 type: 'info',
@@ -702,6 +736,16 @@ function App() {
             }
             return w
         }))
+
+        // Update sessionOrders to remove deleted session
+        setSessionOrders(prev => {
+            const next = new Map(prev)
+            const currentOrder = next.get(workspaceId)
+            if (currentOrder) {
+                next.set(workspaceId, currentOrder.filter(id => id !== sessionId))
+            }
+            return next
+        })
 
         // Clear active session if it's the one being removed
         if (activeSession?.id === sessionId) {

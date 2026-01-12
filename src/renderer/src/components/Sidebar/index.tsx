@@ -1,12 +1,56 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, PanelLeftClose } from 'lucide-react'
-import { Reorder } from 'framer-motion'
+import { Plus, PanelLeftClose, GripVertical } from 'lucide-react'
+import { Reorder, useDragControls } from 'framer-motion'
 import { Workspace, TerminalSession, SessionStatus, HooksSettings, SplitTerminalLayout } from '../../../../shared/types'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
 import { WorkspaceContextMenu, WorktreeContextMenu, BranchMenu, SessionContextMenu } from './ContextMenus'
 import { BranchPromptModal } from './Modals'
+
+/**
+ * ReorderableWorkspace - 워크스페이스 드래그 앤 드롭을 위한 래퍼 컴포넌트
+ * 각 워크스페이스마다 useDragControls 훅을 사용해야 하므로 별도 컴포넌트로 분리
+ */
+interface ReorderableWorkspaceProps {
+    workspace: Workspace
+    children: React.ReactNode
+    onDragStart: () => void
+    onDragEnd: () => void
+}
+
+function ReorderableWorkspace({ workspace, children, onDragStart, onDragEnd }: ReorderableWorkspaceProps) {
+    const dragControls = useDragControls()
+
+    return (
+        <Reorder.Item
+            value={workspace}
+            dragListener={false}
+            dragControls={dragControls}
+            transition={{ layout: { duration: 0 } }}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+        >
+            <div className="group/workspace relative">
+                {/* Workspace drag handle */}
+                <div
+                    onPointerDown={(e) => {
+                        if (e.button === 0) {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            dragControls.start(e)
+                        }
+                    }}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 z-10 cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover/workspace:opacity-50 hover:!opacity-100 transition-opacity"
+                    title="Drag to reorder workspace"
+                >
+                    <GripVertical size={12} className="text-gray-500" />
+                </div>
+                {children}
+            </div>
+        </Reorder.Item>
+    )
+}
 
 interface SidebarProps {
     workspaces: Workspace[]
@@ -668,10 +712,9 @@ export function Sidebar({
                         {regularWorkspaces.map(workspace => {
                             const childWorktrees = workspaces.filter(w => w.parentWorkspaceId === workspace.id)
                             return (
-                                <Reorder.Item
+                                <ReorderableWorkspace
                                     key={workspace.id}
-                                    value={workspace}
-                                    transition={{ layout: { duration: 0 } }}
+                                    workspace={workspace}
                                     onDragStart={() => {
                                         isDraggingWorkspaceRef.current = true
                                     }}
@@ -709,7 +752,7 @@ export function Sidebar({
                                         onDragStartSession={onDragStartSession}
                                         onDragEndSession={onDragEndSession}
                                     />
-                                </Reorder.Item>
+                                </ReorderableWorkspace>
                             )
                         })}
                     </Reorder.Group>
