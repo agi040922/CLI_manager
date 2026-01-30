@@ -117,6 +117,8 @@ export interface TerminalSession {
     type: 'regular' | 'worktree'
     notificationStatus?: NotificationStatus
     initialCommand?: string
+    cliSessionId?: string
+    cliToolName?: string
 }
 
 export interface TerminalTemplate {

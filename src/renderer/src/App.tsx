@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Sidebar } from './components/Sidebar/index'
 import { TerminalView } from './components/TerminalView'
 import { StatusBar } from './components/StatusBar'
@@ -60,6 +60,27 @@ function App() {
         })
         return cleanup
     }, [])
+
+    // Listen for CLI session detection (manual typing interception)
+    useEffect(() => {
+        const cleanup = window.api.onCliSessionDetected((data) => {
+            setWorkspaces(prev => prev.map(ws => {
+                if (ws.id !== data.workspaceId) return ws
+                return {
+                    ...ws,
+                    sessions: ws.sessions.map(s => {
+                        if (s.id !== data.sessionId) return s
+                        return { ...s, cliSessionId: data.cliSessionId, cliToolName: data.cliToolName }
+                    })
+                }
+            }))
+        })
+        return cleanup
+    }, [])
+
+    // Track previous isClaudeCode state to detect exit transitions (true → false)
+    const prevClaudeCodeRef = useRef<Map<string, boolean>>(new Map())
+
     // Session status tracking for Claude Code hooks (claude-squad style)
     const [sessionStatuses, setSessionStatuses] = useState<Map<string, { status: SessionStatus, isClaudeCode: boolean }>>(new Map())
     const [settings, setSettings] = useState<UserSettings>({
@@ -335,6 +356,31 @@ function App() {
 
     // Handle session status change from Claude Code hooks
     const handleSessionStatusChange = (sessionId: string, status: SessionStatus, isClaudeCode: boolean) => {
+        // Detect Claude Code exit: isClaudeCode was true, now false → clear CLI session info
+        const wasClaudeCode = prevClaudeCodeRef.current.get(sessionId) ?? false
+        if (wasClaudeCode && !isClaudeCode) {
+            // Find workspace for this session and clear CLI info
+            for (const ws of workspaces) {
+                const session = ws.sessions.find(s => s.id === sessionId)
+                if (session?.cliSessionId) {
+                    window.api.clearSessionCliInfo(ws.id, sessionId)
+                    setWorkspaces(prev => prev.map(w => {
+                        if (w.id !== ws.id) return w
+                        return {
+                            ...w,
+                            sessions: w.sessions.map(s => {
+                                if (s.id !== sessionId) return s
+                                const { cliSessionId: _, cliToolName: __, ...rest } = s
+                                return rest as typeof s
+                            })
+                        }
+                    }))
+                    break
+                }
+            }
+        }
+        prevClaudeCodeRef.current.set(sessionId, isClaudeCode)
+
         setSessionStatuses(prev => {
             const next = new Map(prev)
             next.set(sessionId, { status, isClaudeCode })
@@ -1200,6 +1246,10 @@ function App() {
                                             fontSize={terminalFontSize}
                                             fontFamily={settings.terminalFontFamily}
                                             initialCommand={session.initialCommand}
+                                            resumeCommand={session.cliSessionId && session.cliToolName
+                                                ? `${session.cliToolName === 'claude' ? 'claude' : session.cliToolName} --resume ${session.cliSessionId}`
+                                                : undefined}
+                                            workspaceId={workspace.id}
                                             shell={settings.defaultShell}
                                             keyboardSettings={settings.keyboard}
                                             hooksSettings={settings.hooks}

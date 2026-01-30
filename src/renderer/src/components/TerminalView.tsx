@@ -18,6 +18,8 @@ interface TerminalViewProps {
     fontSize?: number
     fontFamily?: string  // User's preferred terminal font from settings
     initialCommand?: string
+    resumeCommand?: string  // CLI tool resume command (takes priority over initialCommand)
+    workspaceId?: string    // Workspace ID for CLI session tracking
     shell?: string  // User's preferred shell from settings
     keyboardSettings?: {
         scrollShortcuts: boolean
@@ -40,6 +42,8 @@ export function TerminalView({
     fontSize = 14,
     fontFamily,
     initialCommand,
+    resumeCommand,
+    workspaceId,
     shell,
     keyboardSettings,
     hooksSettings,
@@ -469,13 +473,28 @@ export function TerminalView({
                 }
             })
 
-            // Execute initial command if provided (only once)
-            if (initialCommand && !initialCommandExecutedRef.current) {
-                initialCommandExecutedRef.current = true
-                // Wait a bit for the terminal to be ready
-                setTimeout(() => {
-                    window.api.writeTerminal(id, initialCommand + '\n')
-                }, 500)
+            // Execute initial/resume command if provided (only once)
+            if (!initialCommandExecutedRef.current) {
+                if (resumeCommand) {
+                    // Resume a previous CLI session (takes priority over initialCommand)
+                    initialCommandExecutedRef.current = true
+                    setTimeout(() => {
+                        window.api.writeTerminal(id, resumeCommand + '\n')
+                    }, 500)
+                } else if (initialCommand) {
+                    initialCommandExecutedRef.current = true
+                    // Try to rewrite CLI tool commands to inject --session-id
+                    setTimeout(async () => {
+                        const rewritten = await window.api.rewriteCliCommand(initialCommand)
+                        if (rewritten && workspaceId) {
+                            // Store CLI session info and send rewritten command
+                            window.api.updateSessionCliInfo(workspaceId, id, rewritten.cliSessionId, rewritten.cliToolName)
+                            window.api.writeTerminal(id, rewritten.command + '\n')
+                        } else {
+                            window.api.writeTerminal(id, initialCommand + '\n')
+                        }
+                    }, 500)
+                }
             }
 
             // 초기화 완료 표시 - 이후 resize 이벤트는 정상 처리됨

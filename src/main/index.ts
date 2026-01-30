@@ -17,6 +17,7 @@ import { rgPath } from '@vscode/ripgrep'
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
 import { LicenseManager } from './LicenseManager'
+import { CLISessionTracker } from './CLISessionTracker'
 import { net } from 'electron'
 
 // Set app name for development mode
@@ -119,7 +120,8 @@ const licenseStore = new Store({
     }
 }) as any
 
-const terminalManager = new TerminalManager()
+const cliSessionTracker = new CLISessionTracker()
+const terminalManager = new TerminalManager(cliSessionTracker)
 const portManager = new PortManager()
 const licenseManager = new LicenseManager(licenseStore)
 
@@ -432,6 +434,62 @@ app.whenReady().then(async () => {
             return true
         }
         return false
+    })
+
+    // CLI Session Tracker: when a CLI tool is detected from manual typing
+    cliSessionTracker.onSessionDetected = (info) => {
+        // Find which workspace/session this terminal belongs to and persist
+        const workspaces = store.get('workspaces') as Workspace[]
+        for (const ws of workspaces) {
+            const session = ws.sessions.find((s: TerminalSession) => s.id === info.terminalId)
+            if (session) {
+                session.cliSessionId = info.cliSessionId
+                session.cliToolName = info.cliToolName
+                store.set('workspaces', workspaces)
+
+                // Notify renderer
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('cli-session-detected', {
+                        workspaceId: ws.id,
+                        sessionId: info.terminalId,
+                        cliSessionId: info.cliSessionId,
+                        cliToolName: info.cliToolName
+                    })
+                }
+                break
+            }
+        }
+    }
+
+    // Update CLI session info on a session (from renderer, e.g., template rewrite)
+    ipcMain.handle('update-session-cli-info', (_, workspaceId: string, sessionId: string, cliSessionId: string, cliToolName: string): boolean => {
+        const workspaces = store.get('workspaces') as Workspace[]
+        const ws = workspaces.find((w: Workspace) => w.id === workspaceId)
+        if (!ws) return false
+        const session = ws.sessions.find((s: TerminalSession) => s.id === sessionId)
+        if (!session) return false
+        session.cliSessionId = cliSessionId
+        session.cliToolName = cliToolName
+        store.set('workspaces', workspaces)
+        return true
+    })
+
+    // Clear CLI session info (when CLI tool exits)
+    ipcMain.handle('clear-session-cli-info', (_, workspaceId: string, sessionId: string): boolean => {
+        const workspaces = store.get('workspaces') as Workspace[]
+        const ws = workspaces.find((w: Workspace) => w.id === workspaceId)
+        if (!ws) return false
+        const session = ws.sessions.find((s: TerminalSession) => s.id === sessionId)
+        if (!session) return false
+        delete session.cliSessionId
+        delete session.cliToolName
+        store.set('workspaces', workspaces)
+        return true
+    })
+
+    // Rewrite a command through CLISessionTracker (for template/initialCommand)
+    ipcMain.handle('rewrite-cli-command', (_, command: string): { command: string; cliSessionId: string; cliToolName: string } | null => {
+        return cliSessionTracker.rewriteCommand(command)
     })
 
     ipcMain.handle('get-workspaces', () => {

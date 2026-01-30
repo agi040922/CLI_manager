@@ -93,6 +93,19 @@ const api = {
         return () => ipcRenderer.removeListener(channel, listener)
     },
 
+    // CLI Session Tracking
+    onCliSessionDetected: (callback: (data: { workspaceId: string; sessionId: string; cliSessionId: string; cliToolName: string }) => void): () => void => {
+        const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
+        ipcRenderer.on('cli-session-detected', handler)
+        return () => ipcRenderer.removeListener('cli-session-detected', handler)
+    },
+    updateSessionCliInfo: (workspaceId: string, sessionId: string, cliSessionId: string, cliToolName: string): Promise<boolean> =>
+        ipcRenderer.invoke('update-session-cli-info', workspaceId, sessionId, cliSessionId, cliToolName),
+    clearSessionCliInfo: (workspaceId: string, sessionId: string): Promise<boolean> =>
+        ipcRenderer.invoke('clear-session-cli-info', workspaceId, sessionId),
+    rewriteCliCommand: (command: string): Promise<{ command: string; cliSessionId: string; cliToolName: string } | null> =>
+        ipcRenderer.invoke('rewrite-cli-command', command),
+
     // Ports
     onPortUpdate: (callback: (ports: any[]) => void): () => void => {
         const listener = (_: any, ports: any[]) => callback(ports)
