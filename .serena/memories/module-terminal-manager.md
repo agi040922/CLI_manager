@@ -5,7 +5,8 @@
 Manages node-pty terminal processes, handles I/O streaming, output buffering for previews, and shell resolution.
 
 ## Key Files
-- src/main/TerminalManager.ts - PTY spawn, I/O, buffer management (~360 lines)
+- src/main/TerminalManager.ts - PTY spawn, I/O, buffer management (~370 lines)
+- src/main/CLISessionTracker.ts - CLI tool command interception (injected dependency)
 
 ## How It Works
 - `createTerminal(id, cwd, cols, rows, shell?)` spawns node-pty process with login shell args
