@@ -19,6 +19,8 @@ xterm.js terminal UI component handling PTY communication, resizing, font custom
 - Scroll state tracked to pause resize-triggered reflows during manual scroll
 - Font size/family from settings, adjustable via Cmd+/-/0
 - Context menu extracts file paths from terminal output for quick actions
+- Accepts `resumeCommand` prop (priority over `initialCommand`) for CLI session auto-resume
+- Template `initialCommand` rewritten via `rewriteCliCommand` IPC to inject `--session-id`
 - Session status polling (500ms): detects Claude Code activity via output patterns
 - `terminalPatterns.ts` has extensive regex for Claude Code status, file paths, errors, URLs
 - `filePathLinkProvider.ts` creates clickable hyperlinks for file paths in output
@@ -37,4 +39,6 @@ xterm.js terminal UI component handling PTY communication, resizing, font custom
 ## See Also
 - module:terminal-manager
 - module:renderer-app
+- module:cli-session-tracker
 - flow:terminal-lifecycle
+- flow:cli-session-resume

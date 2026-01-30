@@ -17,6 +17,7 @@ Shared TypeScript type definitions used by both main and renderer processes.
 - Session status: SessionStatus (idle/running/ready/error), NotificationStatus
 - Editor types: EditorType union (vscode/cursor/antigravity/custom)
 - Hooks: HooksSettings with ClaudeCodeHooksSettings nested
+- Keyboard shortcuts: ShortcutAction (11 actions), KeyBinding, KeyboardShortcutMap, DEFAULT_SHORTCUTS
 
 ## Entry Points
 - Imported by main process, renderer, and preload
@@ -26,6 +27,7 @@ Shared TypeScript type definitions used by both main and renderer processes.
 - `-1` means unlimited in numeric limits
 - Workspace has optional fields: isPlayground, isHome, parentWorkspaceId, branchName, baseBranch
 - TerminalSession.type is 'regular' | 'worktree'
+- TerminalSession has optional `cliSessionId` and `cliToolName` for CLI auto-resume tracking
 
 ## See Also
 - module:license-manager

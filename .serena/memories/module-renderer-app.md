@@ -18,6 +18,7 @@ Root React component (App.tsx) managing all application state, routing between v
 - `gridViewSessionIds` syncs with fullscreen terminal window
 - `sessionStatuses` map tracks Claude Code hook states per session
 - License info loaded on mount and checked before gated operations
+- Keyboard shortcuts handled by `useKeyboardShortcuts` hook (capture phase, see module:keyboard-shortcuts)
 - Settings panel toggles inline (not a route)
 - Git panel slides in from right side
 - File search modal overlay

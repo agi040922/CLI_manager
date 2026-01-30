@@ -19,7 +19,9 @@ End-to-end lifecycle of a terminal session from creation to destruction.
   5. TerminalView component renders (or already exists if re-activating)
   6. On mount, TerminalView calls `window.api.createTerminal(id, cwd, cols, rows, shell)`
   7. TerminalManager spawns node-pty process with login shell
-  8. If `initialCommand` set, it's written to PTY after creation
+  8. If `resumeCommand` exists (cliSessionId in store), it's sent instead of initialCommand
+  9. If `initialCommand` set, it's rewritten via CLISessionTracker (inject --session-id) then written to PTY
+  10. Manual CLI commands intercepted by CLISessionTracker on Enter keypress
 - **I/O Streaming**:
   1. PTY output -> `terminal-output-{id}` broadcast to all windows
   2. TerminalView listener filters by matching session ID
@@ -46,8 +48,13 @@ End-to-end lifecycle of a terminal session from creation to destruction.
 - Output buffer (preview) maintained separately in TerminalManager
 - Resize during scroll is paused to prevent layout thrashing
 - Initial command runs via PTY write, not shell args
+- CLI tool commands (claude) are intercepted to inject --session-id for auto-resume
+- On app restart, sessions with cliSessionId send `claude --resume <id>` instead of initialCommand
+- cliSessionId cleared from store when Claude Code exits (isClaudeCode: true → false)
 
 ## See Also
 - module:terminal-manager
 - module:terminal-view
+- module:cli-session-tracker
 - flow:ipc-communication
+- flow:cli-session-resume

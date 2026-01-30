@@ -14,6 +14,7 @@ import { FullscreenTerminalView } from './components/FullscreenTerminalView'
 import { Onboarding } from './components/Onboarding'
 import { LicenseVerification } from './components/LicenseVerification'
 import { UpdateNotification, UpdateStatus } from './components/UpdateNotification'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -237,31 +238,6 @@ function App() {
 
         return cleanup
     }, [])
-
-    // Cmd+P (파일명 검색) / Cmd+Shift+F (파일 내용 검색) 단축키
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Cmd+P (Mac) or Ctrl+P (Windows/Linux) - 파일명 검색
-            if ((e.metaKey || e.ctrlKey) && e.key === 'p' && !e.shiftKey) {
-                e.preventDefault()
-                if (activeWorkspace) {
-                    setFileSearchMode('files')
-                    setFileSearchOpen(true)
-                }
-            }
-            // Cmd+Shift+F (Mac) or Ctrl+Shift+F (Windows/Linux) - 파일 내용 검색
-            else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
-                e.preventDefault()
-                if (activeWorkspace) {
-                    setFileSearchMode('content')
-                    setFileSearchOpen(true)
-                }
-            }
-        }
-
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [activeWorkspace])
 
     const handleOnboardingComplete = () => {
         setShowOnboarding(false)
@@ -722,6 +698,25 @@ function App() {
             }
         }
     }
+
+    // Centralized keyboard shortcuts (session/workspace navigation, search, sidebar, settings, etc.)
+    useKeyboardShortcuts({
+        settings,
+        activeWorkspace,
+        activeSession,
+        sortedWorkspaces,
+        splitLayout,
+        activeSplitIndex,
+        settingsOpen,
+        fileSearchOpen,
+        onSelectSession: handleSelect,
+        onSetActiveSplitIndex: setActiveSplitIndex,
+        onSetFileSearchOpen: setFileSearchOpen,
+        onSetFileSearchMode: setFileSearchMode,
+        onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
+        onToggleSettings: () => setSettingsOpen(prev => !prev),
+        onAddSession: (workspaceId) => handleAddSession(workspaceId),
+    })
 
     const handleAddWorktreeWorkspace = async (parentWorkspaceId: string, branchName: string) => {
         const result: IPCResult<Workspace> = await window.api.addWorktreeWorkspace(parentWorkspaceId, branchName)

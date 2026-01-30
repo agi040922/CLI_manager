@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS, HooksSettings } from '../../../shared/types'
 import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug, Webhook, HelpCircle, ExternalLink } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
+import { KeyboardSettings } from './KeyboardSettings'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'ready' | 'error'
 
@@ -913,86 +914,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
 
                             {/* Keyboard Settings */}
                             {activeCategory === 'keyboard' && (
-                                <>
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-white mb-1">Keyboard Shortcuts</h3>
-                                        <p className="text-xs text-gray-400 mb-4">
-                                            Configure keyboard shortcuts for terminal control
-                                        </p>
-
-                                        <div className="space-y-4">
-                                            {/* Scroll Shortcuts */}
-                                            <div className="p-4 bg-black/20 border border-white/10 rounded-lg">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="text-sm text-white">Scroll Shortcuts</p>
-                                                                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[10px] text-gray-400">⌘↑</kbd>
-                                                                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[10px] text-gray-400">⌘↓</kbd>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setSettings(prev => ({
-                                                            ...prev,
-                                                            keyboard: {
-                                                                scrollShortcuts: !(prev.keyboard?.scrollShortcuts ?? true),
-                                                                showScrollButtons: prev.keyboard?.showScrollButtons ?? true
-                                                            }
-                                                        }))}
-                                                        className={`relative w-11 h-6 rounded-full transition-colors ${
-                                                            (settings.keyboard?.scrollShortcuts ?? true)
-                                                                ? 'bg-blue-600'
-                                                                : 'bg-white/20'
-                                                        }`}
-                                                    >
-                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                                                            (settings.keyboard?.scrollShortcuts ?? true)
-                                                                ? 'translate-x-6'
-                                                                : 'translate-x-1'
-                                                        }`} />
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Floating Scroll Buttons */}
-                                            <div className="p-4 bg-black/20 border border-white/10 rounded-lg">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex-1">
-                                                        <p className="text-sm text-white">Floating Scroll Buttons</p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => setSettings(prev => ({
-                                                            ...prev,
-                                                            keyboard: {
-                                                                scrollShortcuts: prev.keyboard?.scrollShortcuts ?? true,
-                                                                showScrollButtons: !(prev.keyboard?.showScrollButtons ?? true)
-                                                            }
-                                                        }))}
-                                                        className={`relative w-11 h-6 rounded-full transition-colors ${
-                                                            (settings.keyboard?.showScrollButtons ?? true)
-                                                                ? 'bg-blue-600'
-                                                                : 'bg-white/20'
-                                                        }`}
-                                                    >
-                                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                                                            (settings.keyboard?.showScrollButtons ?? true)
-                                                                ? 'translate-x-6'
-                                                                : 'translate-x-1'
-                                                        }`} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-6 pt-4 border-t border-white/10">
-                                            <p className="text-xs text-gray-500">
-                                                <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘+/-/0</kbd> Font size · <kbd className="px-1 py-0.5 bg-white/10 rounded text-[10px]">⌘↑/↓</kbd> Scroll
-                                            </p>
-                                        </div>
-                                    </div>
-                                </>
+                                <KeyboardSettings settings={settings} setSettings={setSettings} />
                             )}
 
                             {/* Hooks Settings (Session Monitoring) */}

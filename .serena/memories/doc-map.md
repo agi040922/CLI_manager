@@ -22,6 +22,7 @@ Renderer (React) <-> Preload (contextBridge) <-> Main (Electron) <-> OS/Git/GitH
 ### Modules (what each part does)
 - **module-main-process** - Electron main: IPC handlers, app lifecycle, manager orchestration
 - **module-terminal-manager** - node-pty spawn, I/O streaming, preview buffers
+- **module-cli-session-tracker** - CLI tool command interception, --session-id injection, auto-resume
 - **module-port-manager** - localhost port monitoring via lsof
 - **module-license-manager** - Lemon Squeezy license, plan limits
 - **module-renderer-app** - Root React component, all top-level state
@@ -29,6 +30,7 @@ Renderer (React) <-> Preload (contextBridge) <-> Main (Electron) <-> OS/Git/GitH
 - **module-terminal-view** - xterm.js wrapper, resize, status polling, file path links
 - **module-git-panel** - Git status, staging, commit, push/pull, GitHub PR/workflow
 - **module-settings** - Tabbed settings UI (~1960 lines), all configuration
+- **module-keyboard-shortcuts** - Capture-phase shortcut handler, xterm.js integration
 - **module-preload-bridge** - IPC bridge, 150+ exposed methods
 - **module-shared-types** - TypeScript interfaces, PLAN_LIMITS constant
 
@@ -36,6 +38,7 @@ Renderer (React) <-> Preload (contextBridge) <-> Main (Electron) <-> OS/Git/GitH
 - **flow-ipc-communication** - Request-response vs streaming patterns, 3-file change rule
 - **flow-terminal-lifecycle** - Session creation -> PTY spawn -> I/O -> tab switch -> destruction
 - **flow-worktree-management** - Worktree create -> workspace link -> sessions -> cleanup
+- **flow-cli-session-resume** - CLI tool session tracking, --session-id injection, auto-resume on restart
 - **flow-license-check** - Feature gate enforcement, validation, upgrade dialog
 
 ### Standards & Ops
@@ -48,7 +51,8 @@ Renderer (React) <-> Preload (contextBridge) <-> Main (Electron) <-> OS/Git/GitH
 | File | Lines | Purpose |
 |------|-------|---------|
 | index.ts | ~2250 | App init, ALL IPC handlers, window mgmt |
-| TerminalManager.ts | ~360 | PTY processes, I/O, preview buffer |
+| TerminalManager.ts | ~370 | PTY processes, I/O, preview buffer |
+| CLISessionTracker.ts | ~213 | CLI command interception, session tracking |
 | PortManager.ts | ~130 | lsof port monitoring |
 | LicenseManager.ts | ~415 | Lemon Squeezy API, feature gates |
 
@@ -78,6 +82,7 @@ Renderer (React) <-> Preload (contextBridge) <-> Main (Electron) <-> OS/Git/GitH
 | src/preload/index.ts | ~200 | IPC bridge (150+ methods) |
 | utils/terminalPatterns.ts | ~630 | Terminal output regex |
 | utils/filePathLinkProvider.ts | ~230 | File path hyperlinks |
+| hooks/useKeyboardShortcuts.ts | ~208 | Centralized shortcut handler |
 | hooks/useWorkspaceBranches.ts | ~44 | Branch state management |
 | hooks/useTemplates.ts | ~31 | Template loading |
 
@@ -86,7 +91,9 @@ Renderer (React) <-> Preload (contextBridge) <-> Main (Electron) <-> OS/Git/GitH
 - **Adding a feature**: Read std-code-patterns, then the relevant module memory
 - **Adding IPC channel**: Read flow-ipc-communication (3-file change rule)
 - **Terminal work**: Read flow-terminal-lifecycle, module-terminal-manager, module-terminal-view
+- **CLI auto-resume**: Read flow-cli-session-resume, module-cli-session-tracker
 - **Git/GitHub work**: Read module-git-panel, module-main-process
 - **License/premium**: Read flow-license-check, module-license-manager, module-shared-types
+- **Keyboard shortcuts**: Read module-keyboard-shortcuts
 - **UI components**: Read module-sidebar, module-settings
 - **Build/release**: Read ops-build-deploy

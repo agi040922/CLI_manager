@@ -18,6 +18,9 @@ Manages node-pty terminal processes, handles I/O streaming, output buffering for
 - `isMeaningfulLine(line)` filters out separators, prompt chars, Claude Code status, fragments
 - `hasRunningProcess(id)` uses `pgrep -P {pid}` to detect child processes
 - `killAll()` terminates all PTY processes on app quit
+- Optional `CLISessionTracker` injected via constructor for CLI command interception
+- `terminal-input` handler routes data through `cliTracker.processInput()` before PTY write
+- `terminal-kill` handler calls `cliTracker.cleanup(id)` to clear input buffers
 
 ## Entry Points
 - IPC: `terminal-create`, `terminal-input`, `terminal-resize`, `terminal-kill`
@@ -32,4 +35,6 @@ Manages node-pty terminal processes, handles I/O streaming, output buffering for
 
 ## See Also
 - module:main-process
+- module:cli-session-tracker
 - flow:terminal-lifecycle
+- flow:cli-session-resume

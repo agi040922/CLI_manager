@@ -32,6 +32,8 @@ IPC communication patterns between Electron main, preload, and renderer processe
 - License gate errors use `errorType: 'UPGRADE_REQUIRED'`, not HTTP status codes
 - Git operations use `execWithShell()` in main process for PATH resolution
 - Fullscreen terminal window receives same broadcasts as main window
+- CLI session IPC: `update-session-cli-info`, `clear-session-cli-info`, `rewrite-cli-command` (invoke/handle)
+- CLI session event: `cli-session-detected` (main → renderer broadcast via webContents.send)
 
 ## See Also
 - module:main-process
