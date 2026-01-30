@@ -380,12 +380,91 @@ function createFullscreenTerminalWindow(sessionIds: string[]): void {
     }
 }
 
+// Validate cliSessionIds on startup against Claude's actual session storage.
+// If the JSONL file doesn't exist, the session was never saved — clear the stale ID.
+function validateCliSessionIds(): void {
+    console.log('[validateCliSessionIds] Starting validation...')
+    const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
+    const projectsDir = path.join(claudeDir, 'projects')
+
+    if (!existsSync(projectsDir)) {
+        console.log('[validateCliSessionIds] Claude projects dir not found:', projectsDir)
+        return
+    }
+
+    // Collect all existing session IDs from Claude's storage
+    const existingSessionIds = new Set<string>()
+    try {
+        const projectDirs = readdirSync(projectsDir)
+        for (const dir of projectDirs) {
+            const dirPath = path.join(projectsDir, dir)
+            try {
+                const files = readdirSync(dirPath)
+                for (const file of files) {
+                    if (file.endsWith('.jsonl')) {
+                        existingSessionIds.add(file.replace('.jsonl', ''))
+                    }
+                }
+            } catch { /* skip unreadable dirs */ }
+        }
+    } catch (e) {
+        console.error('[validateCliSessionIds] Failed to scan projects dir:', e)
+        return
+    }
+
+    console.log(`[validateCliSessionIds] Found ${existingSessionIds.size} session(s) in Claude storage`)
+
+    const workspaces = store.get('workspaces') as Workspace[]
+    let modified = false
+    for (const ws of workspaces) {
+        for (const session of ws.sessions) {
+            if (session.cliSessionId) {
+                if (existingSessionIds.has(session.cliSessionId)) {
+                    console.log(`[validateCliSessionIds] KEEP session ${session.cliSessionId} (file exists)`)
+                } else {
+                    console.log(`[validateCliSessionIds] CLEAR stale session ${session.cliSessionId} (no file)`)
+                    delete session.cliSessionId
+                    delete session.cliToolName
+                    modified = true
+                }
+            }
+        }
+    }
+    if (modified) {
+        store.set('workspaces', workspaces)
+    }
+}
+
+// Clear all cliSessionIds on graceful quit (belt-and-suspenders with validateCliSessionIds).
+function clearAllCliSessionIds(): void {
+    const workspaces = store.get('workspaces') as Workspace[]
+    let modified = false
+    let count = 0
+    for (const ws of workspaces) {
+        for (const session of ws.sessions) {
+            if (session.cliSessionId || session.cliToolName) {
+                delete session.cliSessionId
+                delete session.cliToolName
+                modified = true
+                count++
+            }
+        }
+    }
+    if (modified) {
+        console.log(`[clearAllCliSessionIds] Cleared ${count} CLI session(s)`)
+        store.set('workspaces', workspaces)
+    }
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
     // Fix PATH for packaged app (must be first!)
     await fixPath()
+
+    // Validate persisted cliSessionIds against Claude's session storage
+    validateCliSessionIds()
 
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.climanager.app')
@@ -463,6 +542,7 @@ app.whenReady().then(async () => {
 
     // Update CLI session info on a session (from renderer, e.g., template rewrite)
     ipcMain.handle('update-session-cli-info', (_, workspaceId: string, sessionId: string, cliSessionId: string, cliToolName: string): boolean => {
+        console.log(`[update-session-cli-info] Persisting cliSessionId=${cliSessionId} for session=${sessionId}`)
         const workspaces = store.get('workspaces') as Workspace[]
         const ws = workspaces.find((w: Workspace) => w.id === workspaceId)
         if (!ws) return false
@@ -489,7 +569,9 @@ app.whenReady().then(async () => {
 
     // Rewrite a command through CLISessionTracker (for template/initialCommand)
     ipcMain.handle('rewrite-cli-command', (_, command: string): { command: string; cliSessionId: string; cliToolName: string } | null => {
-        return cliSessionTracker.rewriteCommand(command)
+        const result = cliSessionTracker.rewriteCommand(command)
+        console.log(`[rewrite-cli-command] "${command}" → ${result ? `"${result.command}" (id=${result.cliSessionId})` : 'null (not a CLI tool)'}`)
+        return result
     })
 
     ipcMain.handle('get-workspaces', () => {
@@ -2072,7 +2154,8 @@ app.on('before-quit', async (event) => {
     // Check if there are active terminals
     const terminalCount = terminalManager.getTerminalCount()
     if (terminalCount === 0) {
-        // No terminals, just quit
+        // No active terminals — just quit. Session IDs preserved for resume.
+        // validateCliSessionIds() on next startup cleans up stale ones.
         return
     }
 
@@ -2105,7 +2188,7 @@ app.on('before-quit', async (event) => {
         // Keep running in background
         enterBackgroundMode()
     } else if (response === 1) {
-        // Terminate all and quit
+        // Session IDs preserved — validateCliSessionIds() cleans up on next startup
         isQuitting = true
         terminalManager.killAll()
         // Quit after a short delay to ensure cleanup (use quit() not exit() for proper cleanup)
