@@ -35,6 +35,51 @@ pnpm start
 pnpm typecheck
 ```
 
+## Serena Memory Rules
+
+### Naming (STRICT)
+Prefix required: `module:name`, `flow:name`, `std:name`, `ops:name`
+
+### Structure
+```
+# prefix:name
+<!-- Updated: YYYY-MM-DD -->
+
+## What
+One sentence.
+
+## Key Files
+- path/to/file.ts - what it does
+
+## How It Works
+Bullet points explaining the flow. Enough detail to understand, not to implement.
+
+## Entry Points
+- Main function/endpoint to start
+
+## Gotchas
+- Edge cases and caveats discovered
+
+## See Also
+- Link to README: backend/src/module/README.md
+- Related memory: module:related-thing
+```
+
+### Rules
+- **Target 60-80 lines** — complex flows may need up to 100
+- **Link to READMEs** — memory is quick context, README has full details
+- **No code blocks** — point to file:line instead
+- **No copied content** — summarize, don't duplicate README
+- **No bug fixes** — update module memory's Gotchas section instead
+- **Update date** when modifying
+
+### When to Create
+- ✅ New module with multiple services
+- ✅ Cross-module flow (email ingest, order parsing)
+- ✅ Standards that apply across codebase
+- ❌ Single-file utilities (just document in README)
+- ❌ Bug fixes (add to Gotchas, not new memory)
+
 ## Architecture
 
 ### Process Structure (Electron Multi-Process)
