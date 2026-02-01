@@ -70,3 +70,6 @@ files:
 
 # asar 압축
 asar: true
+
+# Disable npm rebuild (use electron-rebuild manually before build)
+npmRebuild: false

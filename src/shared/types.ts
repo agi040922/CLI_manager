@@ -117,6 +117,8 @@ export interface TerminalSession {
     type: 'regular' | 'worktree'
     notificationStatus?: NotificationStatus
     initialCommand?: string
+    cliSessionId?: string
+    cliToolName?: string
 }
 
 export interface TerminalTemplate {
@@ -190,6 +192,7 @@ export interface UserSettings {
     keyboard?: {
         scrollShortcuts: boolean    // ⌘↑/⌘↓ 스크롤 단축키 활성화 (기본값: true)
         showScrollButtons: boolean  // 플로팅 스크롤 버튼 표시 (기본값: true)
+        shortcuts?: KeyboardShortcutMap  // Configurable keyboard shortcuts (falls back to DEFAULT_SHORTCUTS)
     }
     // Terminal Preview 설정 (hover 시 마지막 N줄 미리보기)
     terminalPreview?: {
@@ -243,4 +246,68 @@ export interface SplitTerminalLayout {
 // Layout for fullscreen terminal window (max 6 terminals)
 export interface FullscreenTerminalLayout {
     sessionIds: string[]    // Session IDs to display (max 6)
+}
+
+// ============================================
+// Keyboard Shortcut Types
+// ============================================
+
+export type ShortcutAction =
+    | 'nextSession' | 'prevSession'
+    | 'nextWorkspace' | 'prevWorkspace'
+    | 'nextSplitPane' | 'prevSplitPane'
+    | 'toggleSidebar' | 'toggleSettings'
+    | 'fileSearch' | 'contentSearch'
+    | 'newSession'
+
+export interface KeyBinding {
+    key: string                          // Display key label (e.g., ']', '[', '`')
+    modifiers: ('mod' | 'shift' | 'alt')[]  // 'mod' = Cmd on Mac, Ctrl elsewhere
+    code: string                         // KeyboardEvent.key value to match
+}
+
+export type KeyboardShortcutMap = Record<ShortcutAction, KeyBinding>
+
+export const DEFAULT_SHORTCUTS: KeyboardShortcutMap = {
+    nextSession:     { key: ']', modifiers: ['mod'], code: ']' },
+    prevSession:     { key: '[', modifiers: ['mod'], code: '[' },
+    nextWorkspace:   { key: ']', modifiers: ['mod', 'shift'], code: ']' },
+    prevWorkspace:   { key: '[', modifiers: ['mod', 'shift'], code: '[' },
+    nextSplitPane:   { key: '`', modifiers: ['mod'], code: '`' },
+    prevSplitPane:   { key: '`', modifiers: ['mod', 'shift'], code: '`' },
+    toggleSidebar:   { key: 'B', modifiers: ['mod'], code: 'b' },
+    toggleSettings:  { key: ',', modifiers: ['mod'], code: ',' },
+    fileSearch:      { key: 'P', modifiers: ['mod'], code: 'p' },
+    contentSearch:   { key: 'F', modifiers: ['mod', 'shift'], code: 'f' },
+    newSession:      { key: 'T', modifiers: ['mod'], code: 't' },
+}
+
+export type ShortcutGroup = 'navigation' | 'splitView' | 'search' | 'ui' | 'actions'
+
+export interface ShortcutInfo {
+    label: string
+    description: string
+    group: ShortcutGroup
+}
+
+export const SHORTCUT_LABELS: Record<ShortcutAction, ShortcutInfo> = {
+    nextSession:     { label: 'Next Tab',            description: 'Switch to the next tab in workspace',      group: 'navigation' },
+    prevSession:     { label: 'Previous Tab',        description: 'Switch to the previous tab in workspace',  group: 'navigation' },
+    nextWorkspace:   { label: 'Next Workspace',      description: 'Switch to the next workspace',             group: 'navigation' },
+    prevWorkspace:   { label: 'Previous Workspace',  description: 'Switch to the previous workspace',         group: 'navigation' },
+    nextSplitPane:   { label: 'Next Split Pane',     description: 'Focus next pane in split view',            group: 'splitView' },
+    prevSplitPane:   { label: 'Previous Split Pane', description: 'Focus previous pane in split view',        group: 'splitView' },
+    toggleSidebar:   { label: 'Toggle Sidebar',      description: 'Show or hide the sidebar',                 group: 'ui' },
+    toggleSettings:  { label: 'Toggle Settings',     description: 'Open or close settings',                   group: 'ui' },
+    fileSearch:      { label: 'File Search',         description: 'Search files by name',                     group: 'search' },
+    contentSearch:   { label: 'Content Search',      description: 'Search inside file contents',              group: 'search' },
+    newSession:      { label: 'New Tab',             description: 'Create a new terminal tab',                group: 'actions' },
+}
+
+export const SHORTCUT_GROUP_NAMES: Record<ShortcutGroup, string> = {
+    navigation: 'Navigation',
+    splitView: 'Split View',
+    search: 'Search',
+    ui: 'UI',
+    actions: 'Actions',
 }

@@ -1,6 +1,6 @@
 {
   "name": "cli-manager",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
+    "postinstall": "node scripts/sync-node-pty-prebuilds.cjs",
     "typecheck": "tsc --noEmit",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:win": "electron-vite build && electron-builder --win",

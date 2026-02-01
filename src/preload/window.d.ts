@@ -79,6 +79,12 @@ declare global {
             writeTerminal: (id: string, data: string) => void
             onTerminalData: (id: string, callback: (data: string) => void) => () => void
 
+            // CLI Session Tracking
+            onCliSessionDetected: (callback: (data: { workspaceId: string; sessionId: string; cliSessionId: string; cliToolName: string }) => void) => () => void
+            updateSessionCliInfo: (workspaceId: string, sessionId: string, cliSessionId: string, cliToolName: string) => Promise<boolean>
+            clearSessionCliInfo: (workspaceId: string, sessionId: string) => Promise<boolean>
+            rewriteCliCommand: (command: string) => Promise<{ command: string; cliSessionId: string; cliToolName: string } | null>
+
             // Ports
             onPortUpdate: (callback: (ports: { port: number, pid: number, command: string }[]) => void) => () => void
             killProcess: (pid: number) => Promise<boolean>

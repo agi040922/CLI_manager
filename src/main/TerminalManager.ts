@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import os from 'os'
 import { execSync } from 'child_process'
 import { existsSync } from 'fs'
+import { CLISessionTracker } from './CLISessionTracker'
 const pty = require('node-pty')
 
 // Default shell based on platform
@@ -22,8 +23,10 @@ export class TerminalManager {
     // Output buffer for terminal preview (stores last N lines per terminal)
     private outputBuffers: Map<string, string[]> = new Map()
     private readonly PREVIEW_BUFFER_LINES = 10
+    private cliTracker: CLISessionTracker | null = null
 
-    constructor() {
+    constructor(cliTracker?: CLISessionTracker) {
+        this.cliTracker = cliTracker ?? null
         this.setupIpc()
     }
 
@@ -211,9 +214,19 @@ export class TerminalManager {
 
         ipcMain.on('terminal-input', (_, id: string, data: string) => {
             const ptyProcess = this.terminals.get(id)
-            if (ptyProcess) {
-                ptyProcess.write(data)
+            if (!ptyProcess) return
+
+            // Route through CLI session tracker for interception
+            if (this.cliTracker) {
+                const intercepted = this.cliTracker.processInput(
+                    id,
+                    data,
+                    (d) => ptyProcess.write(d)
+                )
+                if (intercepted) return
             }
+
+            ptyProcess.write(data)
         })
 
         ipcMain.handle('terminal-resize', (_, id: string, cols: number, rows: number) => {
@@ -229,6 +242,7 @@ export class TerminalManager {
                 ptyProcess.kill()
                 this.terminals.delete(id)
                 this.clearBuffer(id)
+                this.cliTracker?.cleanup(id)
             }
         })
 
