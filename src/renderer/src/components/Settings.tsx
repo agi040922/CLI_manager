@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS, HooksSettings } from '../../../shared/types'
-import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug, Webhook, HelpCircle, ExternalLink } from 'lucide-react'
+import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug, Webhook, HelpCircle, ExternalLink, GripVertical } from 'lucide-react'
+import { Reorder } from 'framer-motion'
 import { v4 as uuidv4 } from 'uuid'
 import { KeyboardSettings } from './KeyboardSettings'
 
@@ -1327,16 +1328,26 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             </button>
                                         </div>
 
-                                        <div className="space-y-2">
-                                            {templates.map(template => (
-                                                <div
+                                        <Reorder.Group
+                                            axis="y"
+                                            values={templates}
+                                            onReorder={setTemplates}
+                                            className="space-y-2"
+                                        >
+                                            {templates.map((template, index) => (
+                                                <Reorder.Item
                                                     key={template.id}
-                                                    className="p-3 bg-black/20 border border-white/10 rounded hover:border-white/20 transition-colors"
+                                                    value={template}
+                                                    className="p-3 bg-black/20 border border-white/10 rounded hover:border-white/20 transition-colors cursor-grab active:cursor-grabbing"
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex items-start gap-2 flex-1">
-                                                            <div className="text-gray-400 mt-0.5">
+                                                            <div className="flex items-center gap-1.5 text-gray-400 mt-0.5">
+                                                                <GripVertical size={12} className="text-gray-600" />
                                                                 {getTemplateIcon(template.icon)}
+                                                                <span className="text-[10px] text-gray-500 font-mono bg-white/5 px-1 rounded">
+                                                                    ⌘T+{index + 1}
+                                                                </span>
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="text-sm font-medium text-white">{template.name}</div>
@@ -1367,15 +1378,15 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                             </button>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </Reorder.Item>
                                             ))}
+                                        </Reorder.Group>
 
-                                            {templates.length === 0 && (
-                                                <div className="text-center py-12 text-gray-500 text-sm">
-                                                    No templates yet. Click "Add Template" to create one.
-                                                </div>
-                                            )}
-                                        </div>
+                                        {templates.length === 0 && (
+                                            <div className="text-center py-12 text-gray-500 text-sm">
+                                                No templates yet. Click "Add Template" to create one.
+                                            </div>
+                                        )}
                                     </div>
                                 </>
                             )}

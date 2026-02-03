@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy, RefreshCw, FolderOpen, SquareX } from 'lucide-react'
+import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy, RefreshCw, FolderOpen, SquareX, Eraser } from 'lucide-react'
 import { Workspace, TerminalTemplate, TerminalSession } from '../../../../shared/types'
 import { getTemplateIcon } from '../../constants/icons'
 import { MENU_Z_INDEX } from '../../constants/styles'
@@ -436,28 +436,44 @@ export function BranchMenu({
 interface SessionContextMenuProps {
     x: number
     y: number
+    sessionId: string
     onRename: () => void
     onDelete: () => void
+    onClear: () => void
     onClose: () => void
 }
 
 /**
  * 세션 우클릭 컨텍스트 메뉴
- * 이름 변경, 삭제 기능 제공
+ * 이름 변경, 삭제, 터미널 클리어 기능 제공
  */
 export function SessionContextMenu({
     x,
     y,
+    sessionId,
     onRename,
     onDelete,
+    onClear,
     onClose
 }: SessionContextMenuProps) {
     return createPortal(
         <div
-            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-32 backdrop-blur-md`}
+            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-36 backdrop-blur-md`}
             style={{ top: y, left: x }}
             onClick={e => e.stopPropagation()}
         >
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onClear()
+                    onClose()
+                }}
+                title="Clear scrollback buffer (⌘K)"
+            >
+                <Eraser size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Clear Terminal</span>
+            </button>
+            <div className="border-t border-white/10 my-0.5"></div>
             <button
                 className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
                 onClick={() => {

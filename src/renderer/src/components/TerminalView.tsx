@@ -309,6 +309,16 @@ export function TerminalView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, onSessionStatusChange])
 
+    // Listen for terminal clear events (Cmd+K)
+    useEffect(() => {
+        const cleanup = window.api.onTerminalClear(id, () => {
+            if (xtermRef.current) {
+                xtermRef.current.clear()  // Clear scrollback buffer and screen
+            }
+        })
+        return cleanup
+    }, [id])
+
     // Handle visibility changes
     useEffect(() => {
         // 초기화 직후에는 resize 건너뛰기 (createTerminal에서 이미 올바른 크기로 생성됨)

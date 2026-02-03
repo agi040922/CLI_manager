@@ -122,6 +122,15 @@ const api = {
         return () => ipcRenderer.removeListener('terminal-zoom', listener)
     },
 
+    // Terminal Clear (Cmd+K 이벤트 수신)
+    clearTerminal: (id: string): void => ipcRenderer.send('terminal-clear', id),
+    onTerminalClear: (id: string, callback: () => void): () => void => {
+        const channel = `terminal-clear-${id}`
+        const listener = () => callback()
+        ipcRenderer.on(channel, listener)
+        return () => ipcRenderer.removeListener(channel, listener)
+    },
+
     // UI Zoom (전체 UI 줌 조정)
     zoomUi: (action: 'in' | 'out' | 'reset'): void => {
         ipcRenderer.send('zoom-ui', action)

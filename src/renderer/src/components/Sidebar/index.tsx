@@ -617,12 +617,17 @@ export function Sidebar({
                 <SessionContextMenu
                     x={sessionMenuOpen.x}
                     y={sessionMenuOpen.y}
+                    sessionId={sessionMenuOpen.sessionId}
                     onRename={() => {
                         setRenamingSessionId(sessionMenuOpen.sessionId)
                         setSessionMenuOpen(null)
                     }}
                     onDelete={() => {
                         onRemoveSession(sessionMenuOpen.workspaceId, sessionMenuOpen.sessionId)
+                        setSessionMenuOpen(null)
+                    }}
+                    onClear={() => {
+                        window.api.clearTerminal(sessionMenuOpen.sessionId)
                         setSessionMenuOpen(null)
                     }}
                     onClose={() => setSessionMenuOpen(null)}

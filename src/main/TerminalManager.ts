@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import os from 'os'
 import { execSync } from 'child_process'
 import { existsSync } from 'fs'
@@ -254,6 +254,15 @@ export class TerminalManager {
         // Get terminal preview (last N lines)
         ipcMain.handle('terminal-get-preview', (_, id: string, lineCount: number = 5): string[] => {
             return this.getPreview(id, lineCount)
+        })
+
+        // Clear terminal buffer (Cmd+K) - broadcasts clear event to all windows
+        ipcMain.on('terminal-clear', (_, id: string) => {
+            // Broadcast clear event to all windows (renderer will call xterm.clear())
+            const channel = `terminal-clear-${id}`
+            BrowserWindow.getAllWindows().forEach(win => {
+                win.webContents.send(channel)
+            })
         })
     }
 

@@ -93,6 +93,10 @@ declare global {
             // Terminal Zoom
             onTerminalZoom: (callback: (key: string) => void) => () => void
 
+            // Terminal Clear (Cmd+K)
+            clearTerminal: (id: string) => void
+            onTerminalClear: (id: string, callback: () => void) => () => void
+
             // UI Zoom
             zoomUi: (action: 'in' | 'out' | 'reset') => void
 

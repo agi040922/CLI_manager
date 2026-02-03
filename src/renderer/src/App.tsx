@@ -15,6 +15,7 @@ import { Onboarding } from './components/Onboarding'
 import { LicenseVerification } from './components/LicenseVerification'
 import { UpdateNotification, UpdateStatus } from './components/UpdateNotification'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useTemplates } from './hooks/useTemplates'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -142,6 +143,9 @@ function App() {
     // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
     const [terminalFontSize, setTerminalFontSize] = useState(14)
 
+    // Custom templates for keyboard shortcuts (Cmd+T → number)
+    const customTemplates = useTemplates(settingsOpen)
+
     // 터미널 폰트 크기 조정 상수
     const MIN_FONT_SIZE = 8
     const MAX_FONT_SIZE = 32
@@ -149,20 +153,34 @@ function App() {
 
     // Load workspaces, settings, and license info on mount
     useEffect(() => {
+        // Dev mode: skip session restore when VITE_NO_SESSION_RESTORE is set
+        const skipSessionRestore = import.meta.env.VITE_NO_SESSION_RESTORE === 'true'
+
         window.api.getWorkspaces().then(loadedWorkspaces => {
-            setWorkspaces(loadedWorkspaces)
+            if (skipSessionRestore) {
+                // Clear all sessions but keep workspaces
+                const workspacesWithoutSessions = loadedWorkspaces.map(w => ({
+                    ...w,
+                    sessions: []
+                }))
+                setWorkspaces(workspacesWithoutSessions)
+            } else {
+                setWorkspaces(loadedWorkspaces)
+            }
             // Initialize workspace order from loaded workspaces (regular workspaces only)
             const regularIds = loadedWorkspaces
                 .filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome)
                 .map(w => w.id)
             setWorkspaceOrder(regularIds)
-            // Initialize session orders from loaded workspaces
+            // Initialize session orders from loaded workspaces (skip if no restore)
             const initialSessionOrders = new Map<string, string[]>()
-            loadedWorkspaces.forEach(w => {
-                if (w.sessions && w.sessions.length > 0) {
-                    initialSessionOrders.set(w.id, w.sessions.map(s => s.id))
-                }
-            })
+            if (!skipSessionRestore) {
+                loadedWorkspaces.forEach(w => {
+                    if (w.sessions && w.sessions.length > 0) {
+                        initialSessionOrders.set(w.id, w.sessions.map(s => s.id))
+                    }
+                })
+            }
             setSessionOrders(initialSessionOrders)
         })
         window.api.getSettings().then(loadedSettings => {
@@ -671,12 +689,21 @@ function App() {
 
         if (result.success && result.data) {
             const newSession = result.data
-            setWorkspaces(prev => prev.map(w => {
-                if (w.id === workspaceId) {
-                    return { ...w, sessions: [...w.sessions, newSession] }
+            setWorkspaces(prev => {
+                const updated = prev.map(w => {
+                    if (w.id === workspaceId) {
+                        return { ...w, sessions: [...w.sessions, newSession] }
+                    }
+                    return w
+                })
+                // Auto-select the new session
+                const workspace = updated.find(w => w.id === workspaceId)
+                if (workspace) {
+                    setActiveWorkspace(workspace)
+                    setActiveSession(newSession)
                 }
-                return w
-            }))
+                return updated
+            })
             // Update sessionOrders to include new session
             setSessionOrders(prev => {
                 const next = new Map(prev)
@@ -699,6 +726,41 @@ function App() {
         }
     }
 
+    // Handle clearing terminal buffer (Cmd+K)
+    const handleClearSession = (sessionId: string) => {
+        window.api.clearTerminal(sessionId)
+    }
+
+    // Handle closing session and navigating to previous (Cmd+W)
+    const handleCloseSession = async (workspaceId: string, sessionId: string) => {
+        const workspace = workspaces.find(w => w.id === workspaceId)
+        if (!workspace) return
+
+        const sessions = workspace.sessions
+        const currentIndex = sessions.findIndex(s => s.id === sessionId)
+
+        // Determine which session to select after closing
+        let nextSession: TerminalSession | null = null
+        if (sessions.length > 1) {
+            // Prefer previous session, fallback to next
+            if (currentIndex > 0) {
+                nextSession = sessions[currentIndex - 1]
+            } else {
+                nextSession = sessions[currentIndex + 1]
+            }
+        }
+
+        // Navigate to next session first
+        if (nextSession) {
+            setActiveSession(nextSession)
+        } else {
+            setActiveSession(null)
+        }
+
+        // Then remove the session (skip confirmation dialog for keyboard shortcut)
+        await handleRemoveSession(workspaceId, sessionId, true)
+    }
+
     // Centralized keyboard shortcuts (session/workspace navigation, search, sidebar, settings, etc.)
     useKeyboardShortcuts({
         settings,
@@ -709,13 +771,18 @@ function App() {
         activeSplitIndex,
         settingsOpen,
         fileSearchOpen,
+        templates: customTemplates,
         onSelectSession: handleSelect,
         onSetActiveSplitIndex: setActiveSplitIndex,
         onSetFileSearchOpen: setFileSearchOpen,
         onSetFileSearchMode: setFileSearchMode,
         onToggleSidebar: () => setIsSidebarOpen(prev => !prev),
         onToggleSettings: () => setSettingsOpen(prev => !prev),
-        onAddSession: (workspaceId) => handleAddSession(workspaceId),
+        onAddSession: (workspaceId, template) => {
+            handleAddSession(workspaceId, 'regular', undefined, template?.command, template?.name)
+        },
+        onCloseSession: handleCloseSession,
+        onClearSession: handleClearSession,
     })
 
     const handleAddWorktreeWorkspace = async (parentWorkspaceId: string, branchName: string) => {
