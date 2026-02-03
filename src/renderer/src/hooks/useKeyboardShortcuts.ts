@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import {
     Workspace,
     TerminalSession,
@@ -8,6 +8,7 @@ import {
     KeyboardShortcutMap,
     ShortcutAction,
     DEFAULT_SHORTCUTS,
+    TerminalTemplate,
 } from '../../../shared/types'
 
 interface UseKeyboardShortcutsConfig {
@@ -19,13 +20,16 @@ interface UseKeyboardShortcutsConfig {
     activeSplitIndex: number
     settingsOpen: boolean
     fileSearchOpen: boolean
+    templates: TerminalTemplate[]  // Custom templates for chord shortcuts
     onSelectSession: (workspace: Workspace, session: TerminalSession) => void
     onSetActiveSplitIndex: (index: number) => void
     onSetFileSearchOpen: (open: boolean) => void
     onSetFileSearchMode: (mode: 'files' | 'content') => void
     onToggleSidebar: () => void
     onToggleSettings: () => void
-    onAddSession: (workspaceId: string) => void
+    onAddSession: (workspaceId: string, template?: TerminalTemplate) => void
+    onCloseSession: (workspaceId: string, sessionId: string) => void
+    onClearSession: (sessionId: string) => void
 }
 
 function getShortcuts(settings: UserSettings): KeyboardShortcutMap {
@@ -54,6 +58,9 @@ function matchShortcut(e: KeyboardEvent, binding: KeyBinding): boolean {
  * Centralized keyboard shortcut handler for the application.
  * Uses capture phase to intercept events before xterm.js consumes them.
  */
+// Chord mode timeout in milliseconds
+const CHORD_TIMEOUT_MS = 500
+
 export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
     const {
         settings,
@@ -64,6 +71,7 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         activeSplitIndex,
         settingsOpen,
         fileSearchOpen,
+        templates,
         onSelectSession,
         onSetActiveSplitIndex,
         onSetFileSearchOpen,
@@ -71,7 +79,16 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         onToggleSidebar,
         onToggleSettings,
         onAddSession,
+        onCloseSession,
+        onClearSession,
     } = config
+
+    // Chord mode state (for Cmd+T → number sequences)
+    const chordModeRef = useRef<{
+        active: boolean
+        workspaceId: string | null
+        timer: NodeJS.Timeout | null
+    }>({ active: false, workspaceId: null, timer: null })
 
     const navigateSplitPane = useCallback((direction: 1 | -1) => {
         if (!splitLayout || splitLayout.sessionIds.length === 0) return
@@ -122,13 +139,65 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         onSelectSession(targetWorkspace, targetWorkspace.sessions[0])
     }, [sortedWorkspaces, activeWorkspace, onSelectSession])
 
+    // Helper to cancel chord mode
+    const cancelChordMode = useCallback(() => {
+        if (chordModeRef.current.timer) {
+            clearTimeout(chordModeRef.current.timer)
+        }
+        chordModeRef.current = { active: false, workspaceId: null, timer: null }
+    }, [])
+
+    // Helper to create session with template by index
+    const createSessionWithTemplateIndex = useCallback((workspaceId: string, index: number) => {
+        if (index === 0) {
+            // 0 = Plain Terminal
+            onAddSession(workspaceId, undefined)
+        } else if (index <= templates.length) {
+            // 1~9 = Template by index (1-based)
+            const template = templates[index - 1]
+            onAddSession(workspaceId, template)
+        } else {
+            // No template at this index, create plain terminal
+            onAddSession(workspaceId, undefined)
+        }
+    }, [templates, onAddSession])
+
     useEffect(() => {
         const shortcuts = getShortcuts(settings)
         console.log('[Shortcuts] Effect mounted, registering capture listener')
 
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Only process events with at least one modifier
+            // Handle chord mode: waiting for number key after Cmd+T
+            if (chordModeRef.current.active) {
+                const workspaceId = chordModeRef.current.workspaceId
+                if (!workspaceId) {
+                    cancelChordMode()
+                    return
+                }
+
+                // Check if it's a number key (0-9)
+                const numMatch = e.key.match(/^[0-9]$/)
+                if (numMatch) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    const index = parseInt(e.key, 10)
+                    console.log(`[Shortcuts] Chord: Cmd+T → ${index} (template index)`)
+                    cancelChordMode()
+                    createSessionWithTemplateIndex(workspaceId, index)
+                    return
+                }
+
+                // Any other key cancels chord mode and creates plain terminal
+                console.log(`[Shortcuts] Chord cancelled by key: ${e.key}`)
+                cancelChordMode()
+                onAddSession(workspaceId, undefined)
+                // Don't prevent default - let the key through
+                return
+            }
+
+            // Only process events with at least one modifier (when not in chord mode)
             if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) return
+
             // Allow toggleSettings even when modals are open
             if (matchShortcut(e, shortcuts.toggleSettings)) {
                 console.log('[Shortcuts] matched: toggleSettings')
@@ -148,6 +217,31 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
 
             // Skip when modals are open (except toggleSettings handled above)
             if (settingsOpen || fileSearchOpen) return
+
+            // Special handling for newSession: enter chord mode instead of immediate action
+            if (matchShortcut(e, shortcuts.newSession)) {
+                if (activeWorkspace) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    console.log('[Shortcuts] Cmd+T pressed, entering chord mode')
+
+                    // Enter chord mode
+                    chordModeRef.current = {
+                        active: true,
+                        workspaceId: activeWorkspace.id,
+                        timer: setTimeout(() => {
+                            // Timeout: create plain terminal
+                            console.log('[Shortcuts] Chord timeout, creating plain terminal')
+                            const wsId = chordModeRef.current.workspaceId
+                            cancelChordMode()
+                            if (wsId) {
+                                onAddSession(wsId, undefined)
+                            }
+                        }, CHORD_TIMEOUT_MS)
+                    }
+                }
+                return
+            }
 
             const actionHandlers: Partial<Record<ShortcutAction, () => void>> = {
                 nextSession: () => navigateSession(1),
@@ -169,9 +263,22 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
                         onSetFileSearchOpen(true)
                     }
                 },
-                newSession: () => {
-                    if (activeWorkspace) {
-                        onAddSession(activeWorkspace.id)
+                closeSession: () => {
+                    // Close the currently active session and go to previous
+                    if (activeWorkspace && activeSession) {
+                        onCloseSession(activeWorkspace.id, activeSession.id)
+                    }
+                },
+                clearSession: () => {
+                    // Clear the currently active session
+                    if (splitLayout && splitLayout.sessionIds.length > 0) {
+                        // In split view, clear the active pane's session
+                        const sessionId = splitLayout.sessionIds[activeSplitIndex]
+                        if (sessionId) {
+                            onClearSession(sessionId)
+                        }
+                    } else if (activeSession) {
+                        onClearSession(activeSession.id)
                     }
                 },
             }
@@ -190,12 +297,19 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
 
         // Use capture phase so we intercept before xterm.js handles the event
         window.addEventListener('keydown', handleKeyDown, true)
-        return () => window.removeEventListener('keydown', handleKeyDown, true)
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown, true)
+            // Cleanup chord mode timer on unmount
+            if (chordModeRef.current.timer) {
+                clearTimeout(chordModeRef.current.timer)
+            }
+        }
     }, [
         settings,
         settingsOpen,
         fileSearchOpen,
         activeWorkspace,
+        templates,
         navigateSession,
         navigateWorkspace,
         navigateSplitPane,
@@ -204,5 +318,9 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         onSetFileSearchOpen,
         onSetFileSearchMode,
         onAddSession,
+        onCloseSession,
+        onClearSession,
+        cancelChordMode,
+        createSessionWithTemplateIndex,
     ])
 }

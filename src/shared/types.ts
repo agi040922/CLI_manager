@@ -258,7 +258,7 @@ export type ShortcutAction =
     | 'nextSplitPane' | 'prevSplitPane'
     | 'toggleSidebar' | 'toggleSettings'
     | 'fileSearch' | 'contentSearch'
-    | 'newSession'
+    | 'newSession' | 'closeSession' | 'clearSession'
 
 export interface KeyBinding {
     key: string                          // Display key label (e.g., ']', '[', '`')
@@ -280,6 +280,8 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcutMap = {
     fileSearch:      { key: 'P', modifiers: ['mod'], code: 'p' },
     contentSearch:   { key: 'F', modifiers: ['mod', 'shift'], code: 'f' },
     newSession:      { key: 'T', modifiers: ['mod'], code: 't' },
+    closeSession:    { key: 'W', modifiers: ['mod'], code: 'w' },
+    clearSession:    { key: 'K', modifiers: ['mod'], code: 'k' },
 }
 
 export type ShortcutGroup = 'navigation' | 'splitView' | 'search' | 'ui' | 'actions'
@@ -302,6 +304,8 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, ShortcutInfo> = {
     fileSearch:      { label: 'File Search',         description: 'Search files by name',                     group: 'search' },
     contentSearch:   { label: 'Content Search',      description: 'Search inside file contents',              group: 'search' },
     newSession:      { label: 'New Tab',             description: 'Create a new terminal tab',                group: 'actions' },
+    closeSession:    { label: 'Close Tab',           description: 'Close current tab and go to previous',     group: 'actions' },
+    clearSession:    { label: 'Clear Terminal',      description: 'Clear terminal scrollback buffer',         group: 'actions' },
 }
 
 export const SHORTCUT_GROUP_NAMES: Record<ShortcutGroup, string> = {
