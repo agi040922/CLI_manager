@@ -30,6 +30,7 @@ interface UseKeyboardShortcutsConfig {
     onAddSession: (workspaceId: string, template?: TerminalTemplate) => void
     onCloseSession: (workspaceId: string, sessionId: string) => void
     onClearSession: (sessionId: string) => void
+    onRenameSession: (sessionId: string) => void
 }
 
 function getShortcuts(settings: UserSettings): KeyboardShortcutMap {
@@ -81,6 +82,7 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         onAddSession,
         onCloseSession,
         onClearSession,
+        onRenameSession,
     } = config
 
     // Chord mode state (for Cmd+T → number sequences)
@@ -281,6 +283,17 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
                         onClearSession(activeSession.id)
                     }
                 },
+                renameSession: () => {
+                    // Rename the currently active session
+                    if (splitLayout && splitLayout.sessionIds.length > 0) {
+                        const sessionId = splitLayout.sessionIds[activeSplitIndex]
+                        if (sessionId) {
+                            onRenameSession(sessionId)
+                        }
+                    } else if (activeSession) {
+                        onRenameSession(activeSession.id)
+                    }
+                },
             }
 
             for (const [action, handler] of Object.entries(actionHandlers)) {
@@ -320,6 +333,7 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         onAddSession,
         onCloseSession,
         onClearSession,
+        onRenameSession,
         cancelChordMode,
         createSessionWithTemplateIndex,
     ])

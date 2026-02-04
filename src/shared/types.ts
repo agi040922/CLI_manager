@@ -258,7 +258,7 @@ export type ShortcutAction =
     | 'nextSplitPane' | 'prevSplitPane'
     | 'toggleSidebar' | 'toggleSettings'
     | 'fileSearch' | 'contentSearch'
-    | 'newSession' | 'closeSession' | 'clearSession'
+    | 'newSession' | 'closeSession' | 'clearSession' | 'renameSession'
 
 export interface KeyBinding {
     key: string                          // Display key label (e.g., ']', '[', '`')
@@ -282,6 +282,7 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcutMap = {
     newSession:      { key: 'T', modifiers: ['mod'], code: 't' },
     closeSession:    { key: 'W', modifiers: ['mod'], code: 'w' },
     clearSession:    { key: 'K', modifiers: ['mod'], code: 'k' },
+    renameSession:   { key: 'R', modifiers: ['mod'], code: 'r' },
 }
 
 export type ShortcutGroup = 'navigation' | 'splitView' | 'search' | 'ui' | 'actions'
@@ -306,6 +307,7 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, ShortcutInfo> = {
     newSession:      { label: 'New Tab',             description: 'Create a new terminal tab',                group: 'actions' },
     closeSession:    { label: 'Close Tab',           description: 'Close current tab and go to previous',     group: 'actions' },
     clearSession:    { label: 'Clear Terminal',      description: 'Clear terminal scrollback buffer',         group: 'actions' },
+    renameSession:   { label: 'Rename Tab',          description: 'Rename the current tab',                   group: 'actions' },
 }
 
 export const SHORTCUT_GROUP_NAMES: Record<ShortcutGroup, string> = {

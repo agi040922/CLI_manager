@@ -157,9 +157,19 @@ export function SessionItem({
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             handleRenameSubmit()
+            // Focus terminal after rename
+            setTimeout(() => {
+                const xtermTextarea = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement
+                xtermTextarea?.focus()
+            }, 50)
         } else if (e.key === 'Escape') {
             setTempName(session.name)
             onRenameCancel()
+            // Focus terminal after cancel
+            setTimeout(() => {
+                const xtermTextarea = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement
+                xtermTextarea?.focus()
+            }, 50)
         }
     }
 

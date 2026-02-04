@@ -225,6 +225,17 @@ export function Sidebar({
         }
     }, [resizeVertical, stopResizingVertical])
 
+    // Listen for rename session request from keyboard shortcut
+    useEffect(() => {
+        const handleRenameRequest = (e: CustomEvent<{ sessionId: string }>) => {
+            setRenamingSessionId(e.detail.sessionId)
+        }
+        window.addEventListener('rename-session-request', handleRenameRequest as EventListener)
+        return () => {
+            window.removeEventListener('rename-session-request', handleRenameRequest as EventListener)
+        }
+    }, [])
+
     // Helper functions for native dialogs with app logo
     const showAlert = useCallback(async (title: string, message: string, type: 'info' | 'warning' | 'error' = 'info') => {
         await window.api.showMessageBox({ type, title, message, buttons: ['OK'] })

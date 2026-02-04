@@ -750,10 +750,11 @@ function App() {
             }
         }
 
-        // Navigate to next session first
+        // Navigate to next session first using handleSelect for proper UI sync
         if (nextSession) {
-            setActiveSession(nextSession)
+            handleSelect(workspace, nextSession)
         } else {
+            setActiveWorkspace(workspace)
             setActiveSession(null)
         }
 
@@ -783,6 +784,10 @@ function App() {
         },
         onCloseSession: handleCloseSession,
         onClearSession: handleClearSession,
+        onRenameSession: (sessionId: string) => {
+            // Dispatch custom event to Sidebar
+            window.dispatchEvent(new CustomEvent('rename-session-request', { detail: { sessionId } }))
+        },
     })
 
     const handleAddWorktreeWorkspace = async (parentWorkspaceId: string, branchName: string) => {
@@ -856,7 +861,8 @@ function App() {
         })
 
         // Clear active session if it's the one being removed
-        if (activeSession?.id === sessionId) {
+        // Skip if skipConfirm is true (called from handleCloseSession which already set the next session)
+        if (!skipConfirm && activeSession?.id === sessionId) {
             setActiveSession(null)
         }
     }
