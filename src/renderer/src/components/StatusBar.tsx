@@ -178,13 +178,21 @@ export function StatusBar({
                 </div>
                 <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap min-w-0 flex-1">
                     {filteredPorts.map(p => (
-                        <div 
-                            key={`${p.port}-${p.pid}`} 
+                        <div
+                            key={`${p.port}-${p.pid}`}
                             className="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-white/5 cursor-context-menu transition-colors group relative"
-                            title={`PID: ${p.pid}\nCommand: ${p.command}\nPath: ${p.cwd || 'Unknown'}`}
+                            title={`PID: ${p.pid}\nCommand: ${p.command}\nPath: ${p.cwd || 'Unknown'}\nClick to open in browser`}
                             onContextMenu={(e) => handleContextMenu(e, p)}
                         >
-                            <span className="text-blue-300 font-mono font-medium">{p.port}</span>
+                            <span
+                                className="text-blue-300 font-mono font-medium hover:text-blue-200 hover:underline cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    window.api.openExternal(`http://localhost:${p.port}/`)
+                                }}
+                            >
+                                {p.port}
+                            </span>
                             {p.cwd && (
                                 <span className="flex items-center gap-1 text-gray-500 group-hover:text-gray-300">
                                     <Folder size={10} />

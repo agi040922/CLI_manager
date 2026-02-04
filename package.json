@@ -1,10 +1,10 @@
 {
   "name": "cli-manager",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "VITE_NO_SESSION_RESTORE=true electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
