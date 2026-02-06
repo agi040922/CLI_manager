@@ -152,6 +152,15 @@ declare global {
                 error?: string;
                 size?: number
             }>
+
+            // Mobile Remote Connection
+            mobileGetState: () => Promise<any>
+            mobileConnect: () => Promise<boolean>
+            mobileDisconnect: () => Promise<void>
+            mobileCreatePin: () => Promise<{ pin: string; expiresAt: number } | null>
+            mobileGetDeviceInfo: () => Promise<{ deviceId: string; deviceName: string; createdAt: number }>
+            mobileSetDeviceName: (name: string) => Promise<boolean>
+            onRemoteStatus: (callback: (state: any) => void) => () => void
         }
     }
 }

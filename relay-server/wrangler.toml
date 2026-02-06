@@ -1,0 +1,29 @@
+# CLImanger Relay Server Configuration
+name = "climanger-relay"
+main = "src/index.ts"
+compatibility_date = "2025-05-25"
+
+# Durable Objects for WebSocket state management
+[[durable_objects.bindings]]
+name = "DEVICE_ROOMS"
+class_name = "DeviceRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["DeviceRoom"]
+
+# KV Namespace for PIN storage (short-lived data)
+[[kv_namespaces]]
+binding = "PIN_STORE"
+id = "2c82a82dd71041208c12541f9ecc4956"
+preview_id = "968f3b6efec54e55b05164b7e5bede33"
+
+# Environment variables (set via wrangler secret)
+# JWT_SECRET - Secret for JWT signing
+# ALLOWED_ORIGINS - Comma-separated list of allowed origins
+
+[vars]
+ENVIRONMENT = "production"
+MAX_CONNECTIONS_PER_DEVICE = "3"
+PIN_EXPIRY_SECONDS = "300"
+SESSION_EXPIRY_SECONDS = "86400"

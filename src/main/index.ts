@@ -18,6 +18,8 @@ import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
 import { LicenseManager } from './LicenseManager'
 import { CLISessionTracker } from './CLISessionTracker'
+import { RemoteServer } from './remote/RemoteServer'
+import { getDeviceInfo, setDeviceName } from './remote/deviceId'
 import { net } from 'electron'
 
 // Set app name for development mode
@@ -124,6 +126,10 @@ const cliSessionTracker = new CLISessionTracker()
 const terminalManager = new TerminalManager(cliSessionTracker)
 const portManager = new PortManager()
 const licenseManager = new LicenseManager(licenseStore)
+
+// Remote server for mobile connections
+// Initialized with a getter that reads workspaces from the store
+const remoteServer = new RemoteServer(() => store.get('workspaces') as Workspace[])
 
 // Background mode state
 let tray: Tray | null = null
@@ -2117,6 +2123,43 @@ app.whenReady().then(async () => {
     // Migrate legacy licenses (called on app start)
     licenseManager.migrateLegacyLicense()
 
+    // ============================================
+    // Mobile Remote IPC Handlers
+    // ============================================
+
+    ipcMain.handle('mobile-get-state', () => {
+        return remoteServer.getState()
+    })
+
+    ipcMain.handle('mobile-connect', async () => {
+        return remoteServer.connect()
+    })
+
+    ipcMain.handle('mobile-disconnect', async () => {
+        remoteServer.disconnect()
+    })
+
+    // Create PIN also auto-connects if not already connected
+    ipcMain.handle('mobile-create-pin', async () => {
+        if (!remoteServer.isConnected()) {
+            await remoteServer.connect()
+        }
+        return remoteServer.createPin()
+    })
+
+    ipcMain.handle('mobile-get-device-info', () => {
+        return getDeviceInfo()
+    })
+
+    ipcMain.handle('mobile-set-device-name', (_, name: string) => {
+        try {
+            setDeviceName(name)
+            return true
+        } catch {
+            return false
+        }
+    })
+
     createWindow()
 
     app.on('activate', function () {
@@ -2146,6 +2189,9 @@ app.on('window-all-closed', () => {
 
 // Handle app quit request (Cmd+Q or close button)
 app.on('before-quit', async (event) => {
+    // Always disconnect remote server on quit to free relay resources
+    remoteServer.disconnect()
+
     // If already confirmed to quit, proceed
     if (isQuitting) {
         return

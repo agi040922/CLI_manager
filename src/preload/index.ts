@@ -173,6 +173,22 @@ const api = {
     // Electron 9.0+ requires webUtils.getPathForFile() instead of file.path
     getFilePath: (file: File): string => webUtils.getPathForFile(file),
 
+    // Mobile Remote
+    mobileGetState: (): Promise<any> => ipcRenderer.invoke('mobile-get-state'),
+    mobileConnect: (): Promise<boolean> => ipcRenderer.invoke('mobile-connect'),
+    mobileDisconnect: (): Promise<void> => ipcRenderer.invoke('mobile-disconnect'),
+    mobileCreatePin: (): Promise<{ pin: string; expiresAt: number } | null> =>
+        ipcRenderer.invoke('mobile-create-pin'),
+    mobileGetDeviceInfo: (): Promise<{ deviceId: string; deviceName: string; createdAt: number }> =>
+        ipcRenderer.invoke('mobile-get-device-info'),
+    mobileSetDeviceName: (name: string): Promise<boolean> =>
+        ipcRenderer.invoke('mobile-set-device-name', name),
+    onRemoteStatus: (callback: (state: any) => void): (() => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, state: any): void => callback(state)
+        ipcRenderer.on('remote-status', handler)
+        return () => ipcRenderer.removeListener('remote-status', handler)
+    },
+
     // File Search
     searchFiles: (workspacePath: string, searchQuery: string): Promise<{ success: boolean; files: Array<{ path: string; relativePath: string; name: string }>; error?: string }> =>
         ipcRenderer.invoke('search-files', workspacePath, searchQuery),

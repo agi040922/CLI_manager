@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, PanelLeftClose, GripVertical } from 'lucide-react'
+import { MobileConnectButton } from '../MobileConnect'
 import { Reorder, useDragControls } from 'framer-motion'
 import { Workspace, TerminalSession, SessionStatus, HooksSettings, SplitTerminalLayout } from '../../../../shared/types'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
@@ -668,6 +669,7 @@ export function Sidebar({
                 <div className="py-1.5 px-2 border-b border-white/10 flex items-center justify-between draggable">
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Workspaces</span>
                     <div className="flex items-center gap-1 no-drag">
+                        <MobileConnectButton />
                         <button
                             onClick={onAddWorkspace}
                             className="p-1 hover:bg-white/10 rounded transition-colors"

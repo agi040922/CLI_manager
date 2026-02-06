@@ -53,6 +53,7 @@ export interface FeatureLimits {
     splitViewEnabled: boolean
     githubIntegrationEnabled: boolean
     portMonitoringEnabled: boolean
+    mobileConnectionEnabled: boolean
 }
 
 // Plan limits configuration
@@ -65,6 +66,7 @@ export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
         splitViewEnabled: false,
         githubIntegrationEnabled: true,  // GitHub is available for free
         portMonitoringEnabled: true,
+        mobileConnectionEnabled: false,
     },
     monthly: {
         maxWorkspaces: -1,
@@ -74,6 +76,7 @@ export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
         splitViewEnabled: true,
         githubIntegrationEnabled: true,
         portMonitoringEnabled: true,
+        mobileConnectionEnabled: true,
     },
     annual: {
         maxWorkspaces: -1,
@@ -83,6 +86,7 @@ export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
         splitViewEnabled: true,
         githubIntegrationEnabled: true,
         portMonitoringEnabled: true,
+        mobileConnectionEnabled: true,
     },
     lifetime: {
         maxWorkspaces: -1,
@@ -92,6 +96,7 @@ export const PLAN_LIMITS: Record<PlanType, FeatureLimits> = {
         splitViewEnabled: true,
         githubIntegrationEnabled: true,
         portMonitoringEnabled: true,
+        mobileConnectionEnabled: true,
     },
 }
 
