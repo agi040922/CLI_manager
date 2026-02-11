@@ -75,6 +75,7 @@ interface SidebarProps {
     setWidth: (width: number) => void
     onClose: () => void
     fontSize?: number  // Sidebar font size for workspace/session names
+    showSessionCount?: boolean  // Show session count next to workspace names
     // Split view props
     splitLayout?: SplitTerminalLayout | null
     onDragStartSession?: (sessionId: string) => void
@@ -113,6 +114,7 @@ export function Sidebar({
     setWidth,
     onClose,
     fontSize = 14,
+    showSessionCount = false,
     splitLayout,
     onDragStartSession,
     onDragEndSession
@@ -701,6 +703,7 @@ export function Sidebar({
                             terminalPreview={terminalPreview}
                             renamingSessionId={renamingSessionId}
                             fontSize={fontSize}
+                            showSessionCount={showSessionCount}
                             onToggleExpand={toggleExpand}
                             onContextMenu={handleContextMenu}
                             onSessionContextMenu={handleSessionContextMenu}
@@ -753,6 +756,7 @@ export function Sidebar({
                                         terminalPreview={terminalPreview}
                                         renamingSessionId={renamingSessionId}
                                         fontSize={fontSize}
+                                        showSessionCount={showSessionCount}
                                         onToggleExpand={toggleExpand}
                                         onContextMenu={handleContextMenu}
                                         onSessionContextMenu={handleSessionContextMenu}
@@ -804,6 +808,7 @@ export function Sidebar({
                                     terminalPreview={terminalPreview}
                                     renamingSessionId={renamingSessionId}
                                     fontSize={fontSize}
+                                    showSessionCount={showSessionCount}
                                     onToggleExpand={toggleExpand}
                                     onContextMenu={handleContextMenu}
                                     onSessionContextMenu={handleSessionContextMenu}

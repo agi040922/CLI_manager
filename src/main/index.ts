@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu } from 'electron'
 import path, { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { electronApp, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
 import logoIcon from '../../resources/logo-final.png?asset'
@@ -469,6 +469,45 @@ app.whenReady().then(async () => {
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.climanager.app')
 
+    // Custom application menu without Reload (Cmd+R) to avoid conflict with session rename shortcut
+    const appMenu = Menu.buildFromTemplate([
+        {
+            label: app.name,
+            submenu: [
+                { role: 'about' },
+                { type: 'separator' },
+                { role: 'services' },
+                { type: 'separator' },
+                { role: 'hide' },
+                { role: 'hideOthers' },
+                { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit' }
+            ]
+        },
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                { role: 'selectAll' }
+            ]
+        },
+        {
+            label: 'Window',
+            submenu: [
+                { role: 'minimize' },
+                { role: 'close' },
+                { role: 'togglefullscreen' }
+            ]
+        }
+    ])
+    Menu.setApplicationMenu(appMenu)
+
     // Set dock icon for macOS (built app uses icon.icns automatically)
     if (process.platform === 'darwin' && app.dock) {
         try {
@@ -484,11 +523,18 @@ app.whenReady().then(async () => {
         autoUpdater.checkForUpdatesAndNotify()
     }
 
-    // Default open or close DevTools by F12 in development
-    // and ignore CommandOrControl + R in production.
-    // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
+    // Custom shortcut handling instead of optimizer.watchWindowShortcuts
+    // We do NOT block Cmd+R in production because it's used for session rename
     app.on('browser-window-created', (_, window) => {
-        optimizer.watchWindowShortcuts(window)
+        window.webContents.on('before-input-event', (event, input) => {
+            // Allow F12 to toggle DevTools in development only
+            if (input.key === 'F12') {
+                if (is.dev) {
+                    window.webContents.toggleDevTools()
+                }
+                event.preventDefault()
+            }
+        })
     })
 
     // IPC Handlers

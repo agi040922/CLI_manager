@@ -487,6 +487,33 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                     className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                                                 />
                                             </div>
+
+                                            {/* Session Count Badge */}
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-300">Show Session Count</p>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Display the number of open sessions next to workspace names
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSettings(prev => ({
+                                                        ...prev,
+                                                        showSessionCount: !(prev.showSessionCount ?? false)
+                                                    }))}
+                                                    className={`relative w-11 h-6 rounded-full transition-colors ${
+                                                        (settings.showSessionCount ?? false)
+                                                            ? 'bg-blue-600'
+                                                            : 'bg-gray-600'
+                                                    }`}
+                                                >
+                                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                                        (settings.showSessionCount ?? false)
+                                                            ? 'translate-x-6'
+                                                            : 'translate-x-1'
+                                                    }`} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     

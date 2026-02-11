@@ -12,6 +12,7 @@ interface WorktreeItemProps {
     hooksSettings?: HooksSettings
     terminalPreview?: { enabled: boolean; lineCount: number }
     fontSize?: number  // Sidebar font size
+    showSessionCount?: boolean  // Show session count next to worktree name
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
     onSelect: (workspace: Workspace, session: TerminalSession) => void
@@ -37,6 +38,7 @@ export function WorktreeItem({
     hooksSettings,
     terminalPreview,
     fontSize = 14,
+    showSessionCount = false,
     onToggleExpand,
     onContextMenu,
     onSelect,
@@ -69,6 +71,11 @@ export function WorktreeItem({
                     >
                         {worktree.name}
                     </span>
+                    {showSessionCount && (worktree.sessions?.length ?? 0) > 0 && (
+                        <span className="text-[10px] text-gray-500 shrink-0">
+                            ({worktree.sessions.length})
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <button

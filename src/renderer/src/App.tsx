@@ -517,14 +517,35 @@ function App() {
     }, [splitLayout?.sessionIds.join(',')])
 
     // Handle drag start from sidebar
+    const dragSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
     const handleSidebarDragStart = (sessionId: string) => {
         setIsDraggingSession(true)
+
+        // Safety: auto-reset after 3s if dragEnd never fires (browser bug, focus loss, etc.)
+        if (dragSafetyTimerRef.current) clearTimeout(dragSafetyTimerRef.current)
+        dragSafetyTimerRef.current = setTimeout(() => {
+            setIsDraggingSession(false)
+            setDragOverZone(null)
+        }, 3000)
     }
 
     const handleSidebarDragEnd = () => {
         setIsDraggingSession(false)
         setDragOverZone(null)
+        if (dragSafetyTimerRef.current) clearTimeout(dragSafetyTimerRef.current)
     }
+
+    // Fallback: document-level dragend to catch missed events
+    useEffect(() => {
+        const handleDocumentDragEnd = () => {
+            setIsDraggingSession(false)
+            setDragOverZone(null)
+            if (dragSafetyTimerRef.current) clearTimeout(dragSafetyTimerRef.current)
+        }
+        document.addEventListener('dragend', handleDocumentDragEnd)
+        return () => document.removeEventListener('dragend', handleDocumentDragEnd)
+    }, [])
 
     // Handle opening search for a specific workspace (from split pane)
     const handleOpenSearchForWorkspace = (workspacePath: string) => {
@@ -614,9 +635,14 @@ function App() {
         }
     }
 
+    // Debounce timers for reorder IPC saves
+    // Prevents rapid electron-store writes during drag (onReorder fires every pointer move)
+    const sessionReorderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const workspaceReorderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
     // 세션 순서 변경 핸들러
     // Note: workspaces 상태를 변경하지 않고 sessionOrders만 변경하여 터미널 재렌더링 방지
-    const handleReorderSessions = async (workspaceId: string, sessions: TerminalSession[]) => {
+    const handleReorderSessions = (workspaceId: string, sessions: TerminalSession[]) => {
         const sessionIds = sessions.map(s => s.id)
 
         // 1. sessionOrders만 업데이트 (workspaces는 건드리지 않음 → 터미널 영향 없음)
@@ -626,8 +652,11 @@ function App() {
             return next
         })
 
-        // 2. 서버에 순서 저장
-        await window.api.reorderSessions(workspaceId, sessionIds)
+        // 2. Debounced save - only persist after drag settles (300ms after last reorder event)
+        if (sessionReorderTimerRef.current) clearTimeout(sessionReorderTimerRef.current)
+        sessionReorderTimerRef.current = setTimeout(() => {
+            window.api.reorderSessions(workspaceId, sessionIds)
+        }, 300)
     }
 
     // Sorted workspaces for Sidebar display (does NOT affect terminal rendering)
@@ -673,14 +702,17 @@ function App() {
     }, [workspaces, workspaceOrder, sessionOrders])
 
     // Workspace order change handler - only changes display order, NOT workspaces array
-    const handleReorderWorkspaces = async (newWorkspaces: Workspace[]) => {
+    const handleReorderWorkspaces = (newWorkspaces: Workspace[]) => {
         const newOrder = newWorkspaces.map(w => w.id)
 
         // Only update display order, workspaces array stays unchanged
         setWorkspaceOrder(newOrder)
 
-        // Save order to store
-        await window.api.reorderWorkspaces(newOrder)
+        // Debounced save - only persist after drag settles
+        if (workspaceReorderTimerRef.current) clearTimeout(workspaceReorderTimerRef.current)
+        workspaceReorderTimerRef.current = setTimeout(() => {
+            window.api.reorderWorkspaces(newOrder)
+        }, 300)
     }
 
     const handleAddSession = async (workspaceId: string, type: 'regular' | 'worktree' = 'regular', branchName?: string, initialCommand?: string, sessionName?: string) => {
@@ -1017,6 +1049,7 @@ function App() {
                     setWidth={setSidebarWidth}
                     onClose={() => setIsSidebarOpen(false)}
                     fontSize={settings.fontSize}
+                    showSessionCount={settings.showSessionCount}
                     splitLayout={splitLayout}
                     onDragStartSession={handleSidebarDragStart}
                     onDragEndSession={handleSidebarDragEnd}

@@ -17,6 +17,7 @@ interface WorkspaceItemProps {
     hooksSettings?: HooksSettings
     terminalPreview?: { enabled: boolean; lineCount: number }
     fontSize?: number  // Sidebar font size
+    showSessionCount?: boolean  // Show session count next to workspace name
     onToggleExpand: (id: string) => void
     onContextMenu: (e: React.MouseEvent, workspaceId: string) => void
     onBranchClick: (e: React.MouseEvent, workspace: Workspace) => void
@@ -50,6 +51,7 @@ export function WorkspaceItem({
     hooksSettings,
     terminalPreview,
     fontSize = 14,
+    showSessionCount = false,
     onToggleExpand,
     onContextMenu,
     onBranchClick,
@@ -97,6 +99,15 @@ export function WorkspaceItem({
                         >
                             {workspace.name}
                         </span>
+                        {showSessionCount && (() => {
+                            const totalSessions = (workspace.sessions?.length ?? 0)
+                                + childWorktrees.reduce((sum, wt) => sum + (wt.sessions?.length ?? 0), 0)
+                            return totalSessions > 0 ? (
+                                <span className="text-[10px] text-gray-500 shrink-0">
+                                    ({totalSessions})
+                                </span>
+                            ) : null
+                        })()}
                     </div>
                     {branchInfo && (
                         <div
@@ -199,6 +210,7 @@ export function WorkspaceItem({
                             hooksSettings={hooksSettings}
                             terminalPreview={terminalPreview}
                             fontSize={fontSize}
+                            showSessionCount={showSessionCount}
                             onToggleExpand={onToggleExpand}
                             onContextMenu={onContextMenu}
                             onSelect={onSelect}

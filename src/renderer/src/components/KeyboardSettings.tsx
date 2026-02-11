@@ -262,7 +262,7 @@ export function KeyboardSettings({ settings, setSettings }: KeyboardSettingsProp
 
                 {/* Configurable Shortcuts */}
                 <div className="mt-6 pt-4 border-t border-white/10">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-1">
                         <h4 className="text-sm font-medium text-white">Shortcut Bindings</h4>
                         <button
                             onClick={handleResetAll}
@@ -272,6 +272,9 @@ export function KeyboardSettings({ settings, setSettings }: KeyboardSettingsProp
                             Reset all
                         </button>
                     </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                        Click a shortcut to re-assign it. All shortcuts require at least one modifier key (⌘, ⇧, ⌥).
+                    </p>
 
                     <div className="space-y-4">
                         {groupedActions.map(({ group, label, actions }) => (

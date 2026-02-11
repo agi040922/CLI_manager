@@ -194,6 +194,8 @@ export interface UserSettings {
         showScrollButtons: boolean  // 플로팅 스크롤 버튼 표시 (기본값: true)
         shortcuts?: KeyboardShortcutMap  // Configurable keyboard shortcuts (falls back to DEFAULT_SHORTCUTS)
     }
+    // Session Count 설정 (워크스페이스 이름 옆에 세션 수 표시)
+    showSessionCount?: boolean  // 기본값: false
     // Terminal Preview 설정 (hover 시 마지막 N줄 미리보기)
     terminalPreview?: {
         enabled: boolean            // 미리보기 활성화 (기본값: false)
