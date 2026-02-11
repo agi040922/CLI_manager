@@ -203,6 +203,8 @@ export interface UserSettings {
     }
     // Hooks 설정 (Claude Code 세션 모니터링)
     hooks?: HooksSettings
+    // Feedback email for issue reporting
+    feedbackEmail?: string
 }
 
 // Hooks settings for AI tool session monitoring

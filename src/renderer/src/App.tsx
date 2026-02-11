@@ -8,7 +8,7 @@ import { FileSearch } from './components/FileSearch'
 import { ConfirmationModal } from './components/Sidebar/Modals'
 import { Workspace, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus, SplitTerminalLayout } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
-import { PanelLeft, Search, LayoutGrid } from 'lucide-react'
+import { PanelLeft, Search, LayoutGrid, MessageSquare } from 'lucide-react'
 import { SplitTerminalHeader } from './components/SplitTerminalHeader'
 import { FullscreenTerminalView } from './components/FullscreenTerminalView'
 import { Onboarding } from './components/Onboarding'
@@ -1370,6 +1370,25 @@ function App() {
                                     </p>
                                 </div>
                                 please select a terminal
+
+                                {settings.feedbackEmail && (
+                                    <button
+                                        onClick={async () => {
+                                            const version = await window.api.getAppVersion()
+                                            const subject = encodeURIComponent('[CLImanger] Issue Report')
+                                            const body = encodeURIComponent(
+                                                `\n\n---\nApp Version: ${version}\nOS: ${navigator.platform}`
+                                            )
+                                            window.api.openExternal(
+                                                `mailto:${settings.feedbackEmail}?subject=${subject}&body=${body}`
+                                            )
+                                        }}
+                                        className="mt-6 flex items-center gap-2 px-3 py-1.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition-colors"
+                                    >
+                                        <MessageSquare size={14} />
+                                        Report Issue
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

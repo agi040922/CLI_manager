@@ -518,6 +518,23 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                     </div>
                                     
                                     <div className="mt-6 pt-6 border-t border-white/10">
+                                        <h3 className="text-sm font-semibold text-white mb-3">Feedback</h3>
+                                        <div>
+                                            <label className="block text-xs text-gray-400 mb-1">Feedback Email</label>
+                                            <p className="text-xs text-gray-500 mb-2">
+                                                Email address to receive issue reports from users
+                                            </p>
+                                            <input
+                                                type="email"
+                                                placeholder="e.g. support@example.com"
+                                                value={settings.feedbackEmail ?? ''}
+                                                onChange={e => setSettings(prev => ({ ...prev, feedbackEmail: e.target.value }))}
+                                                className="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-6 pt-6 border-t border-white/10">
                                         <h3 className="text-sm font-semibold text-white mb-3">Onboarding</h3>
                                         <div className="flex items-center justify-between">
                                             <div>

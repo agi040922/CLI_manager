@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink, Play, CheckCircle2, XCircle, Clock, AlertTriangle, GitMerge, Trash2, FilePlus, ArrowRightLeft, FileEdit } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { GitBranch, GitCommit, GitPullRequest, Upload, RefreshCw, Check, X, FileText, Github, ExternalLink, Play, CheckCircle2, XCircle, Clock, AlertTriangle, GitMerge, Trash2, FilePlus, ArrowRightLeft, FileEdit, Copy } from 'lucide-react'
 
 interface RenamedFile {
     from: string
@@ -51,6 +52,9 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
     const [showWorkflows, setShowWorkflows] = useState(false)
     const [prTitle, setPrTitle] = useState('')
     const [prBody, setPrBody] = useState('')
+
+    // File context menu state
+    const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; filePath: string; isDeleted: boolean } | null>(null)
 
     const loadStatus = async () => {
         if (!workspacePath) return
@@ -328,6 +332,42 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
             setLoading(false)
         }
     }
+
+    // File context menu handlers
+    const handleFileContextMenu = (e: React.MouseEvent, filePath: string, isDeleted: boolean = false) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setFileContextMenu({ x: e.clientX, y: e.clientY, filePath, isDeleted })
+    }
+
+    const handleOpenInEditor = async () => {
+        if (!workspacePath || !fileContextMenu) return
+        try {
+            await window.api.openFileInEditor(fileContextMenu.filePath, workspacePath)
+        } catch (err) {
+            console.error('Failed to open file in editor:', err)
+        }
+        setFileContextMenu(null)
+    }
+
+    const handleCopyFilePath = async () => {
+        if (!workspacePath || !fileContextMenu) return
+        try {
+            const fullPath = `${workspacePath}/${fileContextMenu.filePath}`
+            await navigator.clipboard.writeText(fullPath)
+        } catch (err) {
+            console.error('Failed to copy path:', err)
+        }
+        setFileContextMenu(null)
+    }
+
+    // Close file context menu on click outside
+    useEffect(() => {
+        if (!fileContextMenu) return
+        const handleClick = () => setFileContextMenu(null)
+        window.addEventListener('click', handleClick)
+        return () => window.removeEventListener('click', handleClick)
+    }, [fileContextMenu])
 
     if (!isOpen) return null
 
@@ -690,6 +730,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                             <div
                                                 key={file}
                                                 className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors bg-red-500/5 border border-red-500/20"
+                                                onContextMenu={(e) => handleFileContextMenu(e, file)}
                                             >
                                                 <div className="flex items-center gap-2 overflow-hidden">
                                                     <AlertTriangle size={14} className="text-red-400 shrink-0" />
@@ -754,6 +795,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                                 <div
                                                     key={file}
                                                     className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
+                                                    onContextMenu={(e) => handleFileContextMenu(e, file, isDeleted)}
                                                 >
                                                     <div className="flex items-center gap-2 overflow-hidden">
                                                         <Icon size={14} className={`${iconColor} shrink-0`} />
@@ -793,6 +835,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                             <div
                                                 key={file}
                                                 className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
+                                                onContextMenu={(e) => handleFileContextMenu(e, file)}
                                             >
                                                 <div className="flex items-center gap-2 overflow-hidden">
                                                     <FileText size={14} className="text-yellow-400 shrink-0" />
@@ -832,6 +875,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                                 <div
                                                     key={file}
                                                     className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
+                                                    onContextMenu={(e) => handleFileContextMenu(e, file, true)}
                                                 >
                                                     <div className="flex items-center gap-2 overflow-hidden">
                                                         <Trash2 size={14} className="text-red-400 shrink-0" />
@@ -874,6 +918,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                                 <div
                                                     key={file}
                                                     className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
+                                                    onContextMenu={(e) => handleFileContextMenu(e, file)}
                                                 >
                                                     <div className="flex items-center gap-2 overflow-hidden">
                                                         <FilePlus size={14} className="text-green-400 shrink-0" />
@@ -911,6 +956,7 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                                             <div
                                                 key={file}
                                                 className="group flex items-center justify-between p-2 rounded hover:bg-white/5 transition-colors"
+                                                onContextMenu={(e) => handleFileContextMenu(e, file)}
                                             >
                                                 <div className="flex items-center gap-2 overflow-hidden">
                                                     <FileText size={14} className="text-gray-500 shrink-0" />
@@ -1018,6 +1064,33 @@ export function GitPanel({ workspacePath, isOpen, onClose }: GitPanelProps) {
                     )}
                 </div>
             </div>
+
+            {/* File Context Menu */}
+            {fileContextMenu && createPortal(
+                <div
+                    className="fixed z-[1000] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-44 backdrop-blur-md"
+                    style={{ top: fileContextMenu.y, left: fileContextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {!fileContextMenu.isDeleted && (
+                        <button
+                            className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                            onClick={handleOpenInEditor}
+                        >
+                            <ExternalLink size={12} className="text-gray-400 shrink-0" />
+                            <span className="truncate">Open in Editor</span>
+                        </button>
+                    )}
+                    <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                        onClick={handleCopyFilePath}
+                    >
+                        <Copy size={12} className="text-gray-400 shrink-0" />
+                        <span className="truncate">Copy Path</span>
+                    </button>
+                </div>,
+                document.body
+            )}
         </div>
     )
 }
