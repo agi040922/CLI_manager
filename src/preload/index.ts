@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo } from '../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo, SystemInfo } from '../shared/types'
 
 // Custom APIs for renderer
 const api = {
@@ -105,6 +105,9 @@ const api = {
         ipcRenderer.invoke('clear-session-cli-info', workspaceId, sessionId),
     rewriteCliCommand: (command: string): Promise<{ command: string; cliSessionId: string; cliToolName: string } | null> =>
         ipcRenderer.invoke('rewrite-cli-command', command),
+
+    // System Monitor
+    getSystemInfo: (): Promise<SystemInfo> => ipcRenderer.invoke('get-system-info'),
 
     // Ports
     onPortUpdate: (callback: (ports: any[]) => void): () => void => {

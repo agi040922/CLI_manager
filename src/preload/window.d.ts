@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo } from '../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo, SystemInfo } from '../shared/types'
 
 declare global {
     interface Window {
@@ -84,6 +84,9 @@ declare global {
             updateSessionCliInfo: (workspaceId: string, sessionId: string, cliSessionId: string, cliToolName: string) => Promise<boolean>
             clearSessionCliInfo: (workspaceId: string, sessionId: string) => Promise<boolean>
             rewriteCliCommand: (command: string) => Promise<{ command: string; cliSessionId: string; cliToolName: string } | null>
+
+            // System Monitor
+            getSystemInfo: () => Promise<SystemInfo>
 
             // Ports
             onPortUpdate: (callback: (ports: { port: number, pid: number, command: string }[]) => void) => () => void

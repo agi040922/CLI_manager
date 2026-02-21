@@ -238,6 +238,48 @@ export interface PortInfo {
 }
 
 // ============================================
+// System Monitor Types
+// ============================================
+
+export interface SystemInfo {
+    cpu: {
+        model: string
+        count: number
+        usage: {
+            user: number
+            sys: number
+            idle: number
+            total: number
+        }
+    }
+    memory: {
+        totalGB: string
+        usedGB: string
+        freeGB: string
+        usagePercent: number
+    }
+    disk: {
+        total: string
+        used: string
+        available: string
+        usagePercent: string
+    }
+    battery: {
+        percent: number
+        status: 'charging' | 'discharging' | 'charged' | 'unknown'
+        powerSource: 'AC' | 'Battery'
+    } | null
+    uptime: {
+        formatted: string
+        seconds: number
+    }
+    terminal: {
+        activeSessionCount: number
+        workspaceCount: number
+    }
+}
+
+// ============================================
 // Split Terminal View Types
 // ============================================
 

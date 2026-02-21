@@ -8,9 +8,10 @@ import { FileSearch } from './components/FileSearch'
 import { ConfirmationModal } from './components/Sidebar/Modals'
 import { Workspace, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus, SplitTerminalLayout } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
-import { PanelLeft, Search, LayoutGrid, MessageSquare } from 'lucide-react'
+import { PanelLeft, Search, LayoutGrid, MessageSquare, Monitor } from 'lucide-react'
 import { SplitTerminalHeader } from './components/SplitTerminalHeader'
 import { FullscreenTerminalView } from './components/FullscreenTerminalView'
+import { SystemMonitorPopover } from './components/SystemMonitorPopover'
 import { Onboarding } from './components/Onboarding'
 import { LicenseVerification } from './components/LicenseVerification'
 import { UpdateNotification, UpdateStatus } from './components/UpdateNotification'
@@ -29,6 +30,8 @@ function App() {
     const [gitPanelOpen, setGitPanelOpen] = useState(false)
     const [fileSearchOpen, setFileSearchOpen] = useState(false)
     const [fileSearchMode, setFileSearchMode] = useState<'files' | 'content'>('files')
+    const [showMonitor, setShowMonitor] = useState(false)
+    const monitorButtonRef = useRef<HTMLButtonElement>(null)
 
     // Split terminal view state
     const [splitLayout, setSplitLayout] = useState<SplitTerminalLayout | null>(null)
@@ -1107,6 +1110,14 @@ function App() {
                                     </svg>
                                 </button>
                                 <button
+                                    ref={monitorButtonRef}
+                                    onClick={() => setShowMonitor(prev => !prev)}
+                                    className={`p-2 hover:bg-white/10 rounded transition-colors no-drag ${showMonitor ? 'bg-white/10' : ''}`}
+                                    title="System Monitor"
+                                >
+                                    <Monitor size={16} className="text-gray-400" />
+                                </button>
+                                <button
                                     onClick={() => handleOpenSettings('general')}
                                     className="p-2 hover:bg-white/10 rounded transition-colors no-drag"
                                     title="Settings"
@@ -1403,6 +1414,14 @@ function App() {
                     onOpenSettings={() => handleOpenSettings('port-monitoring')}
                 />
             </div>
+
+            {/* System Monitor Popover */}
+            {showMonitor && (
+                <SystemMonitorPopover
+                    anchorRef={monitorButtonRef}
+                    onClose={() => setShowMonitor(false)}
+                />
+            )}
 
             {/* Settings Modal */}
             <Settings

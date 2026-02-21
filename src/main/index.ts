@@ -16,6 +16,7 @@ import { rgPath } from '@vscode/ripgrep'
 
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
+import { SystemMonitor } from './SystemMonitor'
 import { LicenseManager } from './LicenseManager'
 import { CLISessionTracker } from './CLISessionTracker'
 import { net } from 'electron'
@@ -123,6 +124,7 @@ const licenseStore = new Store({
 const cliSessionTracker = new CLISessionTracker()
 const terminalManager = new TerminalManager(cliSessionTracker)
 const portManager = new PortManager()
+const systemMonitor = new SystemMonitor(store)
 const licenseManager = new LicenseManager(licenseStore)
 
 // Background mode state
