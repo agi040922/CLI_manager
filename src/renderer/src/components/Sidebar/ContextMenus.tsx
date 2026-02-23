@@ -13,6 +13,7 @@ interface WorkspaceContextMenuProps {
     templates: TerminalTemplate[]
     onAddSession: (type: 'regular' | 'worktree', template?: TerminalTemplate) => void
     onTerminateAll: () => void
+    onReloadWorktrees: () => void | Promise<void>
     onOpenSettings: () => void
     onClose: () => void
 }
@@ -29,6 +30,7 @@ export function WorkspaceContextMenu({
     templates,
     onAddSession,
     onTerminateAll,
+    onReloadWorktrees,
     onOpenSettings,
     onClose
 }: WorkspaceContextMenuProps) {
@@ -46,6 +48,15 @@ export function WorkspaceContextMenu({
             await window.api.revealInFinder(workspacePath)
         } catch (err) {
             console.error('Failed to reveal in finder:', err)
+        }
+        onClose()
+    }
+
+    const handleReloadWorktrees = async () => {
+        try {
+            await onReloadWorktrees()
+        } catch (err) {
+            console.error('Failed to reload worktrees:', err)
         }
         onClose()
     }
@@ -74,6 +85,16 @@ export function WorkspaceContextMenu({
             >
                 <FolderOpen size={12} className="text-gray-400 shrink-0" />
                 <span className="truncate">Reveal in Finder</span>
+            </button>
+
+            {/* Reload Worktrees */}
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={handleReloadWorktrees}
+                title="Sync worktree workspaces from git"
+            >
+                <RefreshCw size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Reload Worktrees</span>
             </button>
 
             {/* Terminate All Terminals */}
@@ -175,6 +196,7 @@ interface WorktreeContextMenuProps {
     parentWorkspacePath?: string  // 부모 워크스페이스 경로 (merge용)
     onMergeToMain: () => void  // 현재 브랜치를 main으로 머지
     onPullFromMain: () => void  // main에서 현재 브랜치로 머지
+    onReloadWorktrees: () => void | Promise<void>
     onAddSession: (workspaceId: string, template?: TerminalTemplate) => void
     onClose: () => void
 }
@@ -190,6 +212,7 @@ export function WorktreeContextMenu({
     templates,
     onMergeToMain,
     onPullFromMain,
+    onReloadWorktrees,
     onAddSession,
     onClose
 }: WorktreeContextMenuProps) {
@@ -236,6 +259,17 @@ export function WorktreeContextMenu({
         onClose()
     }
 
+    const handleReloadWorktrees = async (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        try {
+            await onReloadWorktrees()
+        } catch (err) {
+            console.error('Failed to reload worktrees:', err)
+        }
+        onClose()
+    }
+
     const handleTemplateClick = (e: React.MouseEvent, template: TerminalTemplate) => {
         e.preventDefault()
         e.stopPropagation()
@@ -275,6 +309,17 @@ export function WorktreeContextMenu({
             >
                 <FolderOpen size={13} className="text-gray-400 shrink-0" />
                 <span className="truncate">Reveal in Finder</span>
+            </button>
+
+            <button
+                className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-150 flex items-center gap-2 cursor-pointer"
+                onClick={handleReloadWorktrees}
+                onMouseDown={(e) => e.stopPropagation()}
+                title="Sync worktree workspaces from git"
+                type="button"
+            >
+                <RefreshCw size={13} className="text-gray-400 shrink-0" />
+                <span className="truncate">Reload Worktrees</span>
             </button>
 
             <div className="border-t border-white/10 my-1"></div>

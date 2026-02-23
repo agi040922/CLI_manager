@@ -250,6 +250,158 @@ function ensureHomeWorkspace(): Workspace | null {
     }
 }
 
+interface ParsedWorktree {
+    path: string
+    branchName: string
+}
+
+interface WorktreeSyncSummary {
+    imported: number
+    removed: number
+    updated: number
+}
+
+function parseWorktreeListPorcelain(output: string): ParsedWorktree[] {
+    const parsed: ParsedWorktree[] = []
+    const entries = output.split('\n\n')
+
+    for (const entry of entries) {
+        const lines = entry.split('\n').map(line => line.trim()).filter(Boolean)
+        if (lines.length === 0) continue
+
+        let worktreePath: string | undefined
+        let branchName: string | undefined
+
+        for (const line of lines) {
+            if (line.startsWith('worktree ')) {
+                worktreePath = line.slice('worktree '.length).trim()
+                continue
+            }
+            if (line.startsWith('branch refs/heads/')) {
+                branchName = line.slice('branch refs/heads/'.length).trim()
+            }
+        }
+
+        // Only import branch-backed worktrees to keep existing merge/delete assumptions.
+        if (worktreePath && branchName) {
+            parsed.push({
+                path: path.resolve(worktreePath),
+                branchName
+            })
+        }
+    }
+
+    return parsed
+}
+
+async function syncWorktreeWorkspaces(): Promise<WorktreeSyncSummary> {
+    const summary: WorktreeSyncSummary = { imported: 0, removed: 0, updated: 0 }
+
+    const workspaces = (store.get('workspaces') as Workspace[]) || []
+    const parentWorkspaces = workspaces.filter(w => !w.parentWorkspaceId && !w.isPlayground && !w.isHome)
+
+    // parentWorkspaceId -> (resolvedPath -> branchName)
+    const discoveredByParent = new Map<string, Map<string, string>>()
+
+    for (const parent of parentWorkspaces) {
+        try {
+            const git = simpleGit(parent.path)
+            const isRepo = await git.checkIsRepo()
+            if (!isRepo) continue
+
+            const worktreeOutput = await git.raw(['worktree', 'list', '--porcelain'])
+            const parsed = parseWorktreeListPorcelain(worktreeOutput)
+            const parentResolvedPath = path.resolve(parent.path)
+
+            const discovered = new Map<string, string>()
+            for (const item of parsed) {
+                if (item.path === parentResolvedPath) continue
+                discovered.set(item.path, item.branchName)
+            }
+
+            discoveredByParent.set(parent.id, discovered)
+        } catch (error) {
+            // Skip this workspace on scan failure to avoid accidental stale deletion.
+            console.error('[sync-worktree-workspaces] Failed to scan parent workspace:', parent.path, error)
+        }
+    }
+
+    let changed = false
+    const nextWorkspaces: Workspace[] = []
+
+    for (const workspace of workspaces) {
+        if (!workspace.parentWorkspaceId) {
+            nextWorkspaces.push(workspace)
+            continue
+        }
+
+        const discovered = discoveredByParent.get(workspace.parentWorkspaceId)
+        if (!discovered) {
+            nextWorkspaces.push(workspace)
+            continue
+        }
+
+        const workspaceResolvedPath = path.resolve(workspace.path)
+        const discoveredBranchName = discovered.get(workspaceResolvedPath)
+        if (!discoveredBranchName) {
+            summary.removed += 1
+            changed = true
+            continue
+        }
+
+        discovered.delete(workspaceResolvedPath)
+
+        if (workspace.branchName !== discoveredBranchName) {
+            summary.updated += 1
+            changed = true
+            nextWorkspaces.push({
+                ...workspace,
+                branchName: discoveredBranchName
+            })
+            continue
+        }
+
+        nextWorkspaces.push(workspace)
+    }
+
+    for (const parent of parentWorkspaces) {
+        const discovered = discoveredByParent.get(parent.id)
+        if (!discovered || discovered.size === 0) continue
+
+        for (const [worktreePath, branchName] of discovered.entries()) {
+            const alreadyTracked = nextWorkspaces.some(workspace => path.resolve(workspace.path) === worktreePath)
+            if (alreadyTracked) continue
+
+            const importedWorkspace: Workspace = {
+                id: uuidv4(),
+                name: branchName,
+                path: worktreePath,
+                sessions: [
+                    {
+                        id: uuidv4(),
+                        name: 'Main',
+                        cwd: worktreePath,
+                        type: 'regular'
+                    }
+                ],
+                createdAt: Date.now(),
+                parentWorkspaceId: parent.id,
+                branchName
+            }
+
+            nextWorkspaces.push(importedWorkspace)
+            summary.imported += 1
+            changed = true
+        }
+    }
+
+    if (changed) {
+        store.set('workspaces', nextWorkspaces)
+    }
+
+    return summary
+}
+
 function createWindow(): void {
     // Create the browser window.
     mainWindow = new BrowserWindow({
@@ -633,6 +785,16 @@ app.whenReady().then(async () => {
             if (b.isHome) return 1
             return a.createdAt - b.createdAt
         })
+    })
+
+    ipcMain.handle('sync-worktree-workspaces', async (): Promise<IPCResult<WorktreeSyncSummary>> => {
+        try {
+            const result = await syncWorktreeWorkspaces()
+            return { success: true, data: result }
+        } catch (e: any) {
+            console.error('[sync-worktree-workspaces] ERROR:', e)
+            return { success: false, error: e.message, errorType: 'UNKNOWN_ERROR' }
+        }
     })
 
     ipcMain.handle('add-workspace', async (): Promise<IPCResult<Workspace> | null> => {

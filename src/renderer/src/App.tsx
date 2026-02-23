@@ -145,6 +145,7 @@ function App() {
 
     // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
     const [terminalFontSize, setTerminalFontSize] = useState(14)
+    const skipSessionRestore = import.meta.env.VITE_NO_SESSION_RESTORE === 'true'
 
     // Custom templates for keyboard shortcuts (Cmd+T → number)
     const customTemplates = useTemplates(settingsOpen)
@@ -156,10 +157,18 @@ function App() {
 
     // Load workspaces, settings, and license info on mount
     useEffect(() => {
-        // Dev mode: skip session restore when VITE_NO_SESSION_RESTORE is set
-        const skipSessionRestore = import.meta.env.VITE_NO_SESSION_RESTORE === 'true'
+        const loadInitialData = async () => {
+            try {
+                // Startup one-time sync: import/remove worktree workspaces based on git worktree list.
+                const syncResult = await window.api.syncWorktreeWorkspaces()
+                if (!syncResult.success) {
+                    console.error('[startup-sync] Failed to sync worktrees:', syncResult.error)
+                }
+            } catch (err) {
+                console.error('[startup-sync] Failed to sync worktrees:', err)
+            }
 
-        window.api.getWorkspaces().then(loadedWorkspaces => {
+            const loadedWorkspaces = await window.api.getWorkspaces()
             if (skipSessionRestore) {
                 // Clear all sessions but keep workspaces
                 const workspacesWithoutSessions = loadedWorkspaces.map(w => ({
@@ -185,7 +194,12 @@ function App() {
                 })
             }
             setSessionOrders(initialSessionOrders)
+        }
+
+        loadInitialData().catch(err => {
+            console.error('Failed to load workspaces:', err)
         })
+
         window.api.getSettings().then(loadedSettings => {
             if (loadedSettings) {
                 setSettings(loadedSettings)
@@ -568,6 +582,48 @@ function App() {
             setActiveWorkspace(workspace)
             setGitPanelOpen(true)
         }
+    }
+
+    const refreshWorkspacesFromStore = async () => {
+        const updatedWorkspaces = await window.api.getWorkspaces()
+        const existingWorkspaceIds = new Set(updatedWorkspaces.map(w => w.id))
+
+        // Never clear sessions on manual/interactive reload paths.
+        setWorkspaces(updatedWorkspaces)
+
+        setWorkspaceOrder(prev => prev.filter(id => existingWorkspaceIds.has(id)))
+        setSessionOrders(prev => {
+            const next = new Map<string, string[]>()
+            for (const [workspaceId, sessionOrder] of prev.entries()) {
+                const workspace = updatedWorkspaces.find(w => w.id === workspaceId)
+                if (!workspace) continue
+
+                const existingSessionIds = new Set(workspace.sessions.map(s => s.id))
+                next.set(workspaceId, sessionOrder.filter(id => existingSessionIds.has(id)))
+            }
+            return next
+        })
+
+        setActiveWorkspace(prev => {
+            if (!prev) return null
+            return updatedWorkspaces.find(w => w.id === prev.id) || null
+        })
+        setActiveSession(prev => {
+            if (!prev) return null
+            for (const workspace of updatedWorkspaces) {
+                const matched = workspace.sessions.find(s => s.id === prev.id)
+                if (matched) return matched
+            }
+            return null
+        })
+    }
+
+    const handleReloadWorktrees = async () => {
+        const syncResult = await window.api.syncWorktreeWorkspaces()
+        if (!syncResult.success) {
+            throw new Error(syncResult.error || 'Failed to sync worktrees')
+        }
+        await refreshWorkspacesFromStore()
     }
 
     const handleAddWorkspace = async () => {
@@ -999,8 +1055,7 @@ function App() {
         // Reload workspaces if home workspace settings changed
         if (homeSettingsChanged) {
             console.log('[Settings] Home workspace settings changed, reloading workspaces...')
-            const updatedWorkspaces = await window.api.getWorkspaces()
-            setWorkspaces(updatedWorkspaces)
+            await refreshWorkspacesFromStore()
         }
     }
 
@@ -1043,6 +1098,7 @@ function App() {
                     hooksSettings={settings.hooks}
                     terminalPreview={settings.terminalPreview}
                     onOpenInEditor={handleOpenInEditor}
+                    onReloadWorktrees={handleReloadWorktrees}
                     onOpenSettings={() => handleOpenSettings('general')}
                     settingsOpen={settingsOpen}
                     onRenameSession={handleRenameSession}

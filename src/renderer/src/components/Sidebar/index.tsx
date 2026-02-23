@@ -66,6 +66,7 @@ interface SidebarProps {
     hooksSettings?: HooksSettings
     terminalPreview?: { enabled: boolean; lineCount: number }
     onOpenInEditor: (workspacePath: string) => void
+    onReloadWorktrees: () => Promise<void>
     onOpenSettings: () => void
     settingsOpen?: boolean
     onRenameSession: (workspaceId: string, sessionId: string, newName: string) => void
@@ -105,6 +106,7 @@ export function Sidebar({
     hooksSettings,
     terminalPreview,
     onOpenInEditor,
+    onReloadWorktrees,
     onOpenSettings,
     settingsOpen,
     onRenameSession,
@@ -592,6 +594,14 @@ export function Sidebar({
                             }
                         }}
                         onOpenSettings={onOpenSettings}
+                        onReloadWorktrees={async () => {
+                            try {
+                                await onReloadWorktrees()
+                            } catch (err: any) {
+                                console.error('Failed to reload worktrees:', err)
+                                await showAlert('Reload Failed', err?.message || 'Failed to reload worktrees.', 'error')
+                            }
+                        }}
                         onClose={() => setMenuOpen(null)}
                     />
                 )
@@ -605,6 +615,14 @@ export function Sidebar({
                     templates={customTemplates}
                     onMergeToMain={handleMergeToMain}
                     onPullFromMain={handlePullFromMain}
+                    onReloadWorktrees={async () => {
+                        try {
+                            await onReloadWorktrees()
+                        } catch (err: any) {
+                            console.error('Failed to reload worktrees:', err)
+                            await showAlert('Reload Failed', err?.message || 'Failed to reload worktrees.', 'error')
+                        }
+                    }}
                     onAddSession={(workspaceId, template) => {
                         onAddSession(workspaceId, 'regular', undefined, template?.command, template?.name)
                     }}

@@ -5,6 +5,8 @@ import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, Licen
 // Custom APIs for renderer
 const api = {
     getWorkspaces: (): Promise<Workspace[]> => ipcRenderer.invoke('get-workspaces'),
+    syncWorktreeWorkspaces: (): Promise<IPCResult<{ imported: number; removed: number; updated: number }>> =>
+        ipcRenderer.invoke('sync-worktree-workspaces'),
     addWorkspace: (): Promise<IPCResult<Workspace> | null> => ipcRenderer.invoke('add-workspace'),
     addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string, sessionName?: string): Promise<IPCResult<TerminalSession> | null> => ipcRenderer.invoke('add-session', workspaceId, type, branchName, initialCommand, sessionName),
     addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string): Promise<IPCResult<Workspace>> => ipcRenderer.invoke('add-worktree-workspace', parentWorkspaceId, branchName),

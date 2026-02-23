@@ -6,6 +6,7 @@ declare global {
         electron: ElectronAPI
         api: {
             getWorkspaces: () => Promise<Workspace[]>
+            syncWorktreeWorkspaces: () => Promise<IPCResult<{ imported: number; removed: number; updated: number }>>
             addWorkspace: () => Promise<IPCResult<Workspace> | null>
             addSession: (workspaceId: string, type: 'regular' | 'worktree', branchName?: string, initialCommand?: string, sessionName?: string) => Promise<IPCResult<TerminalSession> | null>
             addWorktreeWorkspace: (parentWorkspaceId: string, branchName: string) => Promise<IPCResult<Workspace>>
