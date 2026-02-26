@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo, SystemInfo } from '../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo, SystemInfo, WorkspaceFolder } from '../shared/types'
 
 declare global {
     interface Window {
@@ -16,6 +16,13 @@ declare global {
             reorderSessions: (workspaceId: string, sessionIds: string[]) => Promise<boolean>
             reorderWorkspaces: (workspaceIds: string[]) => Promise<boolean>
             togglePinWorkspace: (workspaceId: string) => Promise<boolean>
+            getFolders: () => Promise<WorkspaceFolder[]>
+            createFolder: (name: string) => Promise<WorkspaceFolder>
+            renameFolder: (folderId: string, newName: string) => Promise<boolean>
+            removeFolder: (folderId: string) => Promise<boolean>
+            toggleFolderExpanded: (folderId: string) => Promise<boolean>
+            moveWorkspaceToFolder: (workspaceId: string, folderId: string | null) => Promise<boolean>
+            reorderFolders: (folderIds: string[]) => Promise<boolean>
             createPlayground: () => Promise<Workspace | null>
 
             // Settings

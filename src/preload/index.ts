@@ -16,6 +16,13 @@ const api = {
     reorderSessions: (workspaceId: string, sessionIds: string[]): Promise<boolean> => ipcRenderer.invoke('reorder-sessions', workspaceId, sessionIds),
     reorderWorkspaces: (workspaceIds: string[]): Promise<boolean> => ipcRenderer.invoke('reorder-workspaces', workspaceIds),
     togglePinWorkspace: (workspaceId: string): Promise<boolean> => ipcRenderer.invoke('toggle-pin-workspace', workspaceId),
+    getFolders: (): Promise<any[]> => ipcRenderer.invoke('get-folders'),
+    createFolder: (name: string): Promise<any> => ipcRenderer.invoke('create-folder', name),
+    renameFolder: (folderId: string, newName: string): Promise<boolean> => ipcRenderer.invoke('rename-folder', folderId, newName),
+    removeFolder: (folderId: string): Promise<boolean> => ipcRenderer.invoke('remove-folder', folderId),
+    toggleFolderExpanded: (folderId: string): Promise<boolean> => ipcRenderer.invoke('toggle-folder-expanded', folderId),
+    moveWorkspaceToFolder: (workspaceId: string, folderId: string | null): Promise<boolean> => ipcRenderer.invoke('move-workspace-to-folder', workspaceId, folderId),
+    reorderFolders: (folderIds: string[]): Promise<boolean> => ipcRenderer.invoke('reorder-folders', folderIds),
     createPlayground: (): Promise<Workspace | null> => ipcRenderer.invoke('create-playground'),
 
     // Settings

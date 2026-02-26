@@ -139,13 +139,22 @@ export interface Workspace {
     isPlayground?: boolean
     isHome?: boolean  // Home directory workspace (cannot be deleted)
     isPinned?: boolean  // Pin workspace to top of sidebar
+    folderId?: string  // Folder this workspace belongs to
     parentWorkspaceId?: string  // Worktree인 경우 부모 workspace ID
     branchName?: string  // Worktree의 브랜치명
     baseBranch?: string  // Worktree 생성 시 분기한 브랜치 (merge 대상)
 }
 
+export interface WorkspaceFolder {
+    id: string
+    name: string
+    isExpanded?: boolean  // Collapse/expand state in sidebar
+    createdAt: number
+}
+
 export interface AppConfig {
     workspaces: Workspace[]
+    folders?: WorkspaceFolder[]
     playgroundPath: string
     settings?: UserSettings
     customTemplates?: TerminalTemplate[]

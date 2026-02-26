@@ -6,7 +6,7 @@ import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
 import { FileSearch } from './components/FileSearch'
 import { ConfirmationModal } from './components/Sidebar/Modals'
-import { Workspace, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus, SplitTerminalLayout } from '../../shared/types'
+import { Workspace, WorkspaceFolder, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus, SplitTerminalLayout } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft, Search, LayoutGrid, MessageSquare, Monitor } from 'lucide-react'
 import { SplitTerminalHeader } from './components/SplitTerminalHeader'
@@ -20,6 +20,7 @@ import { useTemplates } from './hooks/useTemplates'
 
 function App() {
     const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+    const [folders, setFolders] = useState<WorkspaceFolder[]>([])
     // Workspace display order (only affects Sidebar, not terminal rendering)
     const [workspaceOrder, setWorkspaceOrder] = useState<string[]>([])
     // Session display order per workspace (only affects Sidebar, not terminal rendering)
@@ -169,6 +170,8 @@ function App() {
             }
 
             const loadedWorkspaces = await window.api.getWorkspaces()
+            const loadedFolders = await window.api.getFolders()
+            setFolders(loadedFolders)
             if (skipSessionRestore) {
                 // Clear all sessions but keep workspaces
                 const workspacesWithoutSessions = loadedWorkspaces.map(w => ({
@@ -586,6 +589,8 @@ function App() {
 
     const refreshWorkspacesFromStore = async () => {
         const updatedWorkspaces = await window.api.getWorkspaces()
+        const loadedFolders = await window.api.getFolders()
+        setFolders(loadedFolders)
         const existingWorkspaceIds = new Set(updatedWorkspaces.map(w => w.id))
 
         // Never clear sessions on manual/interactive reload paths.
@@ -765,6 +770,42 @@ function App() {
         const newPinned = await window.api.togglePinWorkspace(workspaceId)
         setWorkspaces(prev => prev.map(w =>
             w.id === workspaceId ? { ...w, isPinned: newPinned } : w
+        ))
+    }
+
+    // Folder handlers
+    const handleCreateFolder = async (name: string) => {
+        const newFolder = await window.api.createFolder(name)
+        setFolders(prev => [...prev, newFolder])
+    }
+
+    const handleRenameFolder = async (folderId: string, newName: string) => {
+        await window.api.renameFolder(folderId, newName)
+        setFolders(prev => prev.map(f =>
+            f.id === folderId ? { ...f, name: newName } : f
+        ))
+    }
+
+    const handleRemoveFolder = async (folderId: string) => {
+        await window.api.removeFolder(folderId)
+        setFolders(prev => prev.filter(f => f.id !== folderId))
+        // Workspaces in this folder become unfoldered
+        setWorkspaces(prev => prev.map(w =>
+            w.folderId === folderId ? { ...w, folderId: undefined } : w
+        ))
+    }
+
+    const handleToggleFolderExpanded = async (folderId: string) => {
+        const newExpanded = await window.api.toggleFolderExpanded(folderId)
+        setFolders(prev => prev.map(f =>
+            f.id === folderId ? { ...f, isExpanded: newExpanded } : f
+        ))
+    }
+
+    const handleMoveWorkspaceToFolder = async (workspaceId: string, folderId: string | null) => {
+        await window.api.moveWorkspaceToFolder(workspaceId, folderId)
+        setWorkspaces(prev => prev.map(w =>
+            w.id === workspaceId ? { ...w, folderId: folderId || undefined } : w
         ))
     }
 
@@ -1113,6 +1154,12 @@ function App() {
                     onReorderSessions={handleReorderSessions}
                     onReorderWorkspaces={handleReorderWorkspaces}
                     onTogglePin={handleTogglePin}
+                    folders={folders}
+                    onCreateFolder={handleCreateFolder}
+                    onRenameFolder={handleRenameFolder}
+                    onRemoveFolder={handleRemoveFolder}
+                    onToggleFolderExpanded={handleToggleFolderExpanded}
+                    onMoveWorkspaceToFolder={handleMoveWorkspaceToFolder}
                     width={sidebarWidth}
                     setWidth={setSidebarWidth}
                     onClose={() => setIsSidebarOpen(false)}

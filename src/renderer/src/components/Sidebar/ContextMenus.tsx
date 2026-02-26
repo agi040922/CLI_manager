@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy, RefreshCw, FolderOpen, SquareX, Eraser, Pin } from 'lucide-react'
+import { Terminal, GitBranch, Settings as SettingsIcon, Edit2, Trash2, GitMerge, Download, HardDrive, Copy, RefreshCw, FolderOpen, SquareX, Eraser, Pin, Folder, FolderMinus } from 'lucide-react'
 import { Workspace, TerminalTemplate, TerminalSession } from '../../../../shared/types'
 import { getTemplateIcon } from '../../constants/icons'
 import { MENU_Z_INDEX } from '../../constants/styles'
@@ -12,6 +12,9 @@ interface WorkspaceContextMenuProps {
     sessions: TerminalSession[]
     templates: TerminalTemplate[]
     isPinned?: boolean
+    folders?: { id: string; name: string }[]
+    currentFolderId?: string
+    onMoveToFolder?: (folderId: string | null) => void
     onTogglePin: () => void
     onAddSession: (type: 'regular' | 'worktree', template?: TerminalTemplate) => void
     onTerminateAll: () => void
@@ -31,6 +34,9 @@ export function WorkspaceContextMenu({
     sessions,
     templates,
     isPinned,
+    folders,
+    currentFolderId,
+    onMoveToFolder,
     onTogglePin,
     onAddSession,
     onTerminateAll,
@@ -82,6 +88,41 @@ export function WorkspaceContextMenu({
                 <Pin size={12} className={isPinned ? "text-blue-400 shrink-0" : "text-gray-400 shrink-0"} />
                 <span className="truncate">{isPinned ? 'Unpin' : 'Pin to Top'}</span>
             </button>
+
+            {/* Move to Folder */}
+            {folders && onMoveToFolder && (
+                <>
+                    <div className="border-t border-white/10 my-0.5"></div>
+                    <div className="px-2.5 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Move to Folder
+                    </div>
+                    {currentFolderId && (
+                        <button
+                            className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                            onClick={() => {
+                                onMoveToFolder(null)
+                                onClose()
+                            }}
+                        >
+                            <FolderMinus size={12} className="text-gray-400 shrink-0" />
+                            <span className="truncate">Remove from Folder</span>
+                        </button>
+                    )}
+                    {folders.filter(f => f.id !== currentFolderId).map(folder => (
+                        <button
+                            key={folder.id}
+                            className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                            onClick={() => {
+                                onMoveToFolder(folder.id)
+                                onClose()
+                            }}
+                        >
+                            <Folder size={12} className="text-amber-400/70 shrink-0" />
+                            <span className="truncate">{folder.name}</span>
+                        </button>
+                    ))}
+                </>
+            )}
 
             {/* Copy Path */}
             <button
@@ -554,6 +595,56 @@ export function SessionContextMenu({
             >
                 <Trash2 size={12} className="text-red-400 shrink-0" />
                 <span className="truncate">Delete</span>
+            </button>
+        </div>,
+        document.body
+    )
+}
+
+interface FolderContextMenuProps {
+    x: number
+    y: number
+    onRename: () => void
+    onDelete: () => void
+    onClose: () => void
+}
+
+/**
+ * Folder right-click context menu
+ * Provides rename and delete options for workspace folders
+ */
+export function FolderContextMenu({
+    x,
+    y,
+    onRename,
+    onDelete,
+    onClose
+}: FolderContextMenuProps) {
+    return createPortal(
+        <div
+            className={`fixed z-[${MENU_Z_INDEX}] bg-[#1e1e20] border border-white/10 rounded shadow-xl py-0.5 w-36 backdrop-blur-md`}
+            style={{ top: y, left: x }}
+            onClick={e => e.stopPropagation()}
+        >
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onRename()
+                    onClose()
+                }}
+            >
+                <Edit2 size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">Rename</span>
+            </button>
+            <button
+                className="w-full text-left px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors flex items-center gap-2"
+                onClick={() => {
+                    onDelete()
+                    onClose()
+                }}
+            >
+                <Trash2 size={12} className="text-red-400 shrink-0" />
+                <span className="truncate">Delete Folder</span>
             </button>
         </div>,
         document.body

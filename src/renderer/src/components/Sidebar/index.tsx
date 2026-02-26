@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, PanelLeftClose, GripVertical } from 'lucide-react'
+import { Plus, PanelLeftClose, GripVertical, FolderPlus, Folder, ChevronDown, ChevronRight } from 'lucide-react'
 import { Reorder, useDragControls } from 'framer-motion'
-import { Workspace, TerminalSession, SessionStatus, HooksSettings, SplitTerminalLayout } from '../../../../shared/types'
+import { Workspace, WorkspaceFolder, TerminalSession, SessionStatus, HooksSettings, SplitTerminalLayout } from '../../../../shared/types'
 import { useWorkspaceBranches } from '../../hooks/useWorkspaceBranches'
 import { useTemplates } from '../../hooks/useTemplates'
 import { WorkspaceItem } from './WorkspaceItem'
-import { WorkspaceContextMenu, WorktreeContextMenu, BranchMenu, SessionContextMenu } from './ContextMenus'
+import { WorkspaceContextMenu, WorktreeContextMenu, BranchMenu, SessionContextMenu, FolderContextMenu } from './ContextMenus'
 import { BranchPromptModal } from './Modals'
 
 /**
@@ -73,6 +73,12 @@ interface SidebarProps {
     onReorderSessions: (workspaceId: string, sessions: TerminalSession[]) => void
     onReorderWorkspaces: (workspaces: Workspace[]) => void
     onTogglePin: (workspaceId: string) => void
+    folders: WorkspaceFolder[]
+    onCreateFolder: (name: string) => void
+    onRenameFolder: (folderId: string, newName: string) => void
+    onRemoveFolder: (folderId: string) => void
+    onToggleFolderExpanded: (folderId: string) => void
+    onMoveWorkspaceToFolder: (workspaceId: string, folderId: string | null) => void
     width: number
     setWidth: (width: number) => void
     onClose: () => void
@@ -114,6 +120,12 @@ export function Sidebar({
     onReorderSessions,
     onReorderWorkspaces,
     onTogglePin,
+    folders,
+    onCreateFolder,
+    onRenameFolder,
+    onRemoveFolder,
+    onToggleFolderExpanded,
+    onMoveWorkspaceToFolder,
     width,
     setWidth,
     onClose,
@@ -136,6 +148,9 @@ export function Sidebar({
     const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null)
     const [showPrompt, setShowPrompt] = useState<{ workspaceId: string } | null>(null)
     const [branchLoading, setBranchLoading] = useState(false)
+    const [folderMenuOpen, setFolderMenuOpen] = useState<{ x: number, y: number, folderId: string } | null>(null)
+    const [showFolderPrompt, setShowFolderPrompt] = useState(false)
+    const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null)
 
     // Resizing logic (horizontal - sidebar width)
     const isResizing = useRef(false)
@@ -293,6 +308,7 @@ export function Sidebar({
             setBranchMenuOpen(null)
             setWorktreeMenuOpen(null)
             setSessionMenuOpen(null)
+            setFolderMenuOpen(null)
         }
         window.addEventListener('click', handleClick)
         return () => window.removeEventListener('click', handleClick)
@@ -550,7 +566,7 @@ export function Sidebar({
     // 홈, 일반 워크스페이스, Playground 분리
     const homeWorkspace = workspaces.find(w => w.isHome)
     const pinnedWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome && w.isPinned)
-    const regularWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome && !w.isPinned)
+    const regularWorkspaces = workspaces.filter(w => !w.isPlayground && !w.parentWorkspaceId && !w.isHome && !w.isPinned && !w.folderId)
     const playgroundWorkspaces = workspaces.filter(w => w.isPlayground)
 
     return (
@@ -613,6 +629,12 @@ export function Sidebar({
                                 console.error('Failed to reload worktrees:', err)
                                 await showAlert('Reload Failed', err?.message || 'Failed to reload worktrees.', 'error')
                             }
+                        }}
+                        folders={folders.map(f => ({ id: f.id, name: f.name }))}
+                        currentFolderId={workspace?.folderId}
+                        onMoveToFolder={(folderId) => {
+                            onMoveWorkspaceToFolder(menuOpen.workspaceId, folderId)
+                            setMenuOpen(null)
                         }}
                         onClose={() => setMenuOpen(null)}
                     />
@@ -677,6 +699,22 @@ export function Sidebar({
                 />
             )}
 
+            {folderMenuOpen && (
+                <FolderContextMenu
+                    x={folderMenuOpen.x}
+                    y={folderMenuOpen.y}
+                    onRename={() => {
+                        setRenamingFolderId(folderMenuOpen.folderId)
+                        setFolderMenuOpen(null)
+                    }}
+                    onDelete={() => {
+                        onRemoveFolder(folderMenuOpen.folderId)
+                        setFolderMenuOpen(null)
+                    }}
+                    onClose={() => setFolderMenuOpen(null)}
+                />
+            )}
+
             {/* Modals */}
             {showPrompt && (
                 <BranchPromptModal
@@ -686,6 +724,32 @@ export function Sidebar({
                     }}
                     onCancel={() => setShowPrompt(null)}
                 />
+            )}
+
+            {showFolderPrompt && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFolderPrompt(false)}>
+                    <div className="bg-[#1e1e20] border border-white/10 rounded-lg p-4 w-72" onClick={e => e.stopPropagation()}>
+                        <div className="text-sm font-medium text-gray-200 mb-3">New Folder</div>
+                        <input
+                            autoFocus
+                            className="w-full bg-transparent border border-white/20 rounded px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-200"
+                            placeholder="Folder name"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const value = (e.target as HTMLInputElement).value.trim()
+                                    if (value) {
+                                        onCreateFolder(value)
+                                    }
+                                    setShowFolderPrompt(false)
+                                }
+                                if (e.key === 'Escape') {
+                                    setShowFolderPrompt(false)
+                                }
+                            }}
+                        />
+                        <div className="mt-2 text-[10px] text-gray-500">Press Enter to create, Escape to cancel</div>
+                    </div>
+                </div>
             )}
 
             {/* Sidebar Content */}
@@ -700,6 +764,13 @@ export function Sidebar({
                 <div className="py-1.5 px-2 border-b border-white/10 flex items-center justify-between draggable">
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Workspaces</span>
                     <div className="flex items-center gap-1 no-drag">
+                        <button
+                            onClick={() => setShowFolderPrompt(true)}
+                            className="p-1 hover:bg-white/10 rounded transition-colors"
+                            title="New Folder"
+                        >
+                            <FolderPlus size={14} className="text-gray-400" />
+                        </button>
                         <button
                             onClick={onAddWorkspace}
                             className="p-1 hover:bg-white/10 rounded transition-colors"
@@ -794,6 +865,111 @@ export function Sidebar({
                             })}
                         </>
                     )}
+
+                    {/* Folders */}
+                    {folders.map(folder => {
+                        const folderWorkspaces = workspaces.filter(w =>
+                            w.folderId === folder.id && !w.isPlayground && !w.parentWorkspaceId && !w.isHome && !w.isPinned
+                        )
+                        return (
+                            <div key={folder.id}>
+                                <div
+                                    className="group/folder flex items-center justify-between py-1 px-2 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                                    onClick={() => onToggleFolderExpanded(folder.id)}
+                                    onContextMenu={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        setFolderMenuOpen({ x: e.clientX, y: e.clientY, folderId: folder.id })
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                                        {folder.isExpanded ? (
+                                            <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                                        ) : (
+                                            <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                                        )}
+                                        <Folder size={14} className="text-amber-400/70 shrink-0" />
+                                        {renamingFolderId === folder.id ? (
+                                            <input
+                                                autoFocus
+                                                className="bg-transparent border border-white/20 rounded px-1 text-xs outline-none focus:border-blue-500 w-full"
+                                                defaultValue={folder.name}
+                                                style={{ fontSize: `${fontSize}px` }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const value = (e.target as HTMLInputElement).value.trim()
+                                                        if (value) {
+                                                            onRenameFolder(folder.id, value)
+                                                        }
+                                                        setRenamingFolderId(null)
+                                                    }
+                                                    if (e.key === 'Escape') {
+                                                        setRenamingFolderId(null)
+                                                    }
+                                                }}
+                                                onBlur={(e) => {
+                                                    const value = e.target.value.trim()
+                                                    if (value) {
+                                                        onRenameFolder(folder.id, value)
+                                                    }
+                                                    setRenamingFolderId(null)
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        ) : (
+                                            <span className="text-amber-100/80 font-medium truncate" style={{ fontSize: `${fontSize}px` }}>
+                                                {folder.name}
+                                            </span>
+                                        )}
+                                        {showSessionCount && folderWorkspaces.length > 0 && (
+                                            <span className="text-[10px] text-gray-500 shrink-0">
+                                                ({folderWorkspaces.length})
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                {folder.isExpanded && folderWorkspaces.length > 0 && (
+                                    <div className="ml-3 pl-2 border-l border-white/5 space-y-0.5">
+                                        {folderWorkspaces.map(workspace => {
+                                            const childWorktrees = workspaces.filter(w => w.parentWorkspaceId === workspace.id)
+                                            return (
+                                                <WorkspaceItem
+                                                    key={workspace.id}
+                                                    workspace={workspace}
+                                                    childWorktrees={childWorktrees}
+                                                    expanded={expanded.has(workspace.id)}
+                                                    expandedSet={expanded}
+                                                    branchInfo={workspaceBranches.get(workspace.id)}
+                                                    activeSessionId={activeSessionId}
+                                                    sessionStatuses={sessionStatuses}
+                                                    hooksSettings={hooksSettings}
+                                                    terminalPreview={terminalPreview}
+                                                    renamingSessionId={renamingSessionId}
+                                                    fontSize={fontSize}
+                                                    showSessionCount={showSessionCount}
+                                                    isPinned={false}
+                                                    onToggleExpand={toggleExpand}
+                                                    onContextMenu={handleContextMenu}
+                                                    onSessionContextMenu={handleSessionContextMenu}
+                                                    onBranchClick={handleBranchClick}
+                                                    onSelect={onSelect}
+                                                    onRemoveSession={onRemoveSession}
+                                                    onRemoveWorkspace={onRemoveWorkspace}
+                                                    onOpenInEditor={onOpenInEditor}
+                                                    onRenameSession={handleRenameSubmit}
+                                                    onRenameCancel={() => setRenamingSessionId(null)}
+                                                    onReorderSessions={onReorderSessions}
+                                                    splitLayout={splitLayout}
+                                                    onDragStartSession={onDragStartSession}
+                                                    onDragEndSession={onDragEndSession}
+                                                />
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
 
                     {/* Regular workspaces - drag & drop reorder supported */}
                     <Reorder.Group
