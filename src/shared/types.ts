@@ -341,7 +341,7 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcutMap = {
     closeSession:    { key: 'W', modifiers: ['mod'], code: 'w' },
     clearSession:    { key: 'K', modifiers: ['mod'], code: 'k' },
     renameSession:   { key: 'R', modifiers: ['mod'], code: 'r' },
-    toggleMemo:      { key: 'M', modifiers: ['mod'], code: 'm' },
+    toggleMemo:      { key: 'J', modifiers: ['mod'], code: 'j' },
 }
 
 export type ShortcutGroup = 'navigation' | 'splitView' | 'search' | 'ui' | 'actions'

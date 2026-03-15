@@ -111,7 +111,7 @@ export const SessionMemo = forwardRef<SessionMemoHandle, SessionMemoProps>(
                                 ? 'bg-yellow-500/20 text-yellow-400 opacity-60 hover:opacity-100'
                                 : 'bg-white/5 text-gray-500 opacity-40 hover:opacity-100'
                     }`}
-                    title="Session Memo (⌘M)"
+                    title="Session Memo (⌘J)"
                 >
                     <StickyNote size={14} />
                 </button>
