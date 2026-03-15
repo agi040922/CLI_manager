@@ -31,6 +31,7 @@ interface UseKeyboardShortcutsConfig {
     onCloseSession: (workspaceId: string, sessionId: string) => void
     onClearSession: (sessionId: string) => void
     onRenameSession: (sessionId: string) => void
+    onToggleMemo: () => void
 }
 
 function getShortcuts(settings: UserSettings): KeyboardShortcutMap {
@@ -83,6 +84,7 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         onCloseSession,
         onClearSession,
         onRenameSession,
+        onToggleMemo,
     } = config
 
     // Chord mode state (for Cmd+T → number sequences)
@@ -206,6 +208,15 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
                 e.preventDefault()
                 e.stopPropagation()
                 onToggleSettings()
+                return
+            }
+
+            // Allow toggleMemo even when typing in textarea (memo itself)
+            if (matchShortcut(e, shortcuts.toggleMemo)) {
+                console.log('[Shortcuts] matched: toggleMemo')
+                e.preventDefault()
+                e.stopPropagation()
+                onToggleMemo()
                 return
             }
 
@@ -334,6 +345,7 @@ export function useKeyboardShortcuts(config: UseKeyboardShortcutsConfig): void {
         onCloseSession,
         onClearSession,
         onRenameSession,
+        onToggleMemo,
         cancelChordMode,
         createSessionWithTemplateIndex,
     ])

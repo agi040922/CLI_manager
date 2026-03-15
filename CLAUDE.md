@@ -133,6 +133,14 @@ pnpm typecheck
 - 아이콘, 이름, 설명, 명령어 커스터마이징
 - 새 터미널 생성 시 템플릿 선택 가능
 
+#### 8. Session Memo
+- 각 터미널 세션마다 독립적인 메모장 제공
+- 터미널 우상단 아이콘 클릭으로 빠르게 열기/닫기
+- 500ms 디바운스 자동 저장 (electron-store에 세션 데이터와 함께 저장)
+- 메모가 있으면 아이콘이 노란색으로 변경되어 내용 존재를 표시
+- Escape 키로 즉시 닫기
+- 세션 삭제 시 메모도 자동 삭제 (TerminalSession.memo 필드)
+
 ### Data Flow
 
 ```
@@ -168,7 +176,8 @@ User Action (Renderer)
           id: string,
           name: string,
           cwd: string,
-          type: 'regular' | 'worktree'
+          type: 'regular' | 'worktree',
+          memo?: string               // Session memo text
         }
       ],
       createdAt: number,
@@ -236,6 +245,7 @@ exec('/bin/zsh -l -c "code ."')
 - `remove-workspace`: 워크스페이스 삭제 (Worktree인 경우 git worktree remove 실행)
 - `add-session`: 터미널 세션 추가
 - `remove-session`: 터미널 세션 삭제
+- `update-session-memo`: 세션 메모 저장
 
 #### Git Operations
 - `git-list-branches`: 브랜치 목록 조회

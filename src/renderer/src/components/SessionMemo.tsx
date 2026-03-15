@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react'
 import { StickyNote, X } from 'lucide-react'
 
 interface SessionMemoProps {
@@ -8,50 +8,52 @@ interface SessionMemoProps {
     visible: boolean
 }
 
+export interface SessionMemoHandle {
+    toggle: () => void
+}
+
 // Debounce delay for auto-saving memo (ms)
 const SAVE_DEBOUNCE_MS = 500
 
-export function SessionMemo({ sessionId, workspaceId, initialMemo, visible }: SessionMemoProps) {
-    const [isOpen, setIsOpen] = useState(false)
-    const [memo, setMemo] = useState(initialMemo || '')
-    const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
-    const textareaRef = useRef<HTMLTextAreaElement>(null)
+// Focus the xterm terminal in the same container
+function focusTerminal(sessionId: string): void {
+    const xtermEl = document.querySelector(`[data-session-id="${sessionId}"] .xterm textarea`) as HTMLElement | null
+    xtermEl?.focus()
+}
 
-    // Sync with external initialMemo changes (e.g., session switch)
-    useEffect(() => {
-        setMemo(initialMemo || '')
-    }, [initialMemo, sessionId])
+export const SessionMemo = forwardRef<SessionMemoHandle, SessionMemoProps>(
+    function SessionMemo({ sessionId, workspaceId, initialMemo, visible }, ref) {
+        const [isOpen, setIsOpen] = useState(false)
+        const [memo, setMemo] = useState(initialMemo || '')
+        const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
+        const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-    // Auto-save memo with debounce
-    const saveMemo = useCallback((text: string) => {
-        if (saveTimerRef.current) {
-            clearTimeout(saveTimerRef.current)
-        }
-        saveTimerRef.current = setTimeout(() => {
-            window.api.updateSessionMemo(workspaceId, sessionId, text)
-        }, SAVE_DEBOUNCE_MS)
-    }, [workspaceId, sessionId])
+        // Sync with external initialMemo changes (e.g., session switch)
+        useEffect(() => {
+            setMemo(initialMemo || '')
+        }, [initialMemo, sessionId])
 
-    // Cleanup timer on unmount
-    useEffect(() => {
-        return () => {
+        // Auto-save memo with debounce
+        const saveMemo = useCallback((text: string) => {
             if (saveTimerRef.current) {
                 clearTimeout(saveTimerRef.current)
             }
-        }
-    }, [])
+            saveTimerRef.current = setTimeout(() => {
+                window.api.updateSessionMemo(workspaceId, sessionId, text)
+            }, SAVE_DEBOUNCE_MS)
+        }, [workspaceId, sessionId])
 
-    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const newText = e.target.value
-        setMemo(newText)
-        saveMemo(newText)
-    }
+        // Cleanup timer on unmount
+        useEffect(() => {
+            return () => {
+                if (saveTimerRef.current) {
+                    clearTimeout(saveTimerRef.current)
+                }
+            }
+        }, [])
 
-    const handleToggle = () => {
-        const next = !isOpen
-        setIsOpen(next)
-        if (next) {
-            // Focus textarea and move cursor to end
+        const openMemo = useCallback(() => {
+            setIsOpen(true)
             setTimeout(() => {
                 const ta = textareaRef.current
                 if (ta) {
@@ -59,62 +61,87 @@ export function SessionMemo({ sessionId, workspaceId, initialMemo, visible }: Se
                     ta.selectionStart = ta.selectionEnd = ta.value.length
                 }
             }, 50)
-        }
-    }
+        }, [])
 
-    // Keyboard shortcut: Escape to close
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Escape') {
+        const closeMemo = useCallback(() => {
             setIsOpen(false)
+            // Return focus to terminal
+            setTimeout(() => focusTerminal(sessionId), 50)
+        }, [sessionId])
+
+        const handleToggle = useCallback(() => {
+            if (isOpen) {
+                closeMemo()
+            } else {
+                openMemo()
+            }
+        }, [isOpen, openMemo, closeMemo])
+
+        // Expose toggle method for keyboard shortcut
+        useImperativeHandle(ref, () => ({
+            toggle: handleToggle,
+        }), [handleToggle])
+
+        const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+            const newText = e.target.value
+            setMemo(newText)
+            saveMemo(newText)
         }
-        // Prevent terminal from capturing keystrokes
-        e.stopPropagation()
-    }
 
-    if (!visible) return null
+        // Keyboard shortcut: Escape to close
+        const handleKeyDown = (e: React.KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                closeMemo()
+            }
+            // Prevent terminal from capturing keystrokes
+            e.stopPropagation()
+        }
 
-    return (
-        <>
-            {/* Toggle button - always visible at top-right */}
-            <button
-                onClick={handleToggle}
-                className={`absolute top-2 right-14 z-30 w-7 h-7 flex items-center justify-center rounded-md transition-all duration-200 ${
-                    isOpen
-                        ? 'bg-yellow-500/30 text-yellow-300'
-                        : memo
-                            ? 'bg-yellow-500/20 text-yellow-400 opacity-60 hover:opacity-100'
-                            : 'bg-white/5 text-gray-500 opacity-40 hover:opacity-100'
-                }`}
-                title="Session Memo"
-            >
-                <StickyNote size={14} />
-            </button>
+        if (!visible) return null
 
-            {/* Memo panel */}
-            {isOpen && (
-                <div className="absolute top-1 right-1 z-30 w-72 bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-lg shadow-2xl flex flex-col overflow-hidden">
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700/50">
-                        <span className="text-xs text-gray-400 font-medium">Memo</span>
-                        <button
-                            onClick={() => setIsOpen(false)}
-                            className="text-gray-500 hover:text-gray-300 transition-colors"
-                        >
-                            <X size={12} />
-                        </button>
+        return (
+            <>
+                {/* Toggle button - always visible at top-right */}
+                <button
+                    onClick={handleToggle}
+                    className={`absolute top-2 right-14 z-30 w-7 h-7 flex items-center justify-center rounded-md transition-all duration-200 ${
+                        isOpen
+                            ? 'bg-yellow-500/30 text-yellow-300'
+                            : memo
+                                ? 'bg-yellow-500/20 text-yellow-400 opacity-60 hover:opacity-100'
+                                : 'bg-white/5 text-gray-500 opacity-40 hover:opacity-100'
+                    }`}
+                    title="Session Memo (⌘M)"
+                >
+                    <StickyNote size={14} />
+                </button>
+
+                {/* Memo panel */}
+                {isOpen && (
+                    <div className="absolute top-1 right-1 z-30 w-72 bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-lg shadow-2xl flex flex-col overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700/50">
+                            <span className="text-xs text-gray-400 font-medium">Memo</span>
+                            <button
+                                onClick={closeMemo}
+                                className="text-gray-500 hover:text-gray-300 transition-colors"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                        {/* Textarea */}
+                        <textarea
+                            ref={textareaRef}
+                            value={memo}
+                            onChange={handleChange}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Quick notes..."
+                            className="w-full h-32 px-3 py-2 bg-transparent text-sm text-gray-200 placeholder-gray-600 resize-none outline-none"
+                            spellCheck={false}
+                        />
                     </div>
-                    {/* Textarea */}
-                    <textarea
-                        ref={textareaRef}
-                        value={memo}
-                        onChange={handleChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Quick notes..."
-                        className="w-full h-32 px-3 py-2 bg-transparent text-sm text-gray-200 placeholder-gray-600 resize-none outline-none"
-                        spellCheck={false}
-                    />
-                </div>
-            )}
-        </>
-    )
-}
+                )}
+            </>
+        )
+    }
+)

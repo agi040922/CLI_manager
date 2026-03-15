@@ -316,6 +316,7 @@ export type ShortcutAction =
     | 'toggleSidebar' | 'toggleSettings'
     | 'fileSearch' | 'contentSearch'
     | 'newSession' | 'closeSession' | 'clearSession' | 'renameSession'
+    | 'toggleMemo'
 
 export interface KeyBinding {
     key: string                          // Display key label (e.g., ']', '[', '`')
@@ -340,6 +341,7 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcutMap = {
     closeSession:    { key: 'W', modifiers: ['mod'], code: 'w' },
     clearSession:    { key: 'K', modifiers: ['mod'], code: 'k' },
     renameSession:   { key: 'R', modifiers: ['mod'], code: 'r' },
+    toggleMemo:      { key: 'M', modifiers: ['mod'], code: 'm' },
 }
 
 export type ShortcutGroup = 'navigation' | 'splitView' | 'search' | 'ui' | 'actions'
@@ -365,6 +367,7 @@ export const SHORTCUT_LABELS: Record<ShortcutAction, ShortcutInfo> = {
     closeSession:    { label: 'Close Tab',           description: 'Close current tab and go to previous',     group: 'actions' },
     clearSession:    { label: 'Clear Terminal',      description: 'Clear terminal scrollback buffer',         group: 'actions' },
     renameSession:   { label: 'Rename Tab',          description: 'Rename the current tab',                   group: 'actions' },
+    toggleMemo:      { label: 'Toggle Memo',         description: 'Open or close session memo',               group: 'actions' },
 }
 
 export const SHORTCUT_GROUP_NAMES: Record<ShortcutGroup, string> = {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Sidebar } from './components/Sidebar/index'
 import { TerminalView } from './components/TerminalView'
-import { SessionMemo } from './components/SessionMemo'
+import { SessionMemo, SessionMemoHandle } from './components/SessionMemo'
 import { StatusBar } from './components/StatusBar'
 import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
@@ -34,6 +34,9 @@ function App() {
     const [fileSearchMode, setFileSearchMode] = useState<'files' | 'content'>('files')
     const [showMonitor, setShowMonitor] = useState(false)
     const monitorButtonRef = useRef<HTMLButtonElement>(null)
+
+    // Session memo refs (keyed by session ID)
+    const memoRefsMap = useRef<Map<string, SessionMemoHandle>>(new Map())
 
     // Split terminal view state
     const [splitLayout, setSplitLayout] = useState<SplitTerminalLayout | null>(null)
@@ -929,6 +932,11 @@ function App() {
             // Dispatch custom event to Sidebar
             window.dispatchEvent(new CustomEvent('rename-session-request', { detail: { sessionId } }))
         },
+        onToggleMemo: () => {
+            if (activeSession) {
+                memoRefsMap.current.get(activeSession.id)?.toggle()
+            }
+        },
     })
 
     const handleAddWorktreeWorkspace = async (parentWorkspaceId: string, branchName: string) => {
@@ -1445,7 +1453,7 @@ function App() {
                                     key={session.id}
                                     style={getSplitStyle()}
                                 >
-                                    <div className="h-full w-full relative">
+                                    <div className="h-full w-full relative" data-session-id={session.id}>
                                         {/* Show overlay when session is in grid view */}
                                         {isInGridView && isVisible && (
                                             <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center gap-4">
@@ -1481,6 +1489,13 @@ function App() {
                                             disablePtyResize={isInGridView}
                                         />
                                         <SessionMemo
+                                            ref={(handle) => {
+                                                if (handle) {
+                                                    memoRefsMap.current.set(session.id, handle)
+                                                } else {
+                                                    memoRefsMap.current.delete(session.id)
+                                                }
+                                            }}
                                             sessionId={session.id}
                                             workspaceId={workspace.id}
                                             initialMemo={session.memo}
