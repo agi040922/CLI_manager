@@ -166,15 +166,6 @@ Communication pattern:
 - Invoke/Handle: async request-response
 - Send/On: broadcast terminal stream and port updates
 
-## Premium Feature Limits
-Defined in `src/shared/types.ts` (`PLAN_LIMITS`).
-
-- Free: Workspaces 2 / Sessions 5 / Templates 3 / no worktree / no split view
-- Pro: Unlimited workspaces/sessions/templates, worktree on, split view on
-
-Error contract:
-- Limit exceeded error type must be `UPGRADE_REQUIRED`
-- Display/upgrade path uses `https://solhun.com`
 
 ## Development Policy
 - Keep components concise; target below 300 lines where practical.

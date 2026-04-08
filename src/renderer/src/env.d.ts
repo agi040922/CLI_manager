@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings, IPCResult, PortInfo, LicenseData, LicenseInfo } from '../../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, PortInfo } from '../../shared/types'
 
 declare global {
     interface Window {
@@ -90,13 +90,6 @@ declare global {
 
             // Editor Validation (opens folder picker if testDir not provided)
             validateEditorPath: (editorPath: string, testDir?: string) => Promise<{ valid: boolean; resolvedPath?: string; error?: string }>
-
-            // License
-            licenseActivate: (licenseKey: string) => Promise<IPCResult<LicenseData>>
-            licenseValidate: () => Promise<IPCResult<LicenseData>>
-            licenseDeactivate: () => Promise<IPCResult<void>>
-            licenseCheck: () => Promise<IPCResult<{ hasLicense: boolean }>>
-            licenseGetInfo: () => Promise<IPCResult<LicenseInfo>>
 
             // Updates
             checkForUpdate: () => Promise<{ success: boolean; version?: string; hasUpdate?: boolean; error?: string }>

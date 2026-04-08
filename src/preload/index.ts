@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo, SystemInfo } from '../shared/types'
+import { Workspace, TerminalSession, UserSettings, IPCResult, SystemInfo } from '../shared/types'
 
 // Custom APIs for renderer
 const api = {
@@ -149,18 +149,6 @@ const api = {
     zoomUi: (action: 'in' | 'out' | 'reset'): void => {
         ipcRenderer.send('zoom-ui', action)
     },
-
-    // License
-    licenseActivate: (licenseKey: string): Promise<IPCResult<LicenseData>> =>
-        ipcRenderer.invoke('license-activate', licenseKey),
-    licenseValidate: (): Promise<IPCResult<LicenseData>> =>
-        ipcRenderer.invoke('license-validate'),
-    licenseDeactivate: (): Promise<IPCResult<void>> =>
-        ipcRenderer.invoke('license-deactivate'),
-    licenseCheck: (): Promise<IPCResult<{ hasLicense: boolean }>> =>
-        ipcRenderer.invoke('license-check'),
-    licenseGetInfo: (): Promise<IPCResult<LicenseInfo>> =>
-        ipcRenderer.invoke('license-get-info'),
 
     // Shell Validation
     validateShellPath: (shellPath: string): Promise<{ valid: boolean; resolvedPath?: string; error?: string }> =>

@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
+import { FitAddon, ITerminalDimensions } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { ChevronUp, ChevronDown, FolderOpen, ExternalLink, Code } from 'lucide-react'
 import { TerminalPatternMatcher } from '../utils/terminalPatterns'
 import { registerFilePathLinks } from '../utils/filePathLinkProvider'
+import { TerminalResizeManager } from '../utils/terminalResizeManager'
 import { SessionStatus, HooksSettings } from '../../../shared/types'
 
 interface TerminalViewProps {
@@ -32,6 +33,7 @@ interface TerminalViewProps {
 
 // Default terminal font family (fallback when no custom font is set)
 const DEFAULT_TERMINAL_FONT_FAMILY = 'Menlo, Monaco, "Courier New", monospace'
+const VIEWPORT_REFRESH_ANSI_REGEX = /\x1b\[[0-9;?]*[HJJKf]|\x1b\[\?1049[hl]/
 
 export function TerminalView({
     id,
@@ -60,18 +62,14 @@ export function TerminalView({
     const matcherRef = useRef<TerminalPatternMatcher>(new TerminalPatternMatcher())
     // 초기화 직후 불필요한 resize를 방지하기 위한 플래그
     const isInitializedRef = useRef<boolean>(false)
-    // fit() 중복 호출 방지 플래그 (race condition 방지)
-    const isFittingRef = useRef<boolean>(false)
-    // ResizeObserver debounce 타이머
-    const resizeDebounceRef = useRef<NodeJS.Timeout | null>(null)
-    // fit() 요청 큐 (pending 상태 추적)
-    const fitPendingRef = useRef<boolean>(false)
     // 스크롤 중인지 추적 (스크롤 중에는 ResizeObserver 무시)
     const isScrollingRef = useRef<boolean>(false)
     // 마지막 크기 추적 (1px 이상 변화만 감지)
     const lastSizeRef = useRef<{ width: number; height: number } | null>(null)
-    // 터미널 떠날 때 라인 수 저장 (10줄 이상 증가하면 맨 아래로)
-    const lastLineCountRef = useRef<number>(0)
+    // VS Code식 visible-aware resize coordinator
+    const resizeManagerRef = useRef<TerminalResizeManager | null>(null)
+    const wasNearBottomBeforeHideRef = useRef<boolean>(true)
+    const pendingViewportRefreshWritesRef = useRef<number>(0)
     // initialCommand가 이미 실행되었는지 추적 (StrictMode에서 2번 실행 방지)
     const initialCommandExecutedRef = useRef<boolean>(false)
     // keyboardSettings를 ref로 저장하여 실시간 적용 지원
@@ -119,97 +117,108 @@ export function TerminalView({
             leftSessionTimeRef.current = Date.now()
             // 쿨다운 후 첫 폴링에서 해시 동기화 필요 표시
             needsSyncAfterCooldownRef.current = true
+            const terminal = xtermRef.current
+            if (terminal) {
+                const buffer = terminal.buffer.active
+                wasNearBottomBeforeHideRef.current = buffer.viewportY + terminal.rows >= buffer.length - 2
+            }
         }
         visibleRef.current = visible
     }, [visible])
 
-    /**
-     * 안전한 fit() 호출 - 중복 호출 방지 및 throttle 적용
-     * xterm.js의 fit()은 재진입 불안전(non-reentrant)하므로 동시 호출 방지
-     *
-     * 문제 해결:
-     * - 스크롤 중 ResizeObserver 트리거로 인한 viewport 충돌 방지
-     * - 여러 useEffect에서 동시에 fit() 호출 시 race condition 방지
-     * - fit() 후 scrollLines(0)로 내부 스크롤 상태 동기화하여 스크롤 갇힘 방지
-     */
     // 마지막으로 PTY에 전달한 터미널 크기 (중복 호출 방지)
     const lastPtySizeRef = useRef<{ cols: number; rows: number } | null>(null)
 
-    const safeFit = (options?: { focus?: boolean; scrollToBottom?: boolean }) => {
-        // 이미 fitting 중이면 pending으로 표시하고 skip
-        if (isFittingRef.current) {
-            fitPendingRef.current = true
+    const forceViewportRefresh = useCallback((terminal?: Terminal | null) => {
+        const target = terminal ?? xtermRef.current
+        if (!target) return
+        const terminalCore = (target as Terminal & {
+            _core?: { viewport?: { _innerRefresh?: () => void } }
+        })._core
+        terminalCore?.viewport?._innerRefresh?.()
+    }, [])
+
+    const isViewportNearBottom = useCallback((terminal?: Terminal | null) => {
+        const target = terminal ?? xtermRef.current
+        if (!target) return true
+        const buffer = target.buffer.active
+        return buffer.viewportY + target.rows >= buffer.length - 2
+    }, [])
+
+    const applyTerminalDimensions = useCallback((
+        dimensions: ITerminalDimensions,
+        options?: { focus?: boolean }
+    ) => {
+        const terminal = xtermRef.current
+        if (!terminal) return
+
+        let didResize = false
+        if (terminal.cols !== dimensions.cols || terminal.rows !== dimensions.rows) {
+            terminal.resize(dimensions.cols, dimensions.rows)
+            didResize = true
+        }
+
+        if (options?.focus) {
+            terminal.focus()
+        }
+
+        if (didResize) {
+            requestAnimationFrame(() => {
+                forceViewportRefresh(terminal)
+            })
+        }
+
+        if (disablePtyResize) {
             return
         }
 
-        if (!fitAddonRef.current || !xtermRef.current) return
+        const lastSize = lastPtySizeRef.current
+        if (!lastSize || lastSize.cols !== dimensions.cols || lastSize.rows !== dimensions.rows) {
+            lastPtySizeRef.current = dimensions
+            window.api.resizeTerminal(id, dimensions.cols, dimensions.rows)
+        }
+    }, [disablePtyResize, forceViewportRefresh, id])
 
-        isFittingRef.current = true
+    const getProposedDimensions = useCallback((): ITerminalDimensions | null => {
+        const fitAddon = fitAddonRef.current
+        const terminal = xtermRef.current
+        const terminalElement = terminalRef.current
+        if (!fitAddon || !terminal || !terminalElement) {
+            return null
+        }
 
-        // requestAnimationFrame으로 렌더링 사이클과 동기화
-        requestAnimationFrame(() => {
-            try {
-                fitAddonRef.current?.fit()
+        const rect = terminalElement.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) {
+            return null
+        }
 
-                if (xtermRef.current) {
-                    const newCols = xtermRef.current.cols
-                    const newRows = xtermRef.current.rows
+        const proposed = fitAddon.proposeDimensions()
+        if (!proposed || Number.isNaN(proposed.cols) || Number.isNaN(proposed.rows)) {
+            return null
+        }
 
-                    // DEBUG 로그
-                    console.log(`[Terminal ${id.slice(0, 8)}] safeFit: cols=${newCols}, rows=${newRows}`)
+        return proposed
+    }, [])
 
-                    // Grid Window에서는 PTY resize 비활성화 (메인 앱과 크기 충돌 방지)
-                    // xterm.js fit은 수행하지만 PTY에는 크기를 전달하지 않음
-                    if (disablePtyResize) {
-                        console.log(`[Terminal ${id.slice(0, 8)}] PTY resize disabled (grid window)`)
-                    } else {
-                        // 이전 크기와 같으면 PTY에 전달하지 않음 (SIGWINCH 방지)
-                        const lastSize = lastPtySizeRef.current
-                        if (lastSize && lastSize.cols === newCols && lastSize.rows === newRows) {
-                            console.log(`[Terminal ${id.slice(0, 8)}] skipping resizeTerminal (same size: ${newCols}x${newRows})`)
-                        } else {
-                            console.log(`[Terminal ${id.slice(0, 8)}] resizeTerminal: ${lastSize?.cols}x${lastSize?.rows} → ${newCols}x${newRows}`)
-                            lastPtySizeRef.current = { cols: newCols, rows: newRows }
-                            window.api.resizeTerminal(id, newCols, newRows)
-                        }
-                    }
+    const requestResize = useCallback((options?: {
+        immediate?: boolean
+        focus?: boolean
+        flush?: boolean
+    }) => {
+        if (options?.flush) {
+            resizeManagerRef.current?.flush()
+        }
 
-                    if (options?.focus) {
-                        xtermRef.current.focus()
-                    }
+        const dimensions = getProposedDimensions()
+        if (!dimensions) return
 
-                    // fit() 후 xterm.js 내부 렌더링이 완료될 때까지 대기
-                    // fit()으로 rows가 변경되면 xterm.js가 내부적으로 버퍼를 재계산하고
-                    // 스크롤 위치를 리셋할 수 있음. 충분한 딜레이 후 scrollToBottom() 호출
-                    setTimeout(() => {
-                        if (xtermRef.current) {
-                            // 스크롤 상태 동기화
-                            xtermRef.current.scrollLines(0)
+        if (options?.immediate || options?.focus) {
+            applyTerminalDimensions(dimensions, options)
+            return
+        }
 
-                            if (options?.scrollToBottom) {
-                                xtermRef.current.scrollToBottom()
-
-                                // xterm.js와 DOM 스크롤 강제 동기화
-                                // scrollLines로 xterm.js 내부 스크롤 이벤트를 트리거
-                                xtermRef.current.scrollLines(1)
-                                xtermRef.current.scrollLines(-1)
-                            }
-                        }
-                    }, 50)
-                }
-            } catch (e) {
-                console.error('Failed to fit terminal:', e)
-            } finally {
-                isFittingRef.current = false
-
-                // pending 요청이 있으면 다음 프레임에서 처리
-                if (fitPendingRef.current) {
-                    fitPendingRef.current = false
-                    setTimeout(() => safeFit(options), 0)
-                }
-            }
-        })
-    }
+        resizeManagerRef.current?.resize(dimensions.cols, dimensions.rows, false)
+    }, [applyTerminalDimensions, getProposedDimensions])
 
     /**
      * 터미널 출력 처리
@@ -324,34 +333,30 @@ export function TerminalView({
         // 초기화 직후에는 resize 건너뛰기 (createTerminal에서 이미 올바른 크기로 생성됨)
         if (!isInitializedRef.current) return
 
-        if (!visible && xtermRef.current) {
-            // 터미널 떠날 때: 현재 라인 수 저장
-            lastLineCountRef.current = xtermRef.current.buffer.active.length
-        }
-
         if (visible && fitAddonRef.current && xtermRef.current) {
-            // 터미널로 돌아올 때: 10줄 이상 추가됐으면 맨 아래로 스크롤
-            const currentLineCount = xtermRef.current.buffer.active.length
-            const linesAdded = currentLineCount - lastLineCountRef.current
-            const shouldScrollToBottom = linesAdded >= 10
-
-            // Reset lastPtySizeRef to force PTY resize when coming back from grid view
-            // This ensures PTY gets the correct size after grid view changes it
+            // VS Code setVisible 흐름처럼 pending resize를 flush한 뒤 최신 dimensions로 다시 맞춘다.
             lastPtySizeRef.current = null
-
-            setTimeout(() => {
-                safeFit({
-                    focus: true,
-                    scrollToBottom: shouldScrollToBottom
+            pendingViewportRefreshWritesRef.current = 4
+            requestAnimationFrame(() => {
+                requestResize({
+                    immediate: true,
+                    flush: true,
+                    focus: true
                 })
-            }, 100)
+                requestAnimationFrame(() => {
+                    forceViewportRefresh()
+                    if (wasNearBottomBeforeHideRef.current) {
+                        xtermRef.current?.scrollToBottom()
+                    }
+                })
+            })
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, id])
 
     // fontSize/fontFamily 변경 시 터미널 재생성 없이 동적으로 업데이트
     // IMPORTANT: visible은 의존성에서 제거 - visible 변경 시에는 visibility useEffect에서 처리함
-    // visible을 의존성에 넣으면 세션 전환 시 scrollToBottom 없이 safeFit()이 먼저 호출되는 문제 발생
+    // visible을 의존성에 넣으면 세션 전환 시 불필요한 resize가 먼저 실행될 수 있음
     useEffect(() => {
         if (xtermRef.current && fitAddonRef.current && isInitializedRef.current) {
             xtermRef.current.options.fontSize = fontSize
@@ -360,7 +365,7 @@ export function TerminalView({
             // visible 상태일 때만 fit 호출 (display:none 상태에서는 크기 계산이 잘못됨)
             // 비활성 터미널은 visible이 true가 될 때 visibility useEffect에서 fit 호출됨
             if (visible) {
-                safeFit()
+                requestResize({ immediate: true })
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -381,7 +386,10 @@ export function TerminalView({
             allowProposedApi: true,
             cursorBlink: true,
             scrollback: 10000  // 기본값 1000 → 10000 (더 많은 히스토리 보관)
-        })
+        } as any)
+
+        // VS Code also enables this to handle full-screen erase/redraw sequences more predictably.
+        ;(term.options as typeof term.options & { scrollOnEraseInDisplay?: boolean }).scrollOnEraseInDisplay = true
 
         const fitAddon = new FitAddon()
         term.loadAddon(fitAddon)
@@ -397,6 +405,13 @@ export function TerminalView({
 
         xtermRef.current = term
         fitAddonRef.current = fitAddon
+        resizeManagerRef.current = new TerminalResizeManager(
+            () => visibleRef.current,
+            () => xtermRef.current?.buffer.normal.length ?? 0,
+            (cols, rows) => applyTerminalDimensions({ cols, rows }),
+            (cols) => applyTerminalDimensions({ cols, rows: xtermRef.current?.rows ?? term.rows }),
+            (rows) => applyTerminalDimensions({ cols: xtermRef.current?.cols ?? term.cols, rows })
+        )
 
         // Register file path link provider (Cmd+Click to open in editor)
         registerFilePathLinks(term, cwd)
@@ -429,9 +444,12 @@ export function TerminalView({
 
         if (visible) {
             try {
-                fitAddon.fit()
-                initialCols = term.cols
-                initialRows = term.rows
+                const proposed = fitAddon.proposeDimensions()
+                if (proposed) {
+                    initialCols = proposed.cols
+                    initialRows = proposed.rows
+                    term.resize(proposed.cols, proposed.rows)
+                }
             } catch (e) {
                 console.error('Failed to fit terminal initially:', e)
             }
@@ -474,7 +492,20 @@ export function TerminalView({
 
             // Handle output
             const cleanup = window.api.onTerminalData(id, (data) => {
-                term.write(data)
+                const shouldRefreshViewport = VIEWPORT_REFRESH_ANSI_REGEX.test(data)
+                term.write(data, () => {
+                    if (!visibleRef.current) return
+
+                    if (pendingViewportRefreshWritesRef.current > 0) {
+                        pendingViewportRefreshWritesRef.current--
+                        forceViewportRefresh(term)
+                        return
+                    }
+
+                    if (shouldRefreshViewport) {
+                        forceViewportRefresh(term)
+                    }
+                })
 
                 try {
                     detectOutput(data)
@@ -515,7 +546,7 @@ export function TerminalView({
                 // This triggers SIGWINCH in the shell, causing it to redraw
                 // Essential for Grid View where PTY already exists but xterm is new
                 if (visibleRef.current) {
-                    safeFit()
+                    requestResize({ immediate: true })
                 }
             }, 300)
 
@@ -528,7 +559,7 @@ export function TerminalView({
         // Handle resize with debounce - 창 크기 변경 시 너무 자주 호출되는 것 방지
         // window resize 이벤트는 드래그 중 매 프레임마다 발생하므로 debounce 필수
         const handleResize = () => {
-            if (!visibleRef.current || !isInitializedRef.current) return
+            if (!isInitializedRef.current) return
 
             const rect = terminalRef.current?.getBoundingClientRect()
             if (!rect) return
@@ -556,16 +587,7 @@ export function TerminalView({
             console.log(`[Terminal ${id.slice(0, 8)}] handleResize: size changed from ${lastSizeRef.current.width}x${lastSizeRef.current.height}`)
             lastSizeRef.current = { width: newWidth, height: newHeight }
 
-            // debounce: 300ms로 증가하여 드래그 중 빈번한 호출 방지
-            // ResizeObserver와 같은 타이머 공유하여 중복 방지
-            if (resizeDebounceRef.current) {
-                clearTimeout(resizeDebounceRef.current)
-            }
-            resizeDebounceRef.current = setTimeout(() => {
-                resizeDebounceRef.current = null
-                console.log(`[Terminal ${id.slice(0, 8)}] handleResize: debounce complete, calling safeFit`)
-                safeFit({ scrollToBottom: true })
-            }, 300)  // 300ms debounce (드래그 중 호출 빈도 감소)
+            requestResize()
         }
 
         window.addEventListener('resize', handleResize)
@@ -576,10 +598,10 @@ export function TerminalView({
         // - 1px 이상 변화만 감지 (불필요한 트리거 방지)
         // - 150ms debounce로 연속 이벤트 병합
         const resizeObserver = new ResizeObserver(() => {
-            if (!visibleRef.current || !isInitializedRef.current) return
+            if (!isInitializedRef.current) return
 
             // 스크롤 중이면 무시
-            if (isScrollingRef.current) return
+            if (visibleRef.current && isScrollingRef.current) return
 
             const rect = terminalRef.current?.getBoundingClientRect()
             if (!rect) return
@@ -609,15 +631,7 @@ export function TerminalView({
             console.log(`[Terminal ${id.slice(0, 8)}] ResizeObserver: size changed from ${lastSizeRef.current.width}x${lastSizeRef.current.height}`)
             lastSizeRef.current = { width: newWidth, height: newHeight }
 
-            // debounce: 300ms로 증가하여 드래그 중 빈번한 호출 방지
-            if (resizeDebounceRef.current) {
-                clearTimeout(resizeDebounceRef.current)
-            }
-            resizeDebounceRef.current = setTimeout(() => {
-                resizeDebounceRef.current = null
-                console.log(`[Terminal ${id.slice(0, 8)}] ResizeObserver: debounce complete, calling safeFit`)
-                safeFit({ scrollToBottom: true })
-            }, 300)  // 300ms debounce (드래그 중 호출 빈도 감소)
+            requestResize()
         })
 
         if (terminalRef.current) {
@@ -631,11 +645,8 @@ export function TerminalView({
             window.removeEventListener('resize', handleResize)
             resizeObserver.disconnect()
             terminalElement?.removeEventListener('contextmenu', contextMenuHandler, { capture: true })
-            // debounce 타이머 정리
-            if (resizeDebounceRef.current) {
-                clearTimeout(resizeDebounceRef.current)
-                resizeDebounceRef.current = null
-            }
+            resizeManagerRef.current?.dispose()
+            resizeManagerRef.current = null
             term.dispose()
             // 폴링 타이머는 별도 useEffect에서 정리됨
         }

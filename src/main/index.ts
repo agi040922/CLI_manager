@@ -5,7 +5,7 @@ import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
 import logoIcon from '../../resources/logo-final.png?asset'
 import Store from 'electron-store'
-import { AppConfig, Workspace, TerminalSession, UserSettings, IPCResult, LicenseData, LicenseInfo, WorkspaceFolder } from '../shared/types'
+import { AppConfig, Workspace, TerminalSession, UserSettings, IPCResult, WorkspaceFolder } from '../shared/types'
 import { v4 as uuidv4 } from 'uuid'
 import simpleGit from 'simple-git'
 import { existsSync, mkdirSync, readdirSync, statSync, readFileSync } from 'fs'
@@ -17,7 +17,6 @@ import { rgPath } from '@vscode/ripgrep'
 import { TerminalManager } from './TerminalManager'
 import { PortManager } from './PortManager'
 import { SystemMonitor } from './SystemMonitor'
-import { LicenseManager } from './LicenseManager'
 import { CLISessionTracker } from './CLISessionTracker'
 import { net } from 'electron'
 
@@ -113,19 +112,10 @@ const store = new Store<AppConfig>({
     }
 }) as any
 
-// Separate store for license data (to keep it secure)
-const licenseStore = new Store({
-    name: 'license',
-    defaults: {
-        license: null as LicenseData | null
-    }
-}) as any
-
 const cliSessionTracker = new CLISessionTracker()
 const terminalManager = new TerminalManager(cliSessionTracker)
 const portManager = new PortManager()
 const systemMonitor = new SystemMonitor(store)
-const licenseManager = new LicenseManager(licenseStore)
 
 // Background mode state
 let tray: Tray | null = null
@@ -798,14 +788,7 @@ app.whenReady().then(async () => {
     })
 
     ipcMain.handle('add-workspace', async (): Promise<IPCResult<Workspace> | null> => {
-        // Check workspace limit (exclude Home and Playground from count)
         const workspaces = store.get('workspaces') as Workspace[]
-        const userWorkspaceCount = workspaces.filter(w => !w.isHome && !w.isPlayground && !w.parentWorkspaceId).length
-        const canAdd = licenseManager.canAddWorkspace(userWorkspaceCount)
-
-        if (!canAdd.allowed) {
-            return { success: false, error: canAdd.reason, errorType: 'UPGRADE_REQUIRED' }
-        }
 
         const result = await dialog.showOpenDialog({
             properties: ['openDirectory']
@@ -843,12 +826,6 @@ app.whenReady().then(async () => {
 
         if (!workspace) return null
 
-        // Check session limit
-        const canAdd = licenseManager.canAddSession(workspace.sessions.length)
-        if (!canAdd.allowed) {
-            return { success: false, error: canAdd.reason, errorType: 'UPGRADE_REQUIRED' }
-        }
-
         // Worktree is now created as a separate workspace, not a session
         if (type === 'worktree') {
             console.warn('Use add-worktree-workspace instead')
@@ -873,12 +850,6 @@ app.whenReady().then(async () => {
 
     // Create worktree as a separate workspace
     ipcMain.handle('add-worktree-workspace', async (_, parentWorkspaceId: string, branchName: string): Promise<IPCResult<Workspace>> => {
-        // Check if worktree feature is available
-        const canUseWorktree = licenseManager.canUseWorktree()
-        if (!canUseWorktree.allowed) {
-            return { success: false, error: canUseWorktree.reason, errorType: 'UPGRADE_REQUIRED' }
-        }
-
         const workspaces = store.get('workspaces') as Workspace[]
         const parentWorkspace = workspaces.find((w: Workspace) => w.id === parentWorkspaceId)
 
@@ -2402,42 +2373,6 @@ app.whenReady().then(async () => {
             return { success: false, error: e.message }
         }
     })
-
-    // ============================================
-    // Lemon Squeezy License Handlers (using LicenseManager)
-    // ============================================
-
-    // Activate license with Lemon Squeezy
-    ipcMain.handle('license-activate', async (_, licenseKey: string): Promise<IPCResult<LicenseData>> => {
-        return licenseManager.activate(licenseKey)
-    })
-
-    // Validate existing license
-    ipcMain.handle('license-validate', async (): Promise<IPCResult<LicenseData>> => {
-        return licenseManager.validate()
-    })
-
-    // Deactivate license
-    ipcMain.handle('license-deactivate', async (): Promise<IPCResult<void>> => {
-        return licenseManager.deactivate()
-    })
-
-    // Check if license exists (without validation)
-    ipcMain.handle('license-check', async (): Promise<IPCResult<{ hasLicense: boolean }>> => {
-        return {
-            success: true,
-            data: { hasLicense: licenseManager.hasLicense() }
-        }
-    })
-
-    // Get full license info including plan type and limits
-    ipcMain.handle('license-get-info', async (): Promise<IPCResult<LicenseInfo>> => {
-        const info = licenseManager.getLicenseInfo()
-        return { success: true, data: info }
-    })
-
-    // Migrate legacy licenses (called on app start)
-    licenseManager.migrateLegacyLicense()
 
     createWindow()
 

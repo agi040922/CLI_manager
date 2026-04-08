@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { UserSettings, EditorType, TerminalTemplate, LicenseInfo, PLAN_LIMITS, HooksSettings } from '../../../shared/types'
-import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Crown, Home, Keyboard, Bug, Webhook, HelpCircle, ExternalLink, GripVertical } from 'lucide-react'
+import { UserSettings, EditorType, TerminalTemplate, HooksSettings } from '../../../shared/types'
+import { X, Check, AlertCircle, CircleAlert, Plus, Trash2, Code2, Play, Package, GitBranch, Terminal, Settings as SettingsIcon, Bell, Monitor, Github, FolderOpen, Folder, Download, RefreshCw, Loader2, Home, Keyboard, Bug, Webhook, HelpCircle, ExternalLink, GripVertical } from 'lucide-react'
 import { Reorder } from 'framer-motion'
 import { v4 as uuidv4 } from 'uuid'
 import { KeyboardSettings } from './KeyboardSettings'
@@ -20,13 +20,11 @@ interface SettingsProps {
     onSave?: (settings: UserSettings) => void
     initialCategory?: SettingsCategory
     onResetOnboarding?: () => void
-    licenseInfo?: LicenseInfo
-    onLicenseChange?: (info: LicenseInfo) => void
 }
 
-type SettingsCategory = 'general' | 'editor' | 'terminal' | 'keyboard' | 'hooks' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'license' | 'developer'
+type SettingsCategory = 'general' | 'editor' | 'terminal' | 'keyboard' | 'hooks' | 'notifications' | 'port-monitoring' | 'templates' | 'git' | 'github' | 'developer'
 
-export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding, licenseInfo, onLicenseChange }: SettingsProps) {
+export function Settings({ isOpen, onClose, onSave, initialCategory = 'general', onResetOnboarding }: SettingsProps) {
     const [settings, setSettings] = useState<UserSettings>({
         theme: 'dark',
         fontSize: 14,
@@ -171,23 +169,6 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
     }
 
     const handleAddTemplate = async () => {
-        // Check template limit (Free: 3, Pro: unlimited)
-        const limit = licenseInfo?.limits.maxTemplates ?? 3
-        if (limit !== -1 && templates.length >= limit) {
-            const { response } = await window.api.showMessageBox({
-                type: 'info',
-                title: 'Upgrade to Pro',
-                message: `Free plan allows up to ${limit} templates. Upgrade to Pro for unlimited templates.`,
-                detail: 'Visit https://www.solhun.com/pricing for more details',
-                buttons: ['Later', 'Upgrade']
-            })
-
-            if (response === 1) {
-                window.api.openExternal('https://www.solhun.com/pricing')
-            }
-            return
-        }
-
         const newTemplate: TerminalTemplate = {
             id: uuidv4(),
             name: 'New Template',
@@ -259,7 +240,6 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
         { id: 'templates' as const, label: 'Templates', icon: <Play size={16} /> },
         { id: 'git' as const, label: 'Git (Local)', icon: <GitBranch size={16} /> },
         { id: 'github' as const, label: 'GitHub', icon: <Github size={16} /> },
-        { id: 'license' as const, label: 'License', icon: <Crown size={16} /> },
         // Developer tools - uncomment to enable testing dialogs
         // { id: 'developer' as const, label: 'Developer', icon: <Bug size={16} /> },
     ]
@@ -313,7 +293,7 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             </button>
                                         </div>
                                         <a
-                                            href="https://www.solhun.com/changelog"
+                                            href="https://solhun.com/changelog"
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-[9px] text-blue-500 hover:text-blue-400"
@@ -439,12 +419,14 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                             </div>
 
                                             <div className="pt-3 border-t border-white/10">
-                                                <p className="text-xs text-gray-400 mb-2">Still having issues? Contact:</p>
+                                                <p className="text-xs text-gray-400 mb-2">Still having issues? Open an issue:</p>
                                                 <a
-                                                    href="mailto:solhun.jeong@gmail.com"
+                                                    href="https://github.com/woorichicken/CLI_manager/issues"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
                                                     className="text-xs text-blue-400 hover:text-blue-300"
                                                 >
-                                                    solhun.jeong@gmail.com
+                                                    github.com/woorichicken/CLI_manager/issues
                                                 </a>
                                             </div>
                                         </div>
@@ -1563,129 +1545,6 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                 </>
                             )}
 
-                            {activeCategory === 'license' && (
-                                <>
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-white mb-1">License & Plan</h3>
-                                        <p className="text-xs text-gray-400 mb-4">
-                                            Manage your CLI Manager license and subscription
-                                        </p>
-
-                                        {/* Current Plan Card */}
-                                        <div className={`p-4 rounded-lg border ${licenseInfo?.planType === 'free'
-                                            ? 'bg-gray-500/10 border-gray-500/20'
-                                            : 'bg-purple-500/10 border-purple-500/20'}`}>
-                                            <div className="flex items-center gap-3 mb-3">
-                                                {licenseInfo?.planType !== 'free' && (
-                                                    <Crown size={24} className="text-purple-400" />
-                                                )}
-                                                <div>
-                                                    <h4 className="text-lg font-semibold text-white capitalize">
-                                                        {licenseInfo?.planType || 'Free'} Plan
-                                                    </h4>
-                                                    {licenseInfo?.license?.customerEmail && (
-                                                        <p className="text-xs text-gray-400">
-                                                            {licenseInfo.license.customerEmail}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Plan Summary */}
-                                            <p className="text-xs text-gray-400 mt-2">
-                                                {licenseInfo?.planType === 'free' ? (
-                                                    <>
-                                                        {licenseInfo?.limits.maxWorkspaces} workspaces, {licenseInfo?.limits.maxSessionsPerWorkspace} sessions, {licenseInfo?.limits.maxTemplates} templates
-                                                    </>
-                                                ) : (
-                                                    <>Unlimited workspaces, sessions, templates & Git Worktree</>
-                                                )}
-                                            </p>
-
-                                            {/* Expiry Info */}
-                                            {licenseInfo?.license?.expiresAt && (
-                                                <div className="mt-3 pt-3 border-t border-white/10">
-                                                    <p className="text-xs text-gray-400">
-                                                        {licenseInfo.isExpired ? (
-                                                            <span className="text-red-400">License expired</span>
-                                                        ) : licenseInfo.daysUntilExpiry !== undefined ? (
-                                                            <>Renews in <span className="text-white">{licenseInfo.daysUntilExpiry} days</span></>
-                                                        ) : null}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Upgrade Button for Free Users */}
-                                        {licenseInfo?.planType === 'free' && (
-                                            <div className="mt-4">
-                                                <button
-                                                    onClick={() => window.api.openExternal('https://www.solhun.com/pricing')}
-                                                    className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
-                                                >
-                                                    <Crown size={16} />
-                                                    Upgrade to Pro
-                                                </button>
-                                                <p className="text-xs text-gray-500 text-center mt-2">
-                                                    Unlock unlimited workspaces, sessions, and Git Worktree
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {/* License Key Input */}
-                                        <div className="mt-6 pt-4 border-t border-white/10">
-                                            <h4 className="text-sm font-medium text-white mb-2">Enter License Key</h4>
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
-                                                    className="flex-1 bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
-                                                    id="license-key-input"
-                                                />
-                                                <button
-                                                    onClick={async () => {
-                                                        const input = document.getElementById('license-key-input') as HTMLInputElement
-                                                        if (input?.value) {
-                                                            const result = await window.api.licenseActivate(input.value)
-                                                            if (result.success) {
-                                                                const info = await window.api.licenseGetInfo()
-                                                                if (info.success && info.data && onLicenseChange) {
-                                                                    onLicenseChange(info.data)
-                                                                }
-                                                                input.value = ''
-                                                            } else {
-                                                                await window.api.showMessageBox({
-                                                                    type: 'error',
-                                                                    title: 'Activation Failed',
-                                                                    message: result.error || 'Invalid license key',
-                                                                    buttons: ['OK']
-                                                                })
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
-                                                >
-                                                    Activate
-                                                </button>
-                                            </div>
-                                            <p className="text-xs text-gray-500 mt-2">
-                                                Having trouble? Contact <span className="text-gray-400">solhun.jeong@gmail.com</span>
-                                            </p>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                <button
-                                                    onClick={() => window.api.openExternal('https://www.solhun.com/pricing')}
-                                                    className="text-purple-400 hover:text-purple-300 transition-colors inline-flex items-center gap-1"
-                                                >
-                                                    View pricing & features
-                                                    <ExternalLink size={10} />
-                                                </button>
-                                            </p>
-                                        </div>
-
-                                    </div>
-                                </>
-                            )}
-
                             {/* Developer Tools */}
                             {activeCategory === 'developer' && (
                                 <>
@@ -1715,11 +1574,11 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                             type: 'info',
                                                             title: 'Upgrade to Pro',
                                                             message: 'Free plan allows up to 3 workspaces. Upgrade to Pro for unlimited workspaces.',
-                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            detail: 'Visit https://github.com/woorichicken/CLI_manager for more details',
                                                             buttons: ['Later', 'Upgrade']
                                                         })
                                                         if (response === 1) {
-                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                            window.api.openExternal('https://github.com/woorichicken/CLI_manager')
                                                         }
                                                     }}
                                                     className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
@@ -1740,11 +1599,11 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                             type: 'info',
                                                             title: 'Upgrade to Pro',
                                                             message: 'Free plan allows up to 5 sessions per workspace. Upgrade to Pro for unlimited sessions.',
-                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            detail: 'Visit https://github.com/woorichicken/CLI_manager for more details',
                                                             buttons: ['Later', 'Upgrade']
                                                         })
                                                         if (response === 1) {
-                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                            window.api.openExternal('https://github.com/woorichicken/CLI_manager')
                                                         }
                                                     }}
                                                     className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
@@ -1765,11 +1624,11 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                             type: 'info',
                                                             title: 'Upgrade to Pro',
                                                             message: 'Free plan allows up to 3 templates. Upgrade to Pro for unlimited templates.',
-                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            detail: 'Visit https://github.com/woorichicken/CLI_manager for more details',
                                                             buttons: ['Later', 'Upgrade']
                                                         })
                                                         if (response === 1) {
-                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                            window.api.openExternal('https://github.com/woorichicken/CLI_manager')
                                                         }
                                                     }}
                                                     className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
@@ -1790,11 +1649,11 @@ export function Settings({ isOpen, onClose, onSave, initialCategory = 'general',
                                                             type: 'info',
                                                             title: 'Upgrade to Pro',
                                                             message: 'Git Worktree is a Pro feature. Upgrade to unlock.',
-                                                            detail: 'Visit https://www.solhun.com/pricing for more details',
+                                                            detail: 'Visit https://github.com/woorichicken/CLI_manager for more details',
                                                             buttons: ['Later', 'Upgrade']
                                                         })
                                                         if (response === 1) {
-                                                            window.api.openExternal('https://www.solhun.com/pricing')
+                                                            window.api.openExternal('https://github.com/woorichicken/CLI_manager')
                                                         }
                                                     }}
                                                     className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"

@@ -48,3 +48,13 @@ coverage/
 release/
 dist/
 .wrangler/
+
+# Claude Code / AI tools state
+.omc/
+.omx/
+.sisyphus/
+.claude/
+
+# Personal dev notes
+REFACTORING_SUMMARY.md
+notion-issue-tracker.zip

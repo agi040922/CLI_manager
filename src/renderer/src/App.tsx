@@ -7,14 +7,13 @@ import { Settings } from './components/Settings'
 import { GitPanel } from './components/GitPanel'
 import { FileSearch } from './components/FileSearch'
 import { ConfirmationModal } from './components/Sidebar/Modals'
-import { Workspace, WorkspaceFolder, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, LicenseInfo, PLAN_LIMITS, SessionStatus, SplitTerminalLayout } from '../../shared/types'
+import { Workspace, WorkspaceFolder, TerminalSession, UserSettings, IPCResult, EditorType, TerminalTemplate, PortActionLog, SessionStatus, SplitTerminalLayout } from '../../shared/types'
 import { getErrorMessage } from './utils/errorMessages'
 import { PanelLeft, Search, LayoutGrid, MessageSquare, Monitor } from 'lucide-react'
 import { SplitTerminalHeader } from './components/SplitTerminalHeader'
 import { FullscreenTerminalView } from './components/FullscreenTerminalView'
 import { SystemMonitorPopover } from './components/SystemMonitorPopover'
 import { Onboarding } from './components/Onboarding'
-import { LicenseVerification } from './components/LicenseVerification'
 import { UpdateNotification, UpdateStatus } from './components/UpdateNotification'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTemplates } from './hooks/useTemplates'
@@ -132,21 +131,12 @@ function App() {
 
     // Onboarding state
     const [showOnboarding, setShowOnboarding] = useState(false)
-    const [showLicenseVerification, setShowLicenseVerification] = useState(false)
 
     // Update notification state
     const [showUpdateNotification, setShowUpdateNotification] = useState(false)
     const [updateVersion, setUpdateVersion] = useState<string>('')
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('available')
     const [updatePercent, setUpdatePercent] = useState(0)
-
-    // License state
-    const [licenseInfo, setLicenseInfo] = useState<LicenseInfo>({
-        planType: 'free',
-        license: null,
-        limits: PLAN_LIMITS.free,
-        isExpired: false
-    })
 
     // 터미널 폰트 크기 (settings.fontSize와 별도 관리 - Cmd+/-로만 조절)
     const [terminalFontSize, setTerminalFontSize] = useState(14)
@@ -213,17 +203,10 @@ function App() {
                 if (!loadedSettings.hasCompletedOnboarding) {
                     setShowOnboarding(true)
                 }
-                // Show license verification for first-time users
-                if (!loadedSettings.licenseScreenCompleted) {
-                    setShowLicenseVerification(true)
-                }
             }
         }).catch(err => {
             console.error('Failed to load settings:', err)
         })
-
-        // Load license info
-        loadLicenseInfo()
     }, [])
 
     // Check for updates on app start
@@ -284,51 +267,6 @@ function App() {
     const handleOnboardingComplete = () => {
         setShowOnboarding(false)
         setSettings(prev => ({ ...prev, hasCompletedOnboarding: true }))
-    }
-
-    const handleLicenseVerify = async (key: string, isFreeMode?: boolean): Promise<boolean> => {
-        // Mark license screen as completed (won't show again)
-        const markCompleted = async () => {
-            const currentSettings = await window.api.getSettings()
-            await window.api.saveSettings({
-                ...currentSettings,
-                licenseScreenCompleted: true
-            })
-            setSettings(prev => ({ ...prev, licenseScreenCompleted: true }))
-        }
-
-        if (isFreeMode) {
-            // Continue with free plan
-            const infoResult = await window.api.licenseGetInfo()
-            if (infoResult.success && infoResult.data) {
-                setLicenseInfo(infoResult.data)
-            }
-            await markCompleted()
-            setShowLicenseVerification(false)
-            return true
-        }
-
-        // Activate license with key
-        const result = await window.api.licenseActivate(key)
-        if (result.success) {
-            // Refresh license info
-            const infoResult = await window.api.licenseGetInfo()
-            if (infoResult.success && infoResult.data) {
-                setLicenseInfo(infoResult.data)
-            }
-            await markCompleted()
-            setShowLicenseVerification(false)
-            return true
-        }
-        return false
-    }
-
-    // Load license info on mount
-    const loadLicenseInfo = async () => {
-        const result = await window.api.licenseGetInfo()
-        if (result.success && result.data) {
-            setLicenseInfo(result.data)
-        }
     }
 
     const handleSelect = (workspace: Workspace, session: TerminalSession) => {
@@ -434,20 +372,6 @@ function App() {
 
         // Max 4 terminals in split
         if (splitLayout && splitLayout.sessionIds.length >= 4) return
-
-        // Check license for new split view (not when adding to existing split)
-        if (!splitLayout && !licenseInfo.limits.splitViewEnabled) {
-            const { response } = await window.api.showMessageBox({
-                type: 'info',
-                title: 'Upgrade to Pro',
-                message: 'Split View is a Pro feature. Upgrade to unlock split terminal view.',
-                buttons: ['Later', 'Upgrade']
-            })
-            if (response === 1) {
-                window.api.openExternal('https://www.solhun.com/pricing')
-            }
-            return
-        }
 
         if (splitLayout) {
             // Add to existing split
@@ -646,19 +570,6 @@ function App() {
             if (!newWorkspace.isPlayground && !newWorkspace.parentWorkspaceId && !newWorkspace.isHome) {
                 setWorkspaceOrder(prev => [...prev, newWorkspace.id])
             }
-        } else if (result.errorType === 'UPGRADE_REQUIRED') {
-            const { response } = await window.api.showMessageBox({
-                type: 'info',
-                title: 'Upgrade to Pro',
-                message: result.error || 'Please upgrade to Pro to add more workspaces.',
-                detail: 'Visit https://www.solhun.com/pricing for more details',
-                buttons: ['Later', 'Upgrade']
-            })
-
-            if (response === 1) {
-                // Open pricing page in external browser
-                window.api.openExternal('https://www.solhun.com/pricing')
-            }
         }
     }
 
@@ -855,18 +766,6 @@ function App() {
                 next.set(workspaceId, [...currentOrder, newSession.id])
                 return next
             })
-        } else if (result.errorType === 'UPGRADE_REQUIRED') {
-            const { response } = await window.api.showMessageBox({
-                type: 'info',
-                title: 'Upgrade to Pro',
-                message: result.error || 'Please upgrade to Pro to add more sessions.',
-                detail: 'Visit https://www.solhun.com/pricing for more details',
-                buttons: ['Later', 'Upgrade']
-            })
-
-            if (response === 1) {
-                window.api.openExternal('https://www.solhun.com/pricing')
-            }
         }
     }
 
@@ -944,18 +843,6 @@ function App() {
 
         if (result.success && result.data) {
             setWorkspaces(prev => [...prev, result.data!])
-        } else if (result.errorType === 'UPGRADE_REQUIRED') {
-            const { response } = await window.api.showMessageBox({
-                type: 'info',
-                title: 'Upgrade to Pro',
-                message: result.error || 'Git Worktree is a Pro feature. Upgrade to unlock.',
-                detail: 'Visit https://www.solhun.com/pricing for more details',
-                buttons: ['Later', 'Upgrade']
-            })
-
-            if (response === 1) {
-                window.api.openExternal('https://www.solhun.com/pricing')
-            }
         } else {
             await window.api.showMessageBox({
                 type: 'error',
@@ -1138,8 +1025,7 @@ function App() {
 
     return (
         <div className="flex h-screen w-screen bg-transparent">
-            {showLicenseVerification && <LicenseVerification onVerify={handleLicenseVerify} />}
-            {!showLicenseVerification && showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+            {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
 
             {isSidebarOpen && (
                 <Sidebar
@@ -1370,7 +1256,9 @@ function App() {
                                 if (!isInSplit || !splitLayout) {
                                     // Single view: absolute positioning with top/bottom for responsive height
                                     return {
-                                        display: isVisible ? 'block' : 'none',
+                                        display: 'block',
+                                        visibility: isVisible ? 'visible' : 'hidden',
+                                        pointerEvents: isVisible ? 'auto' : 'none',
                                         position: 'absolute',
                                         top: 0,
                                         left: 0,
@@ -1567,8 +1455,6 @@ function App() {
                     setShowOnboarding(true)
                     setSettings(prev => ({ ...prev, hasCompletedOnboarding: false }))
                 }}
-                licenseInfo={licenseInfo}
-                onLicenseChange={setLicenseInfo}
             />
 
             {/* Git Panel */}
