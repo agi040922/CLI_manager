@@ -1,82 +1,151 @@
-# CLI Manager
+<div align="center">
+  <img src="resources/logo-final.png" alt="CLI Manager" width="80" />
+  <h1>CLI Manager</h1>
+  <p><strong>Your CLI Agents, All in One Place.</strong></p>
+  <p>Claude Code, Codex CLI, Gemini CLI — manage them all from a single macOS desktop app.</p>
 
-A powerful Electron-based terminal manager that lets you organize multiple workspaces, terminal sessions, Git worktrees, and more — all in one place.
+  [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+  [![macOS](https://img.shields.io/badge/platform-macOS-blue.svg)](https://github.com/woorichicken/CLI_manager/releases)
+  [![Open Source](https://img.shields.io/badge/open%20source-%E2%9D%A4-red.svg)](https://github.com/woorichicken/CLI_manager)
+  [![GitHub release](https://img.shields.io/github/v/release/woorichicken/CLI_manager)](https://github.com/woorichicken/CLI_manager/releases/latest)
+
+  [**Download for macOS**](https://github.com/woorichicken/CLI_manager/releases/latest) · [Website](https://solhun.com) · [Report a Bug](https://github.com/woorichicken/CLI_manager/issues)
+</div>
+
+---
+
+## Demo
+
+> 🎬 Add your demo GIF or video here
+>
+> Tip: Record with [Kap](https://getkap.co/) and drop the `.gif` into `docs/` — then reference it below:
+>
+> ```md
+> ![CLI Manager Demo](docs/demo.gif)
+> ```
+
+---
+
+## Why CLI Manager?
+
+**Stop switching between terminals and losing context.**
+
+As AI-powered development grows, developers are juggling Claude Code, Codex CLI, Gemini CLI — and dozens of project contexts at once. CLI Manager keeps everything organized so you can focus on building.
+
+| | Without CLI Manager | With CLI Manager |
+|---|---|---|
+| **Context switching** | Re-open terminals, lose history | Instant tab switch, full state preserved |
+| **Agent management** | Separate windows per tool | All agents in one sidebar |
+| **Project organization** | Scattered folders | Workspaces with named sessions |
+| **Git branching** | Manual worktree setup | One-click worktree workspace |
+
+---
+
+## Performance
+
+- **Zero state loss** — Terminal sessions live in the DOM and are hidden with `display: none`, never destroyed on tab switch
+- **Instant session switching** — No re-initialization overhead; switch in milliseconds
+- **Real-time port detection** — Local dev servers are detected within 5 seconds via `lsof` polling
+- **500ms debounced auto-save** — Session memos save automatically without blocking your workflow
+- **Minimal footprint** — Built on Electron + xterm.js with no unnecessary background processes
+
+---
 
 ## Features
 
-- **Workspace Management** — Add folders as workspaces and manage multiple terminal sessions per workspace
-- **Terminal Sessions** — Create, rename, reorder, and switch between sessions without losing state
-- **Git Worktree Support** — Create and manage Git worktrees as independent workspaces
-- **GitHub Integration** — Push branches, create pull requests, and check workflow status via `gh` CLI
-- **Port Monitoring** — Real-time detection of local development server ports (macOS)
-- **Session Memo** — Per-session notepad with auto-save for quick notes
-- **Custom Templates** — Save frequently used commands as templates for fast session creation
-- **Split View** — View multiple terminals side by side
-- **File Search** — Search files and content across your workspace
-- **Keyboard Shortcuts** — Fully configurable keyboard shortcuts
+### All CLI Agents, One Dashboard
+Manage Claude Code, Codex CLI, and Gemini CLI from a single sidebar. Assign custom names and roles to each agent — "Frontend Dev", "Backend API", "Design Review" — so multi-agent workflows stay intuitive.
 
-## Prerequisites
+### Git Worktree as Independent Workspaces
+Create Git worktrees directly from the UI. Each worktree becomes its own workspace with independent terminal sessions, branch tracking, and GitHub actions — no manual setup required.
 
-- [Node.js](https://nodejs.org/) v18 or later
-- [pnpm](https://pnpm.io/) v8 or later
+### GitHub Integration
+Push branches, create pull requests, and check GitHub Actions workflow status — all from within the app using your existing `gh` CLI authentication.
+
+### Real-Time Port Monitoring
+Automatically detects running local development servers. See which ports are active across all your projects at a glance, with filtering by port range.
+
+### Session Persistence
+Every terminal session remains alive while you navigate. Switch between a dozen sessions without losing a single line of output.
+
+### Custom Terminal Templates
+Save your most-used command sequences as named templates — with icons and descriptions. Launch complex multi-step setups with a single click.
+
+### Per-Session Memo Pad
+Each terminal session has its own notepad. Jot down context, commands, or notes — they auto-save and persist with the session.
+
+### Split View
+View and interact with two terminals side by side. Ideal for running a dev server while watching logs.
+
+### Fully Configurable Shortcuts
+Every action is bindable. Open the keyboard shortcut editor and make CLI Manager fit your workflow.
+
+---
+
+## Download
+
+| Platform | Link |
+|----------|------|
+| macOS Apple Silicon (arm64) | [cli-manager-1.5.0-arm64.dmg](https://pub-dc249db286af4c1991fedf690157891d.r2.dev/cli-manager-1.5.0-arm64.dmg) |
+| macOS Intel (x64) | [cli-manager-1.5.0-x64.dmg](https://pub-dc249db286af4c1991fedf690157891d.r2.dev/cli-manager-1.5.0-x64.dmg) |
+
+Or download from [GitHub Releases](https://github.com/woorichicken/CLI_manager/releases/latest).
+
+---
+
+## Build from Source
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) v18+
+- [pnpm](https://pnpm.io/) v8+
 - [Git](https://git-scm.com/)
-- [gh CLI](https://cli.github.com/) (optional, required for GitHub integration)
+- [gh CLI](https://cli.github.com/) *(optional — required for GitHub integration)*
 
-## Getting Started
-
-### Install dependencies
+### Install & Run
 
 ```bash
+git clone https://github.com/woorichicken/CLI_manager.git
+cd CLI_manager
 pnpm install
-```
-
-### Start development server
-
-```bash
 pnpm dev
 ```
 
-This starts the Electron app with HMR (Hot Module Replacement) enabled.
-
-## Build
+### Build
 
 ```bash
-pnpm build
+pnpm build        # Build for current platform
+pnpm build:mac    # Build signed macOS DMG
 ```
 
-The built app will be output to the `dist/` directory.
-
-### Preview the built app
-
-```bash
-pnpm preview
-# or
-pnpm start
-```
-
-## Type Check
+### Type Check
 
 ```bash
 pnpm typecheck
 ```
 
+---
+
 ## Project Structure
 
 ```
 src/
-  main/         # Electron main process (IPC handlers, terminal management)
-  preload/      # Context bridge between main and renderer
+  main/         # Electron main process — IPC, terminal, port monitoring
+  preload/      # Context bridge (main ↔ renderer)
   renderer/     # React frontend
-    src/
-      components/   # UI components
-      hooks/        # Custom React hooks
-      utils/        # Utility functions
+    components/ # UI components (Sidebar, TerminalView, GitPanel, …)
+    hooks/      # Custom React hooks
+    utils/      # Utilities (terminalResizeManager, …)
   shared/       # Shared TypeScript types
 ```
 
+---
+
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to contribute.
+Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+---
 
 ## License
 
